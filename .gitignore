@@ -180,3 +180,6 @@ coreg/
 ifg/
 logs/
 INSAR_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/
+modules/snap2stamps/graphs/coreg_ifg2run.xml
+modules/snap2stamps/graphs/export2run.xml
+modules/snap2stamps/graphs/splitgraph2run.xml

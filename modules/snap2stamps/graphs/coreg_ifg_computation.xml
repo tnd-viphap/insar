@@ -112,8 +112,6 @@
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <orbitDegree>3</orbitDegree>
       <demName>SRTM 1Sec HGT</demName>
-      <externalDEMFile/>
-      <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
       <tileExtensionPercent>100</tileExtensionPercent>
       <outputTopoPhaseBand>true</outputTopoPhaseBand>
       <outputElevationBand>true</outputElevationBand>
@@ -126,7 +124,6 @@
       <sourceProduct refid="TopoPhaseRemoval"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
       <nRgLooks>3</nRgLooks>
       <nAzLooks>1</nAzLooks>
       <outputIntensity>false</outputIntensity>
@@ -139,7 +136,6 @@
       <sourceProduct refid="TOPSAR-Deburst(2)"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
       <nRgLooks>3</nRgLooks>
       <nAzLooks>1</nAzLooks>
       <outputIntensity>false</outputIntensity>

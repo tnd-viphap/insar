@@ -6,6 +6,8 @@ import subprocess
 import shlex
 import time
 
+start_time = time.time()
+
 inputfile = sys.argv[1]
 bar_message = '\n#####################################################################\n'
 
@@ -123,3 +125,6 @@ try:
     os.rmdir(PROJECT + 'target.data')
 except:
     pass
+
+end_time = time.time()
+print(f"StaMPS Export executes in {(end_time-start_time)/60} minutes.")

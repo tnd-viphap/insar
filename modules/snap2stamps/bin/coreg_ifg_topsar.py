@@ -19,6 +19,8 @@ import subprocess
 import shlex
 import time
 
+start_time = time.time()
+
 inputfile = sys.argv[1]
 
 bar_message = '\n#####################################################################\n'
@@ -142,4 +144,7 @@ for dimfile in sorted_slavesplittedfolder:
     out_file.write(bar_message)
 
 out_file.close()
+
+end_time = time.time()
+print(f"Coregistration and Interferogram executes in {(end_time - start_time)/60} minutes.")
 
