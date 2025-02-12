@@ -18,10 +18,25 @@ import glob
 import subprocess
 import shlex
 import time
+import xml.etree.ElementTree as ET
 
 start_time = time.time()
 
 inputfile = sys.argv[1]
+
+def retrieve_bandname(dimfile):
+    tree = ET.parse(dimfile)
+    root = tree.getroot()
+
+    for bandname in root.findall(".//BAND_NAME"):
+        if bandname.text == "elevation_VV":
+            bandname.text = "elevation"
+        elif bandname.text == "orthorectifiedLon_VV":
+            bandname.text = "orthorectifiedLon"
+        elif bandname.text == "orthorectifiedLat_VV":
+            bandname.text = "orthorectifiedLat"
+    
+    tree.write(dimfile, encoding="UTF-8", xml_declaration=True)
 
 bar_message = '\n#####################################################################\n'
 
@@ -142,6 +157,9 @@ for dimfile in sorted_slavesplittedfolder:
     
     print(bar_message)
     out_file.write(bar_message)
+
+    # Retrieve bandname
+    retrieve_bandname(f"{outputifgfolder}/{outputname}.dim")
 
 out_file.close()
 
