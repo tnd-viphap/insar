@@ -61,7 +61,7 @@
       <srpNumberPoints>501</srpNumberPoints>
       <orbitDegree>3</orbitDegree>
       <includeCoherence>false</includeCoherence>
-      <cohWinAz>3</cohWinAz>
+      <cohWinAz>2</cohWinAz>
       <cohWinRg>10</cohWinRg>
       <squarePixel>true</squarePixel>
       <subtractTopographicPhase>false</subtractTopographicPhase>
@@ -91,7 +91,7 @@
   <node id="Write(2)">
     <operator>Write</operator>
     <sources>
-      <sourceProduct refid="Terrain-Correction(2)"/>
+      <sourceProduct refid="TOPSAR-Deburst(2)"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <file>OUTPUTCOREGFOLDER/OUTPUTFILE</file>
@@ -112,170 +112,10 @@
       <outputLatLonBands>true</outputLatLonBands>
     </parameters>
   </node>
-  <node id="Multilook">
-    <operator>Multilook</operator>
-    <sources>
-      <sourceProduct refid="TopoPhaseRemoval"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <nRgLooks>3</nRgLooks>
-      <nAzLooks>1</nAzLooks>
-      <outputIntensity>false</outputIntensity>
-      <grSquarePixel>true</grSquarePixel>
-    </parameters>
-  </node>
-  <node id="Multilook(2)">
-    <operator>Multilook</operator>
-    <sources>
-      <sourceProduct refid="TOPSAR-Deburst(2)"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <nRgLooks>3</nRgLooks>
-      <nAzLooks>1</nAzLooks>
-      <outputIntensity>false</outputIntensity>
-      <grSquarePixel>true</grSquarePixel>
-    </parameters>
-  </node>
-  <node id="GoldsteinPhaseFiltering">
-    <operator>GoldsteinPhaseFiltering</operator>
-    <sources>
-      <sourceProduct refid="Multilook"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <alpha>1.0</alpha>
-      <FFTSizeString>32</FFTSizeString>
-      <windowSizeString>3</windowSizeString>
-      <useCoherenceMask>false</useCoherenceMask>
-      <coherenceThreshold>0.2</coherenceThreshold>
-    </parameters>
-  </node>
-  <node id="GoldsteinPhaseFiltering(2)">
-    <operator>GoldsteinPhaseFiltering</operator>
-    <sources>
-      <sourceProduct refid="Multilook(2)"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <alpha>1.0</alpha>
-      <FFTSizeString>32</FFTSizeString>
-      <windowSizeString>3</windowSizeString>
-      <useCoherenceMask>false</useCoherenceMask>
-      <coherenceThreshold>0.2</coherenceThreshold>
-    </parameters>
-  </node>
-  <node id="Terrain-Correction">
-    <operator>Terrain-Correction</operator>
-    <sources>
-      <sourceProduct refid="BandMerge"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <demName>SRTM 1Sec HGT</demName>
-      <externalDEMFile/>
-      <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
-      <externalDEMApplyEGM>true</externalDEMApplyEGM>
-      <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
-      <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
-      <pixelSpacingInMeter>10.0</pixelSpacingInMeter>
-      <pixelSpacingInDegree>0.0</pixelSpacingInDegree>
-      <mapProjection>GEOGCS[&quot;WGS84(DD)&quot;, 
-  DATUM[&quot;WGS84&quot;, 
-    SPHEROID[&quot;WGS84&quot;, 6378137.0, 298.257223563]], 
-  PRIMEM[&quot;Greenwich&quot;, 0.0], 
-  UNIT[&quot;degree&quot;, 0.017453292519943295], 
-  AXIS[&quot;Geodetic longitude&quot;, EAST], 
-  AXIS[&quot;Geodetic latitude&quot;, NORTH]]</mapProjection>
-      <alignToStandardGrid>false</alignToStandardGrid>
-      <standardGridOriginX>0.0</standardGridOriginX>
-      <standardGridOriginY>0.0</standardGridOriginY>
-      <nodataValueAtSea>true</nodataValueAtSea>
-      <saveDEM>false</saveDEM>
-      <saveLatLon>false</saveLatLon>
-      <saveIncidenceAngleFromEllipsoid>false</saveIncidenceAngleFromEllipsoid>
-      <saveLocalIncidenceAngle>false</saveLocalIncidenceAngle>
-      <saveProjectedLocalIncidenceAngle>false</saveProjectedLocalIncidenceAngle>
-      <saveSelectedSourceBand>true</saveSelectedSourceBand>
-      <saveLayoverShadowMask>false</saveLayoverShadowMask>
-      <outputComplex>true</outputComplex>
-      <applyRadiometricNormalization>false</applyRadiometricNormalization>
-      <saveSigmaNought>false</saveSigmaNought>
-      <saveGammaNought>false</saveGammaNought>
-      <saveBetaNought>false</saveBetaNought>
-      <incidenceAngleForSigma0>Use projected local incidence angle from DEM</incidenceAngleForSigma0>
-      <incidenceAngleForGamma0>Use projected local incidence angle from DEM</incidenceAngleForGamma0>
-      <auxFile>Latest Auxiliary File</auxFile>
-      <externalAuxFile/>
-    </parameters>
-  </node>
-  <node id="BandMerge">
-    <operator>BandMerge</operator>
-    <sources>
-      <sourceProduct refid="GoldsteinPhaseFiltering"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <geographicError>1.0E-5</geographicError>
-    </parameters>
-  </node>
-  <node id="BandMerge(2)">
-    <operator>BandMerge</operator>
-    <sources>
-      <sourceProduct refid="GoldsteinPhaseFiltering(2)"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <geographicError>1.0E-5</geographicError>
-    </parameters>
-  </node>
-  <node id="Terrain-Correction(2)">
-    <operator>Terrain-Correction</operator>
-    <sources>
-      <sourceProduct refid="BandMerge(2)"/>
-    </sources>
-    <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <sourceBands/>
-      <demName>SRTM 1Sec HGT</demName>
-      <externalDEMFile/>
-      <externalDEMNoDataValue>0.0</externalDEMNoDataValue>
-      <externalDEMApplyEGM>true</externalDEMApplyEGM>
-      <demResamplingMethod>BILINEAR_INTERPOLATION</demResamplingMethod>
-      <imgResamplingMethod>BILINEAR_INTERPOLATION</imgResamplingMethod>
-      <pixelSpacingInMeter>10.0</pixelSpacingInMeter>
-      <pixelSpacingInDegree>0.0</pixelSpacingInDegree>
-      <mapProjection>GEOGCS[&quot;WGS84(DD)&quot;, 
-  DATUM[&quot;WGS84&quot;, 
-    SPHEROID[&quot;WGS84&quot;, 6378137.0, 298.257223563]], 
-  PRIMEM[&quot;Greenwich&quot;, 0.0], 
-  UNIT[&quot;degree&quot;, 0.017453292519943295], 
-  AXIS[&quot;Geodetic longitude&quot;, EAST], 
-  AXIS[&quot;Geodetic latitude&quot;, NORTH]]</mapProjection>
-      <alignToStandardGrid>false</alignToStandardGrid>
-      <standardGridOriginX>0.0</standardGridOriginX>
-      <standardGridOriginY>0.0</standardGridOriginY>
-      <nodataValueAtSea>true</nodataValueAtSea>
-      <saveDEM>false</saveDEM>
-      <saveLatLon>false</saveLatLon>
-      <saveIncidenceAngleFromEllipsoid>false</saveIncidenceAngleFromEllipsoid>
-      <saveLocalIncidenceAngle>false</saveLocalIncidenceAngle>
-      <saveProjectedLocalIncidenceAngle>false</saveProjectedLocalIncidenceAngle>
-      <saveSelectedSourceBand>true</saveSelectedSourceBand>
-      <saveLayoverShadowMask>false</saveLayoverShadowMask>
-      <outputComplex>true</outputComplex>
-      <applyRadiometricNormalization>false</applyRadiometricNormalization>
-      <saveSigmaNought>false</saveSigmaNought>
-      <saveGammaNought>false</saveGammaNought>
-      <saveBetaNought>false</saveBetaNought>
-      <incidenceAngleForSigma0>Use projected local incidence angle from DEM</incidenceAngleForSigma0>
-      <incidenceAngleForGamma0>Use projected local incidence angle from DEM</incidenceAngleForGamma0>
-      <auxFile>Latest Auxiliary File</auxFile>
-      <externalAuxFile/>
-    </parameters>
-  </node>
   <node id="Write">
     <operator>Write</operator>
     <sources>
-      <sourceProduct refid="Terrain-Correction"/>
+      <sourceProduct refid="TopoPhaseRemoval"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <file>OUTPUTIFGFOLDER/OUTPUTFILE</file>
