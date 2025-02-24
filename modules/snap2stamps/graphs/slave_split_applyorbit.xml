@@ -15,8 +15,8 @@
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
       <subswath>IWs</subswath>
       <selectedPolarisations>VV</selectedPolarisations>
-      <firstBurstIndex>8</firstBurstIndex>
-      <lastBurstIndex>8</lastBurstIndex>
+      <firstBurstIndex>FIRST_BURST</firstBurstIndex>
+      <lastBurstIndex>LAST_BURST</lastBurstIndex>
       <wktAoi/>
     </parameters>
   </node>

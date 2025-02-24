@@ -4,7 +4,7 @@
     <operator>Read</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>./master/20180903/S1A_IW_SLC__1SDV_20180903T224511_20180903T224538_023540_029043_9885.zip</file>
+      <file>D:/VIPHAP/insar/data/slaves/20250210\S1A_IW_SLC__1SDV_20250210T224530_20250210T224557_057840_072243_EA7A.zip</file>
     </parameters>
   </node>
   <node id="TOPSAR-Split">
@@ -37,7 +37,7 @@
       <sourceProduct refid="Apply-Orbit-File"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>./master/20180903/S1A_IW_SLC__1SDV_20180903T224511_20180903T224538_023540_029043_9885.dim</file>
+      <file>D:/VIPHAP/insar/data/slaves/20250210/20250210_IW1.dim</file>
       <formatName>BEAM-DIMAP</formatName>
     </parameters>
   </node>

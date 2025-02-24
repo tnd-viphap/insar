@@ -4,14 +4,14 @@
     <operator>Read</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>/home/viphap/insar/master/20210408/20210408_MR.dim</file>
+      <file>D:/VIPHAP/insar/data/master/20160329/20160329_M.dim</file>
     </parameters>
   </node>
   <node id="Read(2)">
     <operator>Read</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>/home/viphap/insar/slaves/20250117/20250117_IW1.dim</file>
+      <file>D:/VIPHAP/insar/data/slaves/20250210\20250210_IW1.dim</file>
     </parameters>
   </node>
   <node id="Back-Geocoding">
@@ -100,7 +100,7 @@
       <sourceProduct refid="Subset(2)"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>/home/viphap/insar/coreg/20210408_20250117_IW1</file>
+      <file>D:/VIPHAP/insar/process/coreg//20160329_20250210_IW1</file>
       <formatName>BEAM-DIMAP</formatName>
     </parameters>
   </node>
@@ -159,7 +159,7 @@
       <sourceProduct refid="Subset"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>/home/viphap/insar/ifg/20210408_20250117_IW1</file>
+      <file>D:/VIPHAP/insar/process/ifg//20160329_20250210_IW1</file>
       <formatName>BEAM-DIMAP</formatName>
     </parameters>
   </node>
