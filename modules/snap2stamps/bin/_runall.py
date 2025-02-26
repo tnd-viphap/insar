@@ -68,16 +68,19 @@ class Manager:
         # Initialze the project configuration
         print(f"############## Running: Step 1: Gather project structure ##############")
         bbox = [106.6969, 10.7615, 106.7275, 10.7945] ############### NEED REPLACING TO YOUR AOI ###############
+        bbox = [106.6783, 10.7236, 106.7746, 10.8136]
         Initialize(bbox)
         print("\n")
         
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
+        print("-> Searching for new products...")
         results = SLC_Search("Descending", 553).search()
+        print(f"-> Found {len(results)} products. Downloading...")
         downloader = Download(results)
         if results:
             downloader.download(self.RAWDATAFOLDER)
-            time.sleep(2)
+        time.sleep(2)
             
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
