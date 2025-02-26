@@ -41,10 +41,10 @@ class Burst:
         zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.MASTERFOLDER}/*/*.zip")]
         if zip:
             s1.load_zip(os.path.join(self.PROJECTFOLDER, zip[0].replace("./", "")))
-            s1.to_shapefile(f"{self.DATAFOLDER}/geom/master_bursts.shp")
+            s1.to_shapefile(f"{self.DATAFOLDER}geom/master_bursts.shp")
             
             # Find bursts
-            gdf = gpd.read_file(f"{self.DATAFOLDER}/geom/master_bursts.shp")
+            gdf = gpd.read_file(f"{self.DATAFOLDER}geom/master_bursts.shp")
             gdf = gdf[gdf.geometry.intersects(self.polygon)]
             subswath = gdf.subswath.values[0]
             first_burst = gdf.burst.values[0]

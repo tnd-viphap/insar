@@ -38,8 +38,8 @@ class Download:
     def _get_expected_size(self, file_id):
         """Retrieve expected file size from lake.json."""
         for entry in self.data:
-            if entry["properties"]["fileID"] == file_id:
-                return entry["properties"]["bytes"]
+            if dict(entry)["properties"]["fileID"] == file_id:
+                return dict(entry)["properties"]["bytes"]
         return None
 
     def _resume_download(self, result, savepath):
