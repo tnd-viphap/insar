@@ -14,7 +14,7 @@ class Burst:
             for line in file.readlines():
                 key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
                 if key:
-                    self.__dict__[key] = value
+                    setattr(self, key, value)
                     
         self.polygon = Polygon([Point(self.LONMIN, self.LATMIN), Point(self.LONMAX, self.LATMIN), Point(self.LONMAX, self.LATMAX), Point(self.LONMIN, self.LATMAX), Point(self.LONMIN, self.LATMIN)])
     

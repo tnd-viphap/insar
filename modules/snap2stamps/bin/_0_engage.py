@@ -5,11 +5,12 @@ import platform
 class Initialize:
     def __init__(self):
         super().__init__()
-        
+        plf = platform.system()
         # To replace
         project_folder = os.path.split(os.path.abspath(__file__))[0].split('modules')[0]
-        project_in_disk = project_folder[0].upper()
-        project_folder = f"{project_in_disk}:{project_folder.split(':')[1]}"
+        if plf == "Windows":
+            project_in_disk = project_folder[0].upper()
+            project_folder = f"{project_in_disk}:{project_folder.split(':')[1]}"
         log_folder = project_folder + '/logs/'
         datafolder = project_folder + '/data/'
         master_folder = project_folder + '/data/master/'
@@ -26,9 +27,9 @@ class Initialize:
         datalake = project_folder + '/data/lake.json'
         n_cores = round(os.cpu_count() * 0.8)
         total_ram = round(psutil.virtual_memory().total / (1024 ** 3) * 0.8)
-        if platform.system() == "Windows":
+        if plf == "Windows":
             gpt = "C:/Program Files/snap9/bin/gpt.exe"
-        elif platform.system() == "Linux":
+        elif plf == "Linux":
             gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap9/bin/gpt'
         
         self.modify_master(config_file, [project_folder, graphs_folder, log_folder,

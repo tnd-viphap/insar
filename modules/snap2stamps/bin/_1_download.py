@@ -17,11 +17,9 @@ class Download:
         
         self.logger = logging.getLogger()
         self.session = asf.ASFSession()
-        self.session.auth_with_creds("tnd2000", "Nick0327@")  # Replace with real credentials
+        self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
-        with open("./data/lake.json", "r") as file:
-            self.data = json.load(file)
-            
+        
         # Read input file
         inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         with open(inputfile, 'r') as file:
@@ -29,7 +27,10 @@ class Download:
                 key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
                 if key:
                     setattr(self, key, value)
-
+                    
+        with open(self.DATALAKE, "r") as file:
+            self.data = json.load(file)
+            
         self.print_lock = threading.Lock()  # Ensure thread-safe printing
         
         self.processed_files = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
@@ -94,9 +95,17 @@ class Download:
             self.logger.info(f"\nDownloaded: {file_name}")
 
         # **Save fileID to download_cache.txt**
-        cache_path = os.path.join("./data/download_cache.txt")
-        with open(cache_path, "a") as cache_file:  # Open in append mode
-            cache_file.write(file_id + "\n")
+        if os.path.exists(self.DOWNLOAD_CACHE):
+            with open(self.DOWNLOAD_CACHE, "r") as cache:
+                lines = cache.readlines()
+                file_id = file_id+'\n'
+                lines.append(file_id)
+        
+        lines = list(sorted(set(lines)))
+        with open(self.DOWNLOAD_CACHE, "w") as cache_file:  # Open in append mode
+            cache_file.writelines(lines)
+            cache_file.close()
+        cache.close()
 
         return file_name
 
@@ -130,7 +139,7 @@ class SLC_Search:
         self.current_date = self.start_date
         self.final_results = []
         self.session = asf.ASFSession()
-        self.session.auth_with_creds("tnd2000", "Nick0327@")
+        self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
 
         # Define paths
         self.lake_json_path = self.DATALAKE

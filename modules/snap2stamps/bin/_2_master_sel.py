@@ -40,7 +40,7 @@ class MasterSelect:
             lines = file.readlines()
 
         for idx, line in enumerate(lines):
-            if master_info[0] and line.startswith("MASTER"):
+            if master_info[0] and line.startswith("MASTER="):
                 strg = str(master_info[0]).replace('\\', '/').replace('//', '/')
                 lines[idx] = f"MASTER={strg}\n"
             if master_info[1] and line.startswith("OLD_MASTER"):
@@ -65,21 +65,22 @@ class MasterSelect:
                 if not os.path.exists(dest_path):
                     os.makedirs(dest_path, exist_ok=True)
                 shutil.move(src_path, dest_path)
-        elif len(os.listdir(self.MASTERFOLDER)) >= 2:
-            exclude = exclude[17:25] if len(exclude) > 8 else exclude
+        if len(os.listdir(self.MASTERFOLDER)) >= 2:
+            exclude = os.path.split(exclude)[1][17:25] if ".zip" in exclude else exclude.replace("\\", "/").split("/")[-1]
             for item in os.listdir(self.MASTERFOLDER):
-                if item != exclude and len(os.listdir(f"{self.MASTERFOLDER}/{item}"))<1:
+                if item != exclude:
                     src_path = os.path.join(self.MASTERFOLDER, item)
-                    if not os.path.exists(src_path.replace("master", "slaves")):
-                        os.makedirs(src_path.replace("master", "slaves"), exist_ok=True)
                     shutil.move(src_path, self.SLAVESFOLDER)
 
-    def move_master(self, src_dir, master_in):
-        date = os.path.split(src_dir)[1][17:25] if master_in == 'r' else src_dir
-        dest = os.path.join(self.MASTERFOLDER, date) if master_in == 'r' else self.MASTERFOLDER
-        if master_in == 'r':
-            os.makedirs(dest, exist_ok=True)
-        shutil.move(src_dir, dest)
+    def move_master(self, src_dir):
+        if not os.path.isdir(src_dir):
+            date = os.path.split(src_dir)[1][17:25]
+            dest = os.path.join(self.MASTERFOLDER, date)
+            if not date in os.listdir(dest):
+                os.makedirs(dest, exist_ok=True)
+        else:
+            dest = self.MASTERFOLDER
+        shutil.move(src_dir, dest)     
 
     def select_master(self):
         
@@ -98,17 +99,19 @@ class MasterSelect:
             print("Reselecting MASTER...") 
             
             master_folder = os.path.join(self.MASTERFOLDER, selected_master[17:25] if master_in=="r" else selected_master)
-            os.makedirs(master_folder, exist_ok=True)
             output_name = f"{master_folder}/{selected_master}_M.dim" if self.plf == "Linux" else \
                         master_folder + f"/{selected_master[17:25] if master_in=='r' else selected_master}_M.dim"
 
             # Move master file
+            if master_folder == os.path.split(self.MASTER)[0].split("/")[-1]:
+                print("No MASTER date changes. Skipping reselecting...\n")
+                sys.exit(0)
             if master_in == "s":
                 print("New MASTER found in /slaves/")
-                self.move_master(os.path.join(self.SLAVESFOLDER, selected_master), master_in)
+                self.move_master(os.path.join(self.SLAVESFOLDER, selected_master))
             elif master_in == "r":
                 print("New MASTER found in /raw/")
-                self.move_master(os.path.join(self.RAWDATAFOLDER, selected_master), master_in)
+                self.move_master(os.path.join(self.RAWDATAFOLDER, selected_master))
             time.sleep(1)
             
             # Move slaves

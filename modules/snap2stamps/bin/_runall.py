@@ -73,14 +73,14 @@ class Manager:
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         results = SLC_Search("Descending", 553).search()
-        downloader = Download([results[-1]])
+        downloader = Download(results)
         if results:
             downloader.download(self.RAWDATAFOLDER)
-        time.sleep(2) 
-           
+            time.sleep(2)
+            
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(0).select_master()
+        MasterSelect(1).select_master()
         print("\n")
         
         # Find master busrt
@@ -109,4 +109,3 @@ if __name__ == "__main__":
         Manager().run_stages()
     except Exception as e:
         print(f"Solution Execution Fails Due to\n{e}")
-        
