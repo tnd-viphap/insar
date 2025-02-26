@@ -161,7 +161,7 @@ class SLC_Search:
         """Determine the search date range based on existing data."""
         if os.listdir(self.MASTERFOLDER) or os.listdir(self.SLAVESFOLDER):
             if os.path.exists(self.DOWNLOAD_CACHE) and os.path.getsize(self.DOWNLOAD_CACHE) > 0:
-                with open("./data/download_cache.txt", "r") as file:
+                with open(self.DOWNLOAD_CACHE, "r") as file:
                     latest_product = file.readlines()[-1].strip()
                 latest_date = datetime.strptime(latest_product[17:25], "%Y%m%d") + timedelta(1)
                 self.logger.info(f"Resuming from latest available data: {latest_date}")
@@ -209,6 +209,7 @@ class SLC_Search:
                 # Save the new product to lake.json
                 if not selected_result.geojson() in lake_data:
                     lake_data.append(selected_result.properties)
+                    lake_data = list(set(lake_data))
                     with open(self.lake_json_path, "w") as file:
                         json.dump(lake_data, file, indent=4)
                 
