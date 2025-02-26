@@ -17,7 +17,7 @@
 #
 
 # Give the correct path to the APS toolbox
-export APS_toolbox="/home/viphap/insar/modules/TRAIN/"
+export APS_toolbox=/mnt/d/VIPHAP/insar/modules/TRAIN/
 # export PYTHONPATH="/home/viphap/insar/modules/TRAIN/python_modules/"
 # full path to the get_modis.py file
 # export get_modis_filepath="/home/viphap/insar/modules/TRAIN/python_packages/oscar-client-python/get_modis.py"

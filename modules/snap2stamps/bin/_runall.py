@@ -67,7 +67,8 @@ class Manager:
     def run_stages(self):
         # Initialze the project configuration
         print(f"############## Running: Step 1: Gather project structure ##############")
-        Initialize()
+        bbox = [106.6969, 10.7615, 106.7275, 10.7945] ############### NEED REPLACING TO YOUR AOI ###############
+        Initialize(bbox)
         print("\n")
         
         # Do searching for data
@@ -105,7 +106,10 @@ class Manager:
         StaMPSExporter("DEMOBaSon", 0).process()
         
 if __name__ == "__main__":
+    Manager().run_stages()
+    '''
     try:
         Manager().run_stages()
     except Exception as e:
         print(f"Solution Execution Fails Due to\n{e}")
+    '''

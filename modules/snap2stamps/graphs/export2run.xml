@@ -7,7 +7,7 @@
       <sourceProduct.1 refid="Read(2)"/>
     </sources>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <targetFolder>D:/VIPHAP/insar/results//DEMOBaSon/INSAR_20160329_v1</targetFolder>
+      <targetFolder>D:/VIPHAP/insar/results//DEMOBaSon/INSAR_20160329_v2</targetFolder>
       <psiFormat>true</psiFormat>
     </parameters>
   </node>
@@ -15,14 +15,14 @@
     <operator>Read</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>D:/VIPHAP/insar/process/coreg\20160329_20160422_IW1.dim</file>
+      <file>D:/VIPHAP/insar/process/coreg\20160329_20250210_IW1.dim</file>
     </parameters>
   </node>
   <node id="Read(2)">
     <operator>Read</operator>
     <sources/>
     <parameters class="com.bc.ceres.binding.dom.XppDomElement">
-      <file>D:\VIPHAP\insar\process\ifg\20160329_20160422_IW1.dim</file>
+      <file>D:\VIPHAP\insar\process\ifg\20160329_20250210_IW1.dim</file>
     </parameters>
   </node>
   <applicationData id="Presentation">

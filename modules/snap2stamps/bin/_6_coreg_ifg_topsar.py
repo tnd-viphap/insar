@@ -231,7 +231,6 @@ class CoregIFG:
         tailm = self.MASTER.split('/')[-1].split('_')[0]
 
         for dimfile in sorted_slavesplittedfolder:
-            print(dimfile)
             k += 1
             _, tail = os.path.split(os.path.join(self.SLAVESFOLDER, dimfile))
             if tail[0:8] != tailm:
@@ -311,6 +310,8 @@ class CoregIFG:
         self.out_file.close()
 
 if __name__ == "__main__":
+    CoregIFG(150.0).process()
+    '''
     try:
         start_time = time.time()
         CoregIFG(150.0).process()
@@ -318,5 +319,6 @@ if __name__ == "__main__":
         print(f"Coregistration and Interferogram executes in {(end_time - start_time)/60} minutes.")
     except Exception as e:
         print(f"Coregistration and Interferogram fails due to\n{e}")
+    '''
 
 
