@@ -7,7 +7,7 @@ import subprocess
 import time
 
 class StaMPSExporter:
-    def __init__(self, project_result, renew_flag, to_remove):
+    def __init__(self, project_result, renew_flag, to_remove=None):
         super().__init__()
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
@@ -152,9 +152,21 @@ class StaMPSExporter:
                 os.remove(os.path.join(self.PROJECTFOLDER, "target.dim"))
         except:
             pass
+        
+    def _update_config(self):
+        with open(self.inputfile, 'r') as file:
+            lines = file.readlines()
+            for idx, line in enumerate(lines):
+                if line.startswith("CURRENT_RESULT"):
+                    lines[idx] = "CURRENT_RESULT=" + str(self.outputexportfolder).replace('\\', '/').replace('//', '/') + '\n'
+                    
+        with open(self.inputfile, "w") as file:
+            file.writelines(lines)
+            file.close()
 
     def process(self):
         self.export()
+        self._update_config()
         self._check_diff()
         self._check_rslc()
         self.cleanup()
@@ -164,7 +176,7 @@ class StaMPSExporter:
 if __name__ == "__main__":
     try:
         start_time = time.time()
-        exporter = StaMPSExporter("DEMOBaSon", 0)
+        exporter = StaMPSExporter("DEMOBaSon", 1)
         exporter.process()
         print(f"StaMPS Export executes in {(time.time() - start_time) / 60} minutes.")
     except Exception as e:
