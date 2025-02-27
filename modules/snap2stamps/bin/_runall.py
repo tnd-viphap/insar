@@ -10,6 +10,7 @@ from _4_splitting_master import MasterSplitter
 from _5_splitting_slaves import SlavesSplitter
 from _6_coreg_ifg_topsar import CoregIFG
 from _7_stamps_export import StaMPSExporter
+from _9_0_stamps_prep import StaMPSPrep
 
 class Manager:
     def __init__(self):
@@ -107,6 +108,10 @@ class Manager:
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
         StaMPSExporter("DEMOBaSon", 0).process()
+        
+        # StaMPS preparation
+        print(f"############## Running: Step 9: StaMPS Preparation ##############")
+        StaMPSPrep(0.45).process()
         
 if __name__ == "__main__":
     Manager().run_stages()

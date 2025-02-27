@@ -49,84 +49,12 @@ class MTPrepSNAP:
         print(f"Processing {self.prg} patch(es) in range and {self.paz} in azimuth\n")
         print(f"Platform: {self.plf}\n")
         
-        if self.plf == "Windows":
-            disk, project = self.PROJECTFOLDER.split(":")
-            
-            # Replace file path
-            self.replace_in_wsl_file(f'/mnt/{disk.lower()}{project}modules/StaMPS/StaMPS_CONFIG.bash', 'STAMPS', f'"/mnt/{disk.lower()}{project}modules/StaMPS"')
-            self.replace_in_wsl_file(f'/mnt/{disk.lower()}{project}modules/StaMPS/StaMPS_CONFIG.bash', 'TRIANGLE_BIN', f'/mnt/{disk.lower()}{project}modules/triangle/bin')
-            self.replace_in_wsl_file(f'/mnt/{disk.lower()}{project}modules/StaMPS/StaMPS_CONFIG.bash', 'SNAPHU_BIN', f'/mnt/{disk.lower()}{project}modules/snaphu-1.4.2/bin')
-            self.replace_in_wsl_file(f'/mnt/{disk.lower()}{project}modules/TRAIN/APS_CONFIG.sh', 'APS_toolbox', f'/mnt/{disk.lower()}{project}modules/TRAIN/')
-            print("\n")
-            time.sleep(1)
-            
-            # Add modules config files to Linux
-            print("Adding StaMPS CONFIG and APS_CONFIG to .bashrc...")
-            lines = [
-                f'source /mnt/{disk.lower()}{project}modules/StaMPS/StaMPS_CONFIG.bash',
-                f'source /mnt/{disk.lower()}{project}modules/TRAIN/APS_CONFIG.sh',
-            ]
-            self.add_to_wsl_bashrc(lines)
-            print("\n")
-        
     def _load_config(self):
         with open(self.inputfile, 'r') as file:
             for line in file.readlines():
                 key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
                 if key:
                     setattr(self, key, value)  # Dynamically set variables
-                    
-    def replace_in_wsl_file(self, file_path, key, new_value):
-        """
-        Replaces a line in a WSL file where a specific key exists, keeping the format 'key=value'.
-
-        :param file_path: Path to the file inside WSL (e.g., ~/.bashrc)
-        :param key: The key (variable name) to search for
-        :param new_value: The new value to assign to the key
-        """
-        # Construct the sed command to replace the line dynamically
-        replace_command = f"wsl bash -c \"sed -i 's|^export {key}=.*|export {key}={new_value}|' {file_path}\""
-
-        # Run the command in WSL
-        result = subprocess.run(replace_command, shell=True, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            print(f"-> Successfully configured '{key}' in {file_path} to '{new_value}'")
-        else:
-            print("Error:", result.stderr)
-                    
-    def add_to_wsl_bashrc(self, lines):
-        """
-        Appends lines to the ~/.bashrc file inside WSL.
-
-        :param lines: List of strings to be added to .bashrc
-        """
-        wsl_bashrc_path = "/home/$USER/.bashrc"
-        
-        # Read the existing .bashrc file
-        check_command = f"wsl bash -c \"grep -Fxq '{lines[0]}' {wsl_bashrc_path} && echo 'FOUND' || echo 'NOT_FOUND'\""
-        result = subprocess.run(check_command, shell=True, capture_output=True, text=True)
-
-        if not "NOT_FOUND" in result.stdout:
-            print("Entries already exist in .bashrc. Skipping addition...")
-            return
-
-        # Escape special characters to prevent syntax issues
-        escaped_lines = [line.replace('"', '\\"').replace("'", "'\\''") for line in lines]
-
-        # Convert list of lines into a formatted string with newline handling
-        formatted_lines = "\\n".join(escaped_lines)
-
-        # WSL command to append lines to .bashrc
-        append_command = f"wsl bash -c \"echo -e '{formatted_lines}' >> {wsl_bashrc_path}\""
-
-        # Run the command
-        result = subprocess.run(append_command, shell=True, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            print(f"Successfully added lines to {wsl_bashrc_path}")
-        else:
-            print("Error:", result.stderr)
 
     def _run_command(self, command):
         """Runs a shell command and returns the output."""
@@ -178,7 +106,7 @@ class MTPrepSNAP:
             self.read_rslc_and_compute_mean([f.replace("\\", "/") for f in slc_files], self.width, calamp_out_path)
         else:
             calamp_cmd = f"calamp {calamp_in_path} {self.width} {calamp_out_path} f 1 {self.maskfile}"
-            subprocess.run(calamp_cmd, shell=True)
+            os.system(calamp_cmd)
         
         time.sleep(3)
 
@@ -200,7 +128,7 @@ class MTPrepSNAP:
             matlab_script = f"{self.PROJECTFOLDER}modules/StaMPS/matlab/sb_parms_initial.m" if self.sb_flag else f"{self.PROJECTFOLDER}modules/StaMPS/matlab/ps_parms_initial_windows.m"
         else:
             matlab_script = f"{self.PROJECTFOLDER}modules/StaMPS/matlab/sb_parms_initial.m" if self.sb_flag else f"{self.PROJECTFOLDER}modules/StaMPS/matlab/ps_parms_initial.m"
-        os.system(f"matlab -nojvm -nosplash -nodisp -r \"run('{matlab_script}'); exit;\" > {self.CURRENT_RESULT}/ps_parms_initial.log")
+        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{matlab_script}'); exit;\" > {self.CURRENT_RESULT}/ps_parms_initial.log")
         
         time.sleep(3)
         
@@ -326,8 +254,8 @@ class MTPrepSNAP:
             sys.exit(3)
     
 if __name__ == "__main__":
-    #try:
-    processor = MTPrepSNAP(0.4, None, None)
-    processor.process()
-    #except Exception as e:
-    #    print(f"MTPreSnap fails to execute due to\n{e}")
+    try:
+        processor = MTPrepSNAP(0.4, None, None)
+        processor.process()
+    except Exception as e:
+        print(f"MTPreSnap fails to execute due to\n{e}")

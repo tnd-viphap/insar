@@ -209,7 +209,7 @@ class SLC_Search:
                 # Save the new product to lake.json
                 if not selected_result.geojson() in lake_data:
                     lake_data.append(selected_result.properties)
-                    lake_data = list(set(lake_data))
+                    lake_data = list(set([dict(f) for f in lake_data]))
                     with open(self.lake_json_path, "w") as file:
                         json.dump(lake_data, file, indent=4)
                 

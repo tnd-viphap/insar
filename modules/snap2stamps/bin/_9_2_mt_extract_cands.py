@@ -44,7 +44,8 @@ class MTExtractCands:
         setx_command = f'setx PATH "%PATH%;{folder_to_add}"'
         subprocess.run(setx_command, shell=True)
         print("Executors added to PATH")
-        
+    
+    '''
     def sel_parm_process(self, param_file):
         try:
             with open(param_file, "r") as parmfile:
@@ -383,7 +384,8 @@ class MTExtractCands:
         psfile.close()
         outfile.close()
         print("DEM Ready")
-
+    '''
+    
     def process(self):
         with open(self.patch_list, 'r') as f:
             patches = f.read().splitlines()
@@ -402,13 +404,7 @@ class MTExtractCands:
                 sel_file = "selsbc.in" if 'sbc' in self.sel_file else "selpsc.in"
                 print(f"######### {sel_file.split('.')[0].upper()} #########")
                 sel_cmd = f"{sel_file.split('.')[0]}_patch {self.sel_file} {patch_in} {pscands_ij} {pscands_da} {mean_amp_flt} {self.precision} {self.byteswap}"
-                if self.plf == "Windows":
-                    self.sel_parm_process(self.sel_file)
-                    self.sel_amplitude_process()
-                    self.sel_read_patch(patch_in)
-                    self.sel_core(pscands_ij, pscands_da, mean_amp_flt, self.mask_file, self.masterampfilename)
-                else:
-                    os.system(sel_cmd)
+                os.system(sel_cmd)
                 if self.mask_file:
                     sel_cmd += f" {os.path.join(self.workdir, self.mask_file)}"
             
@@ -418,10 +414,7 @@ class MTExtractCands:
             if self.dolonlat:
                 print(f"######### LON-LAT Preparation #########")
                 lonlat_cmd = f"psclonlat {psclonlat} {pscands_ij} {pscands_ll}"
-                if self.plf == "Windows":
-                    None#self.extract_lonlat(psclonlat, pscands_ij, pscands_ll)
-                else:
-                    os.system(lonlat_cmd)
+                os.system(lonlat_cmd)
                 print("\n")
                 
             pscdem = os.path.join(self.CURRENT_RESULT, 'pscdem.in').replace("\\", "/")
@@ -430,10 +423,7 @@ class MTExtractCands:
             if self.dodem:
                 print(f"######### DEM Preparation #########")
                 dem_cmd = f"pscdem {pscdem} {pscands_ij} {pscands_hgt}"
-                if self.plf == "Windows":
-                    None#self.extract_psc_height(pscdem, pscands_ij, pscands_hgt)
-                else:
-                    os.system(dem_cmd)
+                os.system(dem_cmd)
                 print("\n")
                 
             pscphase = os.path.join(self.CURRENT_RESULT, 'pscphase.in').replace("\\", "/")
@@ -442,8 +432,5 @@ class MTExtractCands:
             if self.dophase:
                 print(f"######### PHASE Preparation #########")
                 phase_cmd = f"pscphase {pscphase} {pscands_ij} {pscands_ph}"
-                if self.plf == "Windows":
-                    None
-                else:
-                    os.system(phase_cmd)
+                os.system(phase_cmd)
                 print("\n")

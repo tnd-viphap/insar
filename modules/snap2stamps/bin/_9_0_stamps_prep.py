@@ -1,6 +1,5 @@
 import os
 import platform
-import subprocess
 import time
 
 from _9_1_mt_prep_snap import MTPrepSNAP
@@ -27,19 +26,18 @@ class StaMPSPrep:
                     setattr(self, key, value)  # Dynamically set variables
                     
     def process(self):
+        os.chdir(self.CURRENT_RESULT)
         # Default for Linux
-        command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT, self.threshold, 1, 1, 50, 50]
-        if self.patch_info:
-            command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
-                       self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]]
         if self.plf == "Windows":
             processor = MTPrepSNAP(self.threshold, self.patch_info, None)
             processor.process()
         elif self.plf == "Linux":
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]
+            if self.patch_info:
+                command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
+                        str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
             timeStarted = time.time()
-            stdout = process.communicate()[0]
-            print(f'SNAP STDOUT: {stdout}')
+            os.system(" ".join(command))
             timeDelta = time.time() - timeStarted
             print(f'Finished process in {timeDelta} seconds.')
             
