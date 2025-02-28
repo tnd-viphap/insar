@@ -190,3 +190,7 @@ raw/
 geom/
 tomaster2run.xml
 toslaves2run.xml
+data/baseline_cache.txt
+data/broken_cache.txt
+data/download_cache.txt
+data/lake.json
