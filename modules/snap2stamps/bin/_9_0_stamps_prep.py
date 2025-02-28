@@ -1,8 +1,10 @@
 import os
 import platform
 import time
+import sys
+sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 
-from _9_1_mt_prep_snap import MTPrepSNAP
+from modules.snap2stamps.bin._9_1_mt_prep_snap import MTPrepSNAP
 
 
 class StaMPSPrep:

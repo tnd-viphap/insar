@@ -103,10 +103,10 @@ class CoregIFG:
         return baseline_params
 
     def remove_poor_coreg(self, coreg_dim):
-        os.remove(coreg_dim)
         shutil.rmtree(coreg_dim.replace(".dim", ".data"))
-        os.remove(coreg_dim.replace("coreg", "ifg"))
         shutil.rmtree(coreg_dim.replace("coreg", "ifg").replace(".dim", ".data"))
+        os.remove(coreg_dim)
+        os.remove(coreg_dim.replace("coreg", "ifg"))
 
     def check_coregistration(self, dim_file, window_size=128, stride=64, threshold=85):
         """
@@ -246,6 +246,17 @@ class CoregIFG:
                 if any(f in os.listdir(self.COREGFOLDER) for f in check_outputname) or any(f in os.listdir(self.IFGFOLDER) for f in check_outputname):
                     print(f"Slave {tail[0:8]} is coregistered and does have interferogram. Validating spatial coverage...\n")
                     self.check_overlapping(self.MASTER, os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                    # Check baseline and remove weak interferogram in terms of baseline
+                    baseline = self.parse_baseline(os.path.join(self.IFGFOLDER, outputname+'.dim'))["perp_bs"]
+                    if abs(baseline) >= self.max_perp:
+                        if os.path.exists(self.baseline_cache_path):
+                            with open(self.baseline_cache_path, "a") as cb_file:
+                                cb_file.write(f"{outputname+'.dim'}\n")
+                                cb_file.close()
+                        self.remove_poor_coreg(os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                        print(f"Slave {outputname}: Poor Interferogram (Bperp = {baseline} m) for PS processing. Skipping...")
+                    else:
+                        print(f"-> {outputname}: Valid baseline = {baseline}\n")
                     continue
 
                 # **Check if outputname is in broken_cache.txt**
@@ -294,14 +305,17 @@ class CoregIFG:
                 
                 # Check baseline and remove weak interferogram in terms of baseline
                 baseline = self.parse_baseline(os.path.join(self.IFGFOLDER, outputname+'.dim'))["perp_bs"]
-                if baseline >= self.max_perp:
+                if abs(baseline) >= self.max_perp:
                     if os.path.exists(self.baseline_cache_path):
                         with open(self.baseline_cache_path, "a") as cb_file:
-                            cb_file.write(f"{outputname+'.dim'}\n")
+                            lines = cb_file.readlines()
+                        lines.append(f"{outputname+'.dim'}\n")
+                        lines = list(set(lines))
+                        with open(self.baseline_cache_path, "w") as cb_file:
+                            cb_file.writelines(lines)
                             cb_file.close()
                     self.remove_poor_coreg(os.path.join(self.COREGFOLDER, outputname+'.dim'))
-                    self.remove_poor_coreg(os.path.join(self.IFGFOLDER, outputname+'.dim'))
-                    print(f"Slave {outputname}: Poor Interferogram for PS processing. Skipping...")
+                    print(f"Slave {outputname}: Poor Interferogram (Bperp = {baseline} m) for PS processing. Skipping...")
                 else:
                     print(f"-> {outputname}: Valid baseline = {baseline}\n")
                 print(self.bar_message)

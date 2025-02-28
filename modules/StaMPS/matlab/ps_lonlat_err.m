@@ -1,6 +1,6 @@
-function ps_lonlat_err()
+function ps_lonlat_err(current_result)
     load('la2.mat','la');  %incidence angle in radians
-    load('../parms','heading'); %azimuth clockwise from the north
+    load(strcat(current_result, '/parms.mat'),'heading'); %azimuth clockwise from the north
     re=getparm('earth_radius_below_sensor');
     load('dem_err.mat','dem_err');
     theta=(180-heading)*pi/180;

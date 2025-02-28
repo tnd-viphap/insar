@@ -27,9 +27,6 @@ class Download:
                 key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
                 if key:
                     setattr(self, key, value)
-                    
-        with open(self.DATALAKE, "r") as file:
-            self.data = json.load(file)
             
         self.print_lock = threading.Lock()  # Ensure thread-safe printing
         
@@ -37,9 +34,16 @@ class Download:
 
     def _get_expected_size(self, file_id):
         """Retrieve expected file size from lake.json."""
+        with open(self.DATALAKE, "r") as file:
+            self.data = json.load(file)
+        """Retrieve expected file size from lake.json safely."""
         for entry in self.data:
-            if dict(entry)["properties"]["fileID"] == file_id:
-                return dict(entry)["properties"]["bytes"]
+            if isinstance(entry, dict) and "properties" in entry:
+                properties = entry["properties"]
+                if isinstance(properties, dict) and properties.get("fileID") == file_id:
+                    file.close()
+                    return properties.get("bytes")
+        file.close()
         return None
 
     def _resume_download(self, result, savepath):
@@ -140,10 +144,6 @@ class SLC_Search:
         self.final_results = []
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
-
-        # Define paths
-        self.lake_json_path = self.DATALAKE
-        
         self.resume = False
         self.flightDirection = flightDirection
         self.frame = frame
@@ -172,9 +172,9 @@ class SLC_Search:
     def search(self):
         """Perform a full search for Sentinel-1 data."""
         # Load lake.json if it exists
-        if os.path.exists(self.lake_json_path):
+        if os.path.exists(self.DATALAKE):
             try:
-                with open(self.lake_json_path, "r") as file:
+                with open(self.DATALAKE, "r") as file:
                     lake_data = json.load(file)
                     if not isinstance(lake_data, list):
                         lake_data = []
@@ -209,14 +209,15 @@ class SLC_Search:
                 # Save the new product to lake.json
                 if not selected_result.geojson() in lake_data:
                     lake_data.append(selected_result.properties)
-                    lake_data = list(set([dict(f) for f in lake_data]))
-                    with open(self.lake_json_path, "w") as file:
+                    lake_data = list(set(lake_data))
+                    with open(self.DATALAKE, "w") as file:
                         json.dump(lake_data, file, indent=4)
+                        file.close()
                 
                 if os.listdir(self.RAWDATAFOLDER):
                     for file in os.listdir(self.RAWDATAFOLDER):
                         if file[17:23] == selected_result.properties['fileName'][17:23]:
-                            print("Raw files detected. Checking for resuming or reloading...")
+                            print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
                             result = asf.search(
                                 platform=["Sentinel-1A", "Sentinel-1B"],
                                 processingLevel="SLC",

@@ -4,10 +4,11 @@ import platform
 import subprocess
 import sys
 import time
+sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 
 import numpy as np
 
-from _9_2_mt_extract_cands import MTExtractCands
+from modules.snap2stamps.bin._9_2_mt_extract_cands import MTExtractCands
 
 
 class MTPrepSNAP:

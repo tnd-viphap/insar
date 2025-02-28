@@ -3,25 +3,22 @@ function ps_export_gis(filename,lon_rg,lat_rg,ortho)
     ps_plot('v-dao', 'a_linear', 'ts'); %Time series variabls
     close(gcf)
     end
+    fprintf("TS V-dao done\n")
     if ~exist('ps_plot_v-dao.mat')
     ps_plot('v-dao', 'a_linear', -1); %Mean Velocity variabls
     close(gcf)
     end
+    fprintf("V-dao done\n")
 
-    load('ps_plot_v-dao','ph_disp') %dimension [#ps 1]
-    load('ps_plot_ts_v-dao','ph_mm')   %dimension [#ps #ifg]
-    load('ps_plot_ts_v-dao','day')   %dimension [#ifg 1]
-    load('ps2','lonlat')  %dimension [#ps 2]
-    load('lonlat_err','lonlat_err')
-    load('dem_err','dem_err')
-    load('ps2','xy')  %%dimension [#ps 3] id despoints PS
-    load ('hgt2','hgt') %dimension [#ps 1]
-    load('pm2','coh_ps') % [#ps 1]
-
-
-
-
-
+    load('ps_plot_v-dao.mat','ph_disp') %dimension [#ps 1]
+    load('ps_plot_ts_v-dao.mat','ph_mm')   %dimension [#ps #ifg]
+    load('ps_plot_ts_v-dao.mat','day')   %dimension [#ifg 1]
+    load('ps2.mat','lonlat')  %dimension [#ps 2]
+    load('lonlat_err.mat','lonlat_err')
+    load('dem_err.mat','dem_err')
+    load('ps2.mat','xy')  %%dimension [#ps 3] id despoints PS
+    load ('hgt2.mat','hgt') %dimension [#ps 1]
+    load('pm2.mat','coh_ps') % [#ps 1]
 
     %decouper selon une zone
     if ~isempty(lon_rg) && ~isempty(lat_rg)
@@ -72,7 +69,7 @@ function ps_export_gis(filename,lon_rg,lat_rg,ortho)
     %dem_err=
     
     
-    header=['CODE';'LON';'LAT';'HEIGHT';'COHERENCE';'VLOS';days]'; % [1 6+#IFG] %Cell of STRING
+    header=['CODE';'LON';'LAT';'HEIGHT';'COHERENCE';'VLOS';days]; % [1 6+#IFG] %Cell of STRING
     clear days
     data=[ids,lon,lat,hgt,coh,vlos,d_mm]; %[#ps 6+#IFG];
     clear ids lon lat hgt coh vlos d_mm

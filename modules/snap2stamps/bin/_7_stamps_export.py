@@ -46,11 +46,11 @@ class StaMPSExporter:
             project_outputs = sorted(project_outputs, key=lambda x: int(x.lstrip('v')) if x.lstrip('v').isdigit() else float('inf'))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.STAMPFOLDER}/{self.project_result}/INSAR_{tail[:8]}_v{mark}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.STAMPFOLDER}/{self.project_result}/INSAR_{tail[:8]}_v{mark-1}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.STAMPFOLDER}/{self.project_result}/INSAR_{tail[:8]}_v1"
+            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
         os.makedirs(self.LOGFOLDER, exist_ok=True)
@@ -77,11 +77,11 @@ class StaMPSExporter:
                 print("-> Missing .par files\n")
                 
     def _check_rslc(self):
-        if (len(os.listdir(self.COREGFOLDER)) + 2) == len(os.listdir(os.path.join(self.outputexportfolder, "rslc"))):
+        if int(len(glob.glob(self.outputexportfolder + "/diff0" + "/*.base"))) == int(len(glob.glob(self.outputexportfolder + "/rslc" + "/*.rslc")) - 1):
             print("-> Correct RSLC exports\n")
         else:
-            print("-> EXPORT ERROR: Missing RSLC files\n")
-            
+            print(int(len(glob.glob(self.outputexportfolder + "/rslc" + "/*.rslc")) - 1))
+            print("-> EXPORT ERROR: Missing RSLC files. The data is doubted to be removed due to poor baseline\n")
 
     def export(self):
         self.out_file.write(self.bar_message)
@@ -91,6 +91,23 @@ class StaMPSExporter:
         self.out_file.write(self.bar_message)
 
         sorted_dimfiles = sorted(glob.glob(self.COREGFOLDER + '/*' + self.IW1 + '.dim'))
+        
+        
+        with open(self.BASELINE_CACHE, "r") as file:
+            for line in file.readlines():
+                print(f"-> {line.strip()}: Poor intergerogram due to invalid baseline checking...")
+                try:
+                    os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".base")))
+                    os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".diff")))
+                    os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".diff.par")))
+                except:
+                    pass
+                try:
+                    os.remove(os.path.join(self.outputexportfolder, "rslc", line.strip().split(".")[0].split("_")[1]+'.rslc'))
+                    os.remove(os.path.join(self.outputexportfolder, "rslc", line.strip().split(".")[0].split("_")[1]+'.rslc.par'))
+                except:
+                    pass
+                print("-> Invalid baseline data detected. Relating files deleted\n")
 
         for k, dimfile in enumerate(sorted_dimfiles, start=1):
             _, tail = os.path.split(dimfile)
@@ -126,8 +143,29 @@ class StaMPSExporter:
 
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 timeStarted = time.time()
-                stdout = process.communicate()[0]
-                print(f'SNAP STDOUT: {stdout}')
+                try:
+                    result = process.communicate()
+                except:
+                    print("-> Export fails. Skipping this export...")
+                    if tail.replace("_IW1.dim", ".base") in os.listdir(os.path.join(self.outputexportfolder, "diff0")) and \
+                        tail.replace("_IW1.dim", ".diff") in os.listdir(os.path.join(self.outputexportfolder, "diff0")) and \
+                        tail.replace("_IW1.dim", ".diff.par") in os.listdir(os.path.join(self.outputexportfolder, "diff0")):
+                        
+                        try:
+                            os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".base")))
+                            os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".diff")))
+                            os.remove(os.path.join(self.outputexportfolder, "diff0", line.strip().replace("_IW1.dim", ".diff.par")))
+                        except:
+                            pass
+                        try:
+                            os.remove(os.path.join(self.outputexportfolder, "rslc", line.strip().split(".")[0].split("_")[1]+'.rslc'))
+                            os.remove(os.path.join(self.outputexportfolder, "rslc", line.strip().split(".")[0].split("_")[1]+'.rslc.par'))
+                        except:
+                            pass
+                        
+                        continue
+
+                print(f'SNAP STDOUT: {result[0]}')
                 timeDelta = time.time() - timeStarted
                 print(f'[{k}] Finished process in {timeDelta} seconds.')
                 self.out_file.write(f'[{k}] Finished process in {timeDelta} seconds.\n')
@@ -176,7 +214,7 @@ class StaMPSExporter:
 if __name__ == "__main__":
     try:
         start_time = time.time()
-        exporter = StaMPSExporter("DEMOBaSon", 1)
+        exporter = StaMPSExporter("DEMOBaSon", 0)
         exporter.process()
         print(f"StaMPS Export executes in {(time.time() - start_time) / 60} minutes.")
     except Exception as e:

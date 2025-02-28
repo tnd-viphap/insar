@@ -1,9 +1,6 @@
 import os
 import platform
 import subprocess
-import sys
-import struct
-import numpy as np
 
 
 class MTExtractCands:

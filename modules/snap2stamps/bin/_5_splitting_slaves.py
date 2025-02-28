@@ -3,7 +3,9 @@ import os
 import glob
 import subprocess
 import time
-from _3_find_bursts import Burst
+import sys
+sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
+from modules.snap2stamps.bin._3_find_bursts import Burst
 
 class SlavesSplitter:
     def __init__(self):
