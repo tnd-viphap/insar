@@ -17,9 +17,17 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 
 class Manager:
-    def __init__(self, bbox):
+    def __init__(self, bbox, search_direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
+                 result_folder="", renew_flag=0):
         super().__init__()
         self.bbox = bbox
+        self.reest_flag = reest_flag
+        self.max_perp = max_perp
+        self.da_threshold = da_threshold
+        self.search_direction = search_direction
+        self.frame = frame
+        self.result_folder=result_folder
+        self.renew_flag=renew_flag
 
         # List of Python files to execute
         self.python_files = [
@@ -115,7 +123,7 @@ class Manager:
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
-        results = SLC_Search("Descending", 553).search()
+        results = SLC_Search(self.search_direction, self.frame).search()
         time.sleep(2)
         print(f"-> Found {len(results)} products. Downloading...")
         downloader = Download(results)
@@ -125,7 +133,7 @@ class Manager:
 
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(1).select_master()
+        MasterSelect(self.reest_flag).select_master()
         print("\n")
 
         # Find master busrt
@@ -149,11 +157,11 @@ class Manager:
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter("DEMOBaSon", 0).process()
+        StaMPSExporter(self.result_folder, self.renew_flag).process()
 
         # StaMPS preparation
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
-        StaMPSPrep(0.45).process()
+        StaMPSPrep(self.da_threshold).process()
 
 
 if __name__ == "__main__":
