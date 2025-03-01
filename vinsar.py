@@ -1,6 +1,8 @@
+#type:ignore
 from snap2stamps import Manager
 from stamps import StaMPSEXE
 import time
+import os
 
 if __name__ == "__main__":
     bbox = [106.6969, 10.7615, 106.7275, 10.7945] ############### NEED REPLACING TO YOUR AOI ###############
