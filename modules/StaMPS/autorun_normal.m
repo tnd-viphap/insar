@@ -60,13 +60,13 @@ function process_patch_folders(current_result)
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 80);
+            setparm('percent_rand', 100);
             setparm('gamma_stdev_reject', 0);
             stamps(3,3);
             fprintf('\n');
             % Stamps 4:
             fprintf("Step 4: Weed PS\n");
-            setparm('weed_zero_elevation', 'y');
+            setparm('weed_zero_elevation', 'n');
             setparm('weed_neighbours', 'y');
             stamps(4,4);
             fprintf('\n');
@@ -115,9 +115,10 @@ function process_patch_folders(current_result)
             save(strcat(current_result, '/parms.mat'), '-struct', 'data')
             ps_dem_err();
             ps_lonlat_err(current_result);
+            chdir(strcat(current_result, '/', folder_name));
             ps_export_gis('attempt.csv', [], [], 'ortho');
-            fprintf("Results CSV done\n")
-            chdir(current_result)
+            fprintf("Results CSV done\n");
+            chdir(current_result);
         end
     end
 end
