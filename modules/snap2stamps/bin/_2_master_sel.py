@@ -79,7 +79,7 @@ class MasterSelect:
         if not os.path.isdir(src_dir):
             date = os.path.split(src_dir)[1][17:25]
             dest = os.path.join(self.MASTERFOLDER, date)
-            if not date in os.listdir(dest):
+            if not date in os.listdir(self.MASTERFOLDER):
                 os.makedirs(dest, exist_ok=True)
         else:
             dest = self.MASTERFOLDER
@@ -112,28 +112,35 @@ class MasterSelect:
         
     def slave_to_master(self, om, cm):
         current_master = os.path.join(self.MASTERFOLDER, os.listdir(self.MASTERFOLDER)[0])
-        current_master = [os.path.join(current_master, f) for f in os.listdir(current_master) if '.dim' in f][0]
+        current_master = [os.path.join(current_master, f) for f in os.listdir(current_master) if '.dim' in f]
+        if current_master:
+            current_master = current_master[0]
         
-        graphxml = os.path.join(self.GRAPHSFOLDER, 'tomaster.xml')
-        with open(graphxml, 'r') as file:
-            filedata = file.read()
-            filedata = filedata.replace('SOURCE', current_master)
-            filedata = filedata.replace('OUTPUT', current_master.replace(f"_{self.IW1}", "_M"))
-        
-        with open(self.graph2runsm, 'w') as file:
-            file.write(filedata)
+            graphxml = os.path.join(self.GRAPHSFOLDER, 'tomaster.xml')
+            with open(graphxml, 'r') as file:
+                filedata = file.read()
+                filedata = filedata.replace('SOURCE', current_master)
+                filedata = filedata.replace('OUTPUT', current_master.replace(f"_{self.IW1}", "_M"))
             
-        if (om in cm) or (os.path.split(current_master)[1].replace(f"{self.IW1}", "M") in os.listdir(os.path.split(current_master)[0])):
-            print("-> Converted S-M data detected. Skipping...")
+            with open(self.graph2runsm, 'w') as file:
+                file.write(filedata)
+                
+            if (om in cm) or (os.path.split(current_master)[1].replace(f"{self.IW1}", "M") in os.listdir(os.path.split(current_master)[0])):
+                print("-> Converted S-M data detected. Skipping...")
+            else:
+                print("-> Converting S-M...")
+                args = [self.GPTBIN_PATH, self.graph2runsm, '-c', self.CACHE, '-q', self.CPU]
+                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                process.communicate()
+                time.sleep(2)
+                os.remove(current_master)
+                shutil.rmtree(current_master.replace(".dim", ".data"))
+                print("-> Converting DONE")
         else:
-            print("-> Converting S-M...")
-            args = [self.GPTBIN_PATH, self.graph2runsm, '-c', self.CACHE, '-q', self.CPU]
-            process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            process.communicate()
-            time.sleep(2)
-            os.remove(current_master)
-            shutil.rmtree(current_master.replace(".dim", ".data"))
-            print("-> Converting DONE")
+            if any(['.zip' in f for f in os.listdir(os.path.join(self.MASTERFOLDER, os.listdir(self.MASTERFOLDER)[0]))]):
+                print(f"-> Raw data with ZIP detected. Skipping...\n")
+            else:
+                print(f"-> No data found. Skipping...\n")
 
     def select_master(self):
         selected_master = self.all_files[int(len(self.all_files) // 2)] if len(self.all_files) > 2 else self.all_files[0]
@@ -183,7 +190,10 @@ class MasterSelect:
                         om = line.split("=")[1].strip()
                         
                 print("Converting old-new MASTER...")
-                self.master_to_slave(om, cm)
+                if '.zip' in os.listdir(os.path.join(self.MASTERFOLDER, selected_master))[0]:
+                    print("Raw data detected. Skipping reformatting MASTER file...")
+                else:
+                    self.master_to_slave(om, cm)
                 time.sleep(1)
                 self.slave_to_master(om, cm)
                 time.sleep(1)

@@ -56,39 +56,39 @@ function process_patch_folders(current_result)
             setparm('gamma_change_convergence', 0.01);
             setparm('filter_grid_size', 100);
             stamps(2,2);
-            print('\n')
+            fprintf('\n');
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
             setparm('percent_rand', 80);
-            setparm('gamma_stdev_reject', 0.)
+            setparm('gamma_stdev_reject', 0);
             stamps(3,3);
-            print('\n')
+            fprintf('\n');
             % Stamps 4:
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'y');
             setparm('weed_neighbours', 'y');
             stamps(4,4);
-            print('\n')
+            fprintf('\n');
             % Stamps 5:
             fprintf("Step 5: Phase correction\n");
-            setparm('merge_resample_size', 10)
+            setparm('merge_resample_size', 10);
             setparm('scla_deramp', 'y');
             stamps(5,5, 'y');
-            ps_plot('w', -1)
+            fprintf('\n');
             % Stamps 6:
             fprintf("Step 6: Phase unwrapping\n");
             stamps(6,6, 'y');
+            fprintf('\n');
             % Stamps 7:
             aps_linear();
             fprintf("Step 7: Phase unwrapping correction\n");
             stamps(7,7, 'y');
-            % Re-run 6 and 7
-            stamps(6,6, 'y');
-            stamps(7,7, 'y');
+            fprintf('\n');
             % Stamps 8:
             fprintf("Step 8: Atmospheric correction\n");
             stamps(8,8, 'y');
+            fprintf('\n');
             % Export to csv
             fprintf("Exporting results...");
             % Assume youre in any of PATCH folder

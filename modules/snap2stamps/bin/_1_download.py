@@ -65,7 +65,7 @@ class Download:
             return file_name
         
         if file_id[17:25] in self.processed_files:
-            print("Processed data detected. Skipping this product...")
+            print("-> Processed data detected. Skipping this product...")
             return
 
         with self.print_lock:
@@ -124,7 +124,7 @@ class Download:
                     self.logger.info(f"Downloaded: {file_name}")
 
 class SLC_Search:
-    def __init__(self, flightDirection, frame):
+    def __init__(self):
         super().__init__()
         
         # Read input file
@@ -145,8 +145,6 @@ class SLC_Search:
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
         self.resume = False
-        self.flightDirection = flightDirection
-        self.frame = frame
 
     def _setup_logger(self):
         """Set up logging."""
@@ -166,6 +164,16 @@ class SLC_Search:
                 latest_date = datetime.strptime(latest_product[17:25], "%Y%m%d") + timedelta(1)
                 self.logger.info(f"Resuming from latest available data: {latest_date}")
                 return latest_date, datetime.now()
+            else:
+                images = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
+                latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
+                return latest_date, datetime.now()
+        else:
+            images = [f[17:25] for f in os.listdir(self.RAWDATAFOLDER)]
+            if images:
+                latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
+                return latest_date, datetime.now()
+                
         self.logger.info("No data found in master/slaves, downloading from beginning.")
         return datetime(2014, 10, 1), datetime.now()
 
@@ -181,8 +189,10 @@ class SLC_Search:
             except json.JSONDecodeError:
                 lake_data = []
         else:
-            lake_data = []
-
+            with open(self.DATALAKE, 'w') as file:
+                json.dump([], file, indent=4)
+                file.close()
+        print(f"-> Search for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
         while self.current_date <= self.end_date:
             start = datetime(self.current_date.year, self.current_date.month, 1)
             next_month = self.current_date.month + 1 if self.current_date.month < 12 else 1
@@ -195,24 +205,22 @@ class SLC_Search:
                 platform=["Sentinel-1A", "Sentinel-1B"],
                 processingLevel="SLC",
                 intersectsWith=self.AOI,
-                flightDirection="Descending",
-                frame=553,
+                flightDirection=self.DIRECTION,
+                frame=int(self.FRAME),
                 start=start,
                 end=end
             )
+            lake_data.extend([f.geojson() for f in results])
             if results:
                 # Select one random result from the available images
                 selected_result = random.choice(results)
                 
                 # Append new product to the download queue
                 self.final_results.append(selected_result)
+                
                 # Save the new product to lake.json
                 if not selected_result.geojson() in lake_data:
                     lake_data.append(selected_result.properties)
-                    lake_data = list(set(lake_data))
-                    with open(self.DATALAKE, "w") as file:
-                        json.dump(lake_data, file, indent=4)
-                        file.close()
                 
                 if os.listdir(self.RAWDATAFOLDER):
                     for file in os.listdir(self.RAWDATAFOLDER):
@@ -222,8 +230,8 @@ class SLC_Search:
                                 platform=["Sentinel-1A", "Sentinel-1B"],
                                 processingLevel="SLC",
                                 intersectsWith=self.AOI,
-                                flightDirection=self.flightDirection,
-                                frame=self.frame,
+                                flightDirection=self.DIRECTION,
+                                frame=int(self.FRAME),
                                 start=datetime.strptime(file[17:25], "%Y%m%d")-timedelta(1),
                                 end=datetime.strptime(file[17:25], "%Y%m%d")+timedelta(1)
                             )
@@ -233,6 +241,14 @@ class SLC_Search:
                                 self.resume = True
             # Move to the next month
             self.current_date += timedelta(days=30)
+            
+        with open(self.DATALAKE, 'w') as file:
+            json.dump(lake_data, file, indent=4) 
+            
+        # Final check
+        processed_data = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
+        processed_month = [f[0:6] for f in processed_data]
+        self.final_results = [f for f in self.final_results if not f.geojson()["properties"]["fileID"][17:23] in processed_month]
 
         self.logger.info(f"Found {len(self.final_results)} images for download.")
         return self.final_results

@@ -94,6 +94,10 @@ class MasterSplitter:
                     message = f'Split master {files[0]} successfully completed.\n'
                     print(message)
                     out_file.write(message)
+                    
+                # Delete raw data
+                if files[0].endswith(".zip"):
+                    os.remove(files[0])
                 
                 out_file.write(self.bar_message)
 
