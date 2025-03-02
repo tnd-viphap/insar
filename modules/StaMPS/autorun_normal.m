@@ -129,7 +129,7 @@ try
     chdir(current_result);
 
     % Change priority of StaMPS
-    folder_to_move = '../../../modules/StaMPS/matlab'
+    folder_to_move = '../../../modules/StaMPS/matlab';
     if contains(path, folder_to_move)
         rmpath(folder_to_move);
     end

@@ -1,3 +1,34 @@
+function value = read_conf_value(filename, key)
+    % Open the file for reading
+    fid = fopen(filename, 'r');
+    if fid == -1
+        error('Cannot open the file.');
+    end
+    
+    % Read the file line by line
+    value = '';
+    while ~feof(fid)
+        line = fgetl(fid);
+        if startsWith(line, key)
+            parts = strsplit(line, '=');
+            if numel(parts) > 1
+                value = strtrim(parts{2}); % Trim spaces from the value
+                break; % Stop after finding the first match
+            end
+        end
+    end
+    
+    % Close the file
+    fclose(fid);
+    
+    % Display the extracted value
+    if isempty(value)
+        WARNING('CURRENT_RESULT not found in the file.');
+    else
+        fprintf('Extracted value: %s\n', value);
+    end
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%% For SHP analysis  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 % CalWin - based on azimuth and range spacing to have rough square window in real world 
 % row x col is expected to much greater than number of images to better invert covariance matrix.  
@@ -15,19 +46,28 @@ Cohthre_slc_filt = 0.05; % less than 0.05 is mostly water
 % PSDSInSAR RAM requirement is 1.5*Nslc*Nslc*Nline*Nwidth/2.7e8 (GB)
 % ComSAR is much friendly Big Data processing. A rough approximation for
 % ComSAR RAM requirement is 0.3*Nslc*Nslc*Nline*Nwidth/2.7e8 (GB)
-% i.e., 200 images of 500x2000 size, 220 GB is for PSDS, but for ComSAR it requires only 45 GB.  
-ComSAR_flag = true; % true is for ComSAR, false is for PSDSInSAR
+% i.e., 200 images of 500x2000 size, 220 GB is for PSDS, but for ComSAR it requires only 45 GB.
+COMSAR_fetch = read_conf_value('../../snap2stamps/bin/project.conf', 'COMSAR');
+if strcmpi(COMSAR_fetch, 'true') || strcmp(COMSAR_fetch, '1')
+    ComSAR_flag = true;
+    disp("-> ComSAR Enabled")
+else
+    ComSAR_flag = false;
+    disp("-> TomoSAR Enabled")
+end
 miniStackSize = 5; % 5 (or 10) can help to reduce up to 80% (or 90%) computation. 
 Unified_flag = true; % true is for full time series ComSAR, false is just for compressed version
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 InSAR_processor = 'snap'; % snap or isce 
 switch InSAR_processor
     case 'snap' % 
         % Define path - expect the SNAP export STAMPS structure
         % check out a tutorial here https://youtu.be/HzvvJoDE8ic 
-        InSAR_path = '/home/viphap/insar/INSAR_20210408';
-        reference_date = '20210408';
+        InSAR_path = read_conf_value('../../snap2stamps/bin/project.conf', 'CURRENT_RESULT');
+        reference_date = split(InSAR_path, '/');
+        reference_date = split(reference_date{-1}, '_');
+        reference_date = reference_date{2};
 
         file_par = [InSAR_path,'/rslc/',reference_date,'.rslc.par'];
         par_getline = regexp(fileread(file_par),['[^\n\r]+','zimuth_lines','[^\n\r]+'],'match');
