@@ -41,7 +41,7 @@ class StaMPSPrep:
                     command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
                             str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
             else:
-                os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
+                os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{self.PROJECTFOLDER}modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
                 flag = 'comsar' if self.COMSAR == "1" else 'psds'
                 command = [f"mt_prep_snap_{flag}", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]
                 if self.patch_info:

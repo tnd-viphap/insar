@@ -50,10 +50,10 @@ Cohthre_slc_filt = 0.05; % less than 0.05 is mostly water
 COMSAR_fetch = read_conf_value('../../snap2stamps/bin/project.conf', 'COMSAR');
 if strcmpi(COMSAR_fetch, 'true') || strcmp(COMSAR_fetch, '1')
     ComSAR_flag = true;
-    disp("-> ComSAR Enabled")
+    fprintf("-> ComSAR Enabled")
 else
     ComSAR_flag = false;
-    disp("-> TomoSAR Enabled")
+    fprintf("-> TomoSAR Enabled")
 end
 miniStackSize = 5; % 5 (or 10) can help to reduce up to 80% (or 90%) computation. 
 Unified_flag = true; % true is for full time series ComSAR, false is just for compressed version
@@ -66,7 +66,8 @@ switch InSAR_processor
         % check out a tutorial here https://youtu.be/HzvvJoDE8ic 
         InSAR_path = read_conf_value('../../snap2stamps/bin/project.conf', 'CURRENT_RESULT');
         reference_date = split(InSAR_path, '/');
-        reference_date = split(reference_date{-1}, '_');
+        size_split=length(reference_date);
+        reference_date = split(reference_date{size_split}, '_');
         reference_date = reference_date{2};
 
         file_par = [InSAR_path,'/rslc/',reference_date,'.rslc.par'];
@@ -89,4 +90,3 @@ switch InSAR_processor
 end
 
 warning('off','all')
-
