@@ -5,10 +5,9 @@ import geopandas as gpd
 from shapely.geometry import Point
 
 class StaMPSEXE:
-    def __init__(self, process_type=None, display=' -nodisplay'):
+    def __init__(self, display=' -nodisplay'):
         super().__init__()
         
-        self.process_type = process_type
         self.display = display
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")+'/modules/snap2stamps/bin', "project.conf")
@@ -32,18 +31,12 @@ class StaMPSEXE:
                 data.to_file(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{folder}.shp'))
         
     def run(self):
-        if self.process_type == 'NORMAL':
-            try:
-                os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_normal.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
-                time.sleep(1)
-                self._csvtoshp()
-            except:
-                sys.exit(0)  
-        elif self.process_type == 'TOMO':
-            os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
+        try:
             os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_normal.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
             time.sleep(1)
             self._csvtoshp()
+        except:
+            sys.exit(0)  
             
 if __name__ == "__main__":
-    StaMPSEXE("NORMAL", '').run()
+    StaMPSEXE('').run()

@@ -8,7 +8,7 @@ from modules.snap2stamps.bin._9_1_mt_prep_snap import MTPrepSNAP
 
 
 class StaMPSPrep:
-    def __init__(self, threshold, patch_info=None):
+    def __init__(self, stamps_flag, threshold, patch_info=None):
         super().__init__()
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
@@ -19,6 +19,7 @@ class StaMPSPrep:
         self.master_date = os.path.split(self.MASTER)[1].split("_")[0]
         self.threshold = threshold
         self.patch_info = patch_info
+        self.stamps_flag = stamps_flag
         
     def _load_config(self):
         with open(self.inputfile, 'r') as file:
@@ -34,10 +35,18 @@ class StaMPSPrep:
             processor = MTPrepSNAP(self.threshold, self.patch_info, None)
             processor.process()
         elif self.plf == "Linux":
-            command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]
-            if self.patch_info:
-                command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
-                        str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
+            if self.stamps_flag == 'NORMAL':
+                command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]
+                if self.patch_info:
+                    command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
+                            str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
+            else:
+                os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
+                flag = 'comsar' if self.COMSAR == "1" else 'psds'
+                command = [f"mt_prep_snap_{flag}", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]
+                if self.patch_info:
+                    command = [f"mt_prep_snap_{flag}", self.master_date, self.CURRENT_RESULT,
+                            str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
             timeStarted = time.time()
             os.system(" ".join(command))
             timeDelta = time.time() - timeStarted

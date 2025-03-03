@@ -18,7 +18,7 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 class Manager:
     def __init__(self, bbox, search_direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
-                 result_folder="", renew_flag=0):
+                 result_folder="", renew_flag=0, stamps_flag='NORMAL'):
         super().__init__()
         self.bbox = bbox
         self.reest_flag = reest_flag
@@ -28,6 +28,7 @@ class Manager:
         self.frame = frame
         self.result_folder=result_folder
         self.renew_flag=renew_flag
+        self.stamps_flag = stamps_flag
 
         # List of Python files to execute
         self.python_files = [
@@ -161,7 +162,7 @@ class Manager:
 
         # StaMPS preparation
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
-        StaMPSPrep(self.da_threshold).process()
+        StaMPSPrep(self.stamps_flag, self.da_threshold).process()
 
 
 if __name__ == "__main__":
