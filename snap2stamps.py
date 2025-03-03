@@ -124,7 +124,7 @@ class Manager:
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
-        results = SLC_Search(self.search_direction, self.frame).search()
+        results = SLC_Search().search()
         time.sleep(2)
         print(f"-> Found {len(results)} products. Downloading...")
         downloader = Download(results)
