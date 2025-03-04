@@ -60,19 +60,19 @@ function process_patch_folders(current_result)
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 100);
+            setparm('percent_rand', 80);
             setparm('gamma_stdev_reject', 0);
             stamps(3,3);
             fprintf('\n');
             % Stamps 4:
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'n');
-            setparm('weed_neighbours', 'y');
+            setparm('weed_neighbours', 'n');
             stamps(4,4);
             fprintf('\n');
             % Stamps 5:
             fprintf("Step 5: Phase correction\n");
-            setparm('merge_resample_size', 10);
+            setparm('merge_resample_size', 0);
             setparm('scla_deramp', 'y');
             stamps(5,5, 'y');
             fprintf('\n');
@@ -115,9 +115,6 @@ function process_patch_folders(current_result)
             save(strcat(current_result, '/parms.mat'), '-struct', 'data')
             ps_dem_err();
             ps_lonlat_err(current_result);
-            chdir(strcat(current_result, '/', folder_name));
-            ps_export_gis('attempt.csv', [], [], 'ortho');
-            fprintf("Results CSV done\n");
             chdir(current_result);
         end
     end
@@ -129,7 +126,7 @@ try
     chdir(current_result);
 
     % Change priority of StaMPS
-    folder_to_move = '../../../modules/StaMPS/matlab';
+    folder_to_move = '../../modules/StaMPS/matlab';
     if contains(path, folder_to_move)
         rmpath(folder_to_move);
     end
@@ -139,5 +136,6 @@ try
 
     process_patch_folders(current_result);
 catch ME
+    fprintf(ME.message);
     exit();
 end

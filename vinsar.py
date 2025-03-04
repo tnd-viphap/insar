@@ -13,6 +13,7 @@ if __name__ == "__main__":
                 key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
                 if key:
                     locals()[key] = value             
-    session = Manager(bbox, REEST_FLAG, MAX_PERP, DA_THRESHOLD, stamps_flag='NORMAL').run_stages()
+    session = Manager(bbox, 'DESCENING', 553, REEST_FLAG, MAX_PERP, DA_THRESHOLD, stamps_flag='TOMO', ptype=0).run_stages()
     time.sleep(1)
     StaMPSEXE('').run()
+

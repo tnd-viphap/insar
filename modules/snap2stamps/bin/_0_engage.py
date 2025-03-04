@@ -4,11 +4,14 @@ import psutil
 import platform
 
 class Initialize:
-    def __init__(self, bbox):
+    def __init__(self, bbox, direction, frame, ptype=None):
         super().__init__()
         plf = platform.system()
         
         self.bbox = bbox
+        self.direction = direction
+        self.frame = frame
+        self.ptype = ptype
         # To replace
         project_folder = os.path.split(os.path.abspath(__file__))[0].split('modules')[0]
         if plf == "Windows":
@@ -54,7 +57,7 @@ class Initialize:
                                     coreg_folder, ifg_folder, stamp_folder,
                                     config_file,
                                     lonmin, latmin, lonmax, latmax,
-                                    dc, bc, bsc, datalake, datafolder,
+                                    dc, bc, bsc, datalake, self.direction, self.frame, datafolder, self.ptype,
                                     gpt, n_cores, total_ram])
         
     # Update config
@@ -99,14 +102,20 @@ class Initialize:
                     lines[idx] = "BASELINE_CACHE=" + str(path[16]).replace('\\', '/').replace('//', '/') + '\n'
                 elif line.startswith("DATALAKE"):
                     lines[idx] = "DATALAKE=" + str(path[17]).replace('\\', '/').replace('//', '/') + '\n'
+                elif line.startswith("DIRECTION"):
+                    lines[idx] = "DIRECTION=" + str(path[18]) + '\n'
+                elif line.startswith("FRAME"):
+                    lines[idx] = "FRAME=" + str(path[19]) + '\n'
                 elif line.startswith("DATAFOLDER"):
-                    lines[idx] = "DATAFOLDER=" + str(path[18]).replace('\\', '/').replace('//', '/') + '\n'
+                    lines[idx] = "DATAFOLDER=" + str(path[20]).replace('\\', '/').replace('//', '/') + '\n'
+                elif line.startswith("COMSAR"):
+                    lines[idx] = "COMSAR=" + str(path[21]) + '\n'
                 elif line.startswith("GPTBIN_PATH"):
-                    lines[idx] = "GPTBIN_PATH=" + str(path[19]).replace(str(path[2][0]), str(path[2][0])) + '\n'
+                    lines[idx] = "GPTBIN_PATH=" + str(path[22]).replace(str(path[2][0]), str(path[2][0])) + '\n'
                 elif line.startswith("CPU"):
-                    lines[idx] = "CPU=" + str(path[20]) + '\n'
+                    lines[idx] = "CPU=" + str(path[23]) + '\n'
                 elif line.startswith("CACHE"):
-                    lines[idx] = "CACHE=" + str(path[21]) + 'G\n'
+                    lines[idx] = "CACHE=" + str(path[24]) + 'G\n'
             
         with open(config_file, "w") as file:
             file.writelines(lines)
@@ -118,3 +127,6 @@ if __name__ == "__main__":
         Initialize(bbox)
     except Exception as e:
         print(f"Engage project structure fails due to\n{e}\n")
+        
+
+

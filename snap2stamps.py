@@ -17,18 +17,22 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 
 class Manager:
-    def __init__(self, bbox, search_direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
-                 result_folder="", renew_flag=0, stamps_flag='NORMAL'):
+    def __init__(self, bbox, direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
+                 result_folder="", renew_flag=0, stamps_flag='NORMAL', ptype=None):
         super().__init__()
         self.bbox = bbox
+        self.direction = direction
+        self.frame = frame
         self.reest_flag = reest_flag
         self.max_perp = max_perp
         self.da_threshold = da_threshold
-        self.search_direction = search_direction
-        self.frame = frame
         self.result_folder=result_folder
         self.renew_flag=renew_flag
         self.stamps_flag = stamps_flag
+        if self.stamps_flag != 'NORMAL' and ptype == None:
+            print("TomoSAR requires processing type flag (comsar):\n-> 0: PSDS\n->1: ComSAR")
+            sys.exit(0)
+        self.ptype = ptype
 
         # List of Python files to execute
         self.python_files = [
@@ -118,7 +122,7 @@ class Manager:
         print(
             f"############## Running: Step 1: Gather project structure ##############"
         )
-        Initialize(self.bbox)
+        Initialize(self.bbox, self.direction, self.frame, self.ptype)
         print("\n")
 
         # Do searching for data
@@ -126,7 +130,10 @@ class Manager:
         print("-> Searching for new products...")
         results = SLC_Search().search()
         time.sleep(2)
-        print(f"-> Found {len(results)} products. Downloading...")
+        if results:
+            print(f"-> Found {len(results)} products. Downloading...")
+        else:
+            print("-> No new products. Skip downloading")
         downloader = Download(results)
         if results:
             downloader.download(self.RAWDATAFOLDER)
@@ -155,14 +162,17 @@ class Manager:
             f"############## Running: Step 7: Coregistration and Interferogram ##############"
         )
         CoregIFG(150.0).process()
+        print('\n')
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
         StaMPSExporter(self.result_folder, self.renew_flag).process()
+        print('\n')
 
         # StaMPS preparation
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
         StaMPSPrep(self.stamps_flag, self.da_threshold).process()
+        print('\n')
 
 
 if __name__ == "__main__":
