@@ -92,7 +92,7 @@ class StaMPSEXE:
         
         # Create DataFrame
         header = ['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + days
-        data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
+        data = list(zip(ids, float(lon), float(lat), float(hgt), float(coh), float(vlos), *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
         
         # Save to CSV
