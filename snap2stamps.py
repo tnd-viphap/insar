@@ -130,49 +130,48 @@ class Manager:
         print("-> Searching for new products...")
         results = SLC_Search().search()
         time.sleep(2)
-        if results:
-            print(f"-> Found {len(results)} products. Downloading...")
-        else:
-            print("-> No new products. Skip downloading")
         downloader = Download(results)
         if results:
+            print(f"-> Found {len(results)} products. Downloading...")
             downloader.download(self.RAWDATAFOLDER)
-        time.sleep(2)
+            time.sleep(2)
 
-        # Select master
-        print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(self.reest_flag).select_master()
-        print("\n")
+            # Select master
+            print(f"############## Running: Step 3: Select MASTER ##############")
+            MasterSelect(self.reest_flag).select_master()
+            print("\n")
 
-        # Find master busrt
-        print(f"############## Running: Step 4: Find MASTER burst ##############")
-        Burst().find_burst()
-        print("\n")
+            # Find master busrt
+            print(f"############## Running: Step 4: Find MASTER burst ##############")
+            Burst().find_burst()
+            print("\n")
 
-        # Master split and slaves split
-        print(f"############## Running: Step 5: Split MASTER ##############")
-        MasterSplitter().process()
-        print("\n")
-        print(f"############## Running: Step 6: Split SLAVES ##############")
-        SlavesSplitter().process()
-        print("\n")
+            # Master split and slaves split
+            print(f"############## Running: Step 5: Split MASTER ##############")
+            MasterSplitter().process()
+            print("\n")
+            print(f"############## Running: Step 6: Split SLAVES ##############")
+            SlavesSplitter().process()
+            print("\n")
 
-        # Run coregistration and make interferogram
-        print(
-            f"############## Running: Step 7: Coregistration and Interferogram ##############"
-        )
-        CoregIFG(150.0).process()
-        print('\n')
+            # Run coregistration and make interferogram
+            print(
+                f"############## Running: Step 7: Coregistration and Interferogram ##############"
+            )
+            CoregIFG(150.0).process()
+            print('\n')
 
-        # StaMPS export
-        print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.result_folder, self.renew_flag).process()
-        print('\n')
+            # StaMPS export
+            print(f"############## Running: Step 8: StaMPS Export ##############")
+            StaMPSExporter(self.result_folder, self.renew_flag).process()
+            print('\n')
 
-        # StaMPS preparation
-        print(f"############## Running: Step 9: StaMPS Preparation ##############")
-        StaMPSPrep(self.stamps_flag, self.da_threshold).process()
-        print('\n')
+            # StaMPS preparation
+            print(f"############## Running: Step 9: StaMPS Preparation ##############")
+            StaMPSPrep(self.stamps_flag, self.da_threshold).process()
+            print('\n')
+        else:
+            print("-> No new products. Skip downloading and processing!")
 
 
 if __name__ == "__main__":
