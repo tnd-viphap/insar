@@ -160,18 +160,19 @@ class Manager:
             )
             CoregIFG(150.0).process()
             print('\n')
-
-            # StaMPS export
-            print(f"############## Running: Step 8: StaMPS Export ##############")
-            StaMPSExporter(self.result_folder, self.renew_flag).process()
-            print('\n')
-
-            # StaMPS preparation
-            print(f"############## Running: Step 9: StaMPS Preparation ##############")
-            StaMPSPrep(self.stamps_flag, self.da_threshold).process()
-            print('\n')
         else:
             print("-> No new products. Skip downloading and processing!")
+
+        # StaMPS export
+        print(f"############## Running: Step 8: StaMPS Export ##############")
+        StaMPSExporter(self.result_folder, self.renew_flag).process()
+        print('\n')
+
+        # StaMPS preparation
+        print(f"############## Running: Step 9: StaMPS Preparation ##############")
+        StaMPSPrep(self.stamps_flag, self.da_threshold).process()
+        print('\n')
+        
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ else
     fprintf("-> TomoSAR Enabled")
 end
 miniStackSize = 5; % 5 (or 10) can help to reduce up to 80% (or 90%) computation. 
-Unified_flag = true; % true is for full time series ComSAR, false is just for compressed version
+Unified_flag = false; % true is for full time series ComSAR, false is just for compressed version
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 InSAR_processor = 'snap'; % snap or isce 
