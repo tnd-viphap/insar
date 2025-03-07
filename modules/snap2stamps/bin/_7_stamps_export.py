@@ -44,7 +44,7 @@ class StaMPSExporter:
         project_outputs = os.listdir(os.path.join(self.STAMPFOLDER, self.project_result))
         if project_outputs:
             project_outputs = sorted(project_outputs, key=lambda x: int(x.lstrip('v')) if x.lstrip('v').isdigit() else float('inf'))
-            mark = int(project_outputs[0][-1])+1
+            mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
                 self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v{mark}"
             else:
