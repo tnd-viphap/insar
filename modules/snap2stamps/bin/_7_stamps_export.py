@@ -7,12 +7,13 @@ import subprocess
 import time
 
 class StaMPSExporter:
-    def __init__(self, project_result, renew_flag, to_remove=None):
+    def __init__(self, stamps_flag, project_result, renew_flag, to_remove=None):
         super().__init__()
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         self.bar_message = '\n#####################################################################\n'
         self.renew_flag = bool(int(renew_flag))
+        self.stamps_flag = stamps_flag
         self._load_config()
         self.project_result = project_result
         if not os.path.exists(os.path.join(self.STAMPFOLDER, self.project_result)):
@@ -42,15 +43,22 @@ class StaMPSExporter:
     def _setup_folders(self):
         _, tail = os.path.split(self.MASTER)
         project_outputs = os.listdir(os.path.join(self.STAMPFOLDER, self.project_result))
+        comsar = self.COMSAR
+        if comsar == "1":
+            core = "ComSAR"
+        elif comsar == "0" and self.stamps_flag == "NORMAL":
+            core = ""
+        elif comsar == "0" and self.stamps_flag != "NORMAL":
+            core = "PSDS"
         if project_outputs:
-            project_outputs = sorted(project_outputs, key=lambda x: int(x.lstrip('v')) if x.lstrip('v').isdigit() else float('inf'))
+            project_outputs = sorted(project_outputs, key=lambda x: int(x.split(_)[-1]))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v{mark}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v{mark-1}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_v1"
+            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
         os.makedirs(self.LOGFOLDER, exist_ok=True)

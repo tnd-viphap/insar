@@ -1,5 +1,6 @@
 import os
 import platform
+import shutil
 import time
 import sys
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
@@ -29,6 +30,7 @@ class StaMPSPrep:
                     setattr(self, key, value)  # Dynamically set variables
                     
     def process(self):
+        shutil.copy(f"{self.PROJECTFOLDER}modules/TomoSAR/Tomography/scripts/Parameter_input.m", self.CURRENT_RESULT)
         os.chdir(self.CURRENT_RESULT)
         # Default for Linux
         if self.plf == "Windows":

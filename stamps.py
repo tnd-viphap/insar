@@ -35,12 +35,12 @@ class StaMPSEXE:
 
     def ps_export_gis(self, filename, shapefile_name, lon_rg=None, lat_rg=None, ortho=None):
         if not os.path.exists("ps_plot_ts_v-dao.mat"):
-            command = "matlab -nojvm -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
+            command = "matlab -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
             os.system(command)
         print("-> TS V-dao done")
         
         if not os.path.exists("ps_plot_v-dao.mat"):
-            command = "matlab -nojvm -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
+            command = "matlab -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
             os.system(command)
         print("-> V-dao done")
         
