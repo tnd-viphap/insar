@@ -127,7 +127,7 @@ class Manager:
         )
         Initialize(self.bbox, self.direction, self.frame, self.ptype, self.stack_size, self.uni)
         print("\n")
-        '''
+        
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
@@ -175,7 +175,7 @@ class Manager:
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
         StaMPSPrep(self.stamps_flag, self.da_threshold).process()
         print('\n')
-        '''
+        
 
 
 if __name__ == "__main__":
