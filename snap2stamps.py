@@ -18,7 +18,8 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 class Manager:
     def __init__(self, bbox, direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
-                 result_folder="", renew_flag=0, stamps_flag='NORMAL', ptype=None):
+                 result_folder="", renew_flag=0, stamps_flag='NORMAL', ptype=None,
+                 stack_size=5, uni=0):
         super().__init__()
         self.bbox = bbox
         self.direction = direction
@@ -33,6 +34,8 @@ class Manager:
             print("TomoSAR requires processing type flag (comsar):\n-> 0: PSDS\n->1: ComSAR")
             sys.exit(0)
         self.ptype = ptype
+        self.stack_size = stack_size
+        self.uni = uni
 
         # List of Python files to execute
         self.python_files = [
@@ -122,9 +125,9 @@ class Manager:
         print(
             f"############## Running: Step 1: Gather project structure ##############"
         )
-        Initialize(self.bbox, self.direction, self.frame, self.ptype)
+        Initialize(self.bbox, self.direction, self.frame, self.ptype, self.stack_size, self.uni)
         print("\n")
-
+        '''
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
@@ -172,7 +175,7 @@ class Manager:
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
         StaMPSPrep(self.stamps_flag, self.da_threshold).process()
         print('\n')
-        
+        '''
 
 
 if __name__ == "__main__":

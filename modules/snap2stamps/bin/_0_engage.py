@@ -4,7 +4,7 @@ import psutil
 import platform
 
 class Initialize:
-    def __init__(self, bbox, direction, frame, ptype=None):
+    def __init__(self, bbox, direction, frame, ptype=None, stack_size=None, unified_flag=None):
         super().__init__()
         plf = platform.system()
         
@@ -12,6 +12,8 @@ class Initialize:
         self.direction = direction
         self.frame = frame
         self.ptype = ptype
+        self.stack_size = stack_size
+        self.unified_flag = unified_flag
         # To replace
         project_folder = os.path.split(os.path.abspath(__file__))[0].split('modules')[0]
         if plf == "Windows":
@@ -58,6 +60,7 @@ class Initialize:
                                     config_file,
                                     lonmin, latmin, lonmax, latmax,
                                     dc, bc, bsc, datalake, self.direction, self.frame, datafolder, self.ptype,
+                                    self.stack_size, self.unified_flag,
                                     gpt, n_cores, total_ram])
         
     # Update config
@@ -110,12 +113,16 @@ class Initialize:
                     lines[idx] = "DATAFOLDER=" + str(path[20]).replace('\\', '/').replace('//', '/') + '\n'
                 elif line.startswith("COMSAR"):
                     lines[idx] = "COMSAR=" + str(path[21]) + '\n'
+                elif line.startswith("MINISTACK"):
+                    lines[idx] = "MINISTACK=" + str(path[22]) + '\n'
+                elif line.startswith("UNIFIED"):
+                    lines[idx] = "UNIFIED=" + str(path[23]) + '\n'
                 elif line.startswith("GPTBIN_PATH"):
-                    lines[idx] = "GPTBIN_PATH=" + str(path[22]).replace(str(path[2][0]), str(path[2][0])) + '\n'
+                    lines[idx] = "GPTBIN_PATH=" + str(path[24]).replace(str(path[2][0]), str(path[2][0])) + '\n'
                 elif line.startswith("CPU"):
-                    lines[idx] = "CPU=" + str(path[23]) + '\n'
+                    lines[idx] = "CPU=" + str(path[25]) + '\n'
                 elif line.startswith("CACHE"):
-                    lines[idx] = "CACHE=" + str(path[24]) + 'G\n'
+                    lines[idx] = "CACHE=" + str(path[26]) + 'G\n'
             
         with open(config_file, "w") as file:
             file.writelines(lines)

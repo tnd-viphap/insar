@@ -53,10 +53,18 @@ if strcmpi(COMSAR_fetch, 'true') || strcmp(COMSAR_fetch, '1')
     fprintf("-> ComSAR Enabled")
 else
     ComSAR_flag = false;
-    fprintf("-> TomoSAR Enabled")
+    fprintf("-> PSDS Enabled")
 end
-miniStackSize = 5; % 5 (or 10) can help to reduce up to 80% (or 90%) computation. 
-Unified_flag = false; % true is for full time series ComSAR, false is just for compressed version
+miniStackSize = read_conf_value('../../../snap2stamps/bin/project.conf', 'MINISTACK');
+miniStackSize = str2num(miniStackSize);
+Unified_fetch = read_conf_value('../../../snap2stamps/bin/project.conf', 'UNIFIED');
+if strcmpi(Unified_fetch, 'true') || strcmp(Unified_fetch, '1')
+    Unified_flag = true;
+    fprintf("-> Unified ComSAR Enabled")
+else
+    Unified_flag = false;
+    fprintf("-> Unified ComSAR Disabled")
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 InSAR_processor = 'snap'; % snap or isce 
