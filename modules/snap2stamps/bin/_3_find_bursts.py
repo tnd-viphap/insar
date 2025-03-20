@@ -5,6 +5,7 @@ import os
 import geopandas as gpd
 import stsa
 from shapely.geometry import Point, Polygon
+import time
 
 
 class Burst:
@@ -45,25 +46,26 @@ class Burst:
             
             # Find bursts
             gdf = gpd.read_file(f"{self.DATAFOLDER}geom/master_bursts.shp")
-            gdf = gdf[gdf.geometry.intersects(self.polygon)]
-            subswath = gdf.subswath.values[0]
-            first_burst = gdf.burst.values[0]
-            last_burst = gdf.burst.values[-1]
+            if any(gdf.geometry.intersects(self.polygon)):
+                gdf = gdf[gdf.geometry.intersects(self.polygon)]
+                subswath = gdf.subswath.values[0]
+                first_burst = gdf.burst.values[0]
+                last_burst = gdf.burst.values[-1]
             
-            # Update configuration
-            self.modify_master([subswath, first_burst, last_burst])
-            print("FOUND BURSTS: Updated burst index")
+                # Update configuration
+                self.modify_master([subswath, first_burst, last_burst])
+                print(f"-> Found AOI in bursts {first_burst} - {last_burst}")
+                return True
+            else:
+                print("-> Found no overlapping bursts")
+                return False
         else:
             print("NO RAW IMAGE FOUND: Ensure at least 1 master image is in master folder")
             print("NO RAW IMAGE FOUND: Keep current burst index\n")
+            return False
 
 if __name__ == "__main__":
     try:
         Burst().find_burst()
     except Exception as e:
         print(f"Find bursts fails due to\n{e}")
-        
-    
-    
-    
-    

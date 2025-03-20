@@ -96,7 +96,7 @@ class MasterSplitter:
                     out_file.write(message)
                     
                 # Delete raw data
-                if files[0].endswith(".zip"):
+                if files[0]:
                     os.remove(files[0])
                 
                 out_file.write(self.bar_message)

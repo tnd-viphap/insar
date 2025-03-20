@@ -44,24 +44,23 @@ class StaMPSExporter:
         _, tail = os.path.split(self.MASTER)
         project_outputs = os.listdir(os.path.join(self.STAMPFOLDER, self.project_result))
         comsar = self.COMSAR
-        if comsar == "1":
-            core = "ComSAR"
-        elif comsar == "0" and self.stamps_flag == "NORMAL":
-            core = ""
+        if self.stamps_flag == "NORMAL":
+            core = "NORMAL"
         elif comsar == "0" and self.stamps_flag != "NORMAL":
             core = "PSDS"
+        elif comsar == "1" and self.stamps_flag != "NORMAL":
+            core = "ComSAR"
         if project_outputs:
-            project_outputs = sorted(project_outputs, key=lambda x: int(x.split(_)[-1]))
+            project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_")[-1][-1]))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v{mark}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v{mark-1}"
+                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}/INSAR_{tail[:8]}_{core}_v1"
+            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
-        os.makedirs(self.LOGFOLDER, exist_ok=True)
 
     def _setup_logging(self):
         self.outlog = os.path.join(self.LOGFOLDER, 'export_proc_stdout.log')
@@ -211,8 +210,8 @@ class StaMPSExporter:
             file.close()
 
     def process(self):
-        self.export()
         self._update_config()
+        self.export()
         self._check_diff()
         self._check_rslc()
         self.cleanup()

@@ -47,28 +47,30 @@ function process_patch_folders(current_result)
             getparm();
             setparm('n_cores', 30);
             setparm('plot_scatterer_size', 30);
-            stamps(1,1);
+            stamps(1,1, 'y');
             ps_info();
             fprintf("\n")
             % Stamps 2:
             fprintf("Step 2: Calculate coherence\n");
-            setparm('max_topo_err', 5)
-            setparm('gamma_change_convergence', 0.01);
-            setparm('filter_grid_size', 100);
-            stamps(2,2);
+            setparm('max_topo_err', 2)
+            setparm('gamma_change_convergence', 0.005);
+            setparm('filter_grid_size', 50);
+            stamps(2,2, 'y');
             fprintf('\n');
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 80);
+            setparm('percent_rand', 20);
             setparm('gamma_stdev_reject', 0);
-            stamps(3,3);
+            stamps(3,3, 'y');
             fprintf('\n');
             % Stamps 4:
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'n');
             setparm('weed_neighbours', 'n');
-            stamps(4,4);
+            setparm('small_baseline_flag', 'n')
+            stamps(4,4, 'y');
+            setparm('small_baseline_flag', 'n')
             fprintf('\n');
             % Stamps 5:
             fprintf("Step 5: Phase correction\n");
@@ -76,6 +78,13 @@ function process_patch_folders(current_result)
             setparm('scla_deramp', 'y');
             stamps(5,5, 'y');
             fprintf('\n');
+            load("./ps2.mat", "n_ps");
+            load("./ps2.mat", "n_ifg");
+            if (floor(n_ps / n_ifg) < 32)
+                setparm('unwrap_gold_n_win', 16);
+            else
+                setparm('unwrap_gold_n_win', 32);
+            end
             % Stamps 6:
             fprintf("Step 6: Phase unwrapping\n");
             stamps(6,6, 'y');

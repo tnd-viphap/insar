@@ -94,6 +94,9 @@ class StaMPSEXE:
         header = ['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + days
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
+        for key in gis_data.keys():
+            if key != 'CODE':
+                gis_data[key] = gis_data[key].astype(np.float32)
         
         # Save to CSV
         gis_data.to_csv(filename, index=False)

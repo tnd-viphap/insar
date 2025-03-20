@@ -8,11 +8,12 @@ import time
 import numpy as np
 
 class MasterSelect:
-    def __init__(self, reest_flag):
+    def __init__(self, reest_flag, subprocess=False):
         super().__init__()
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         self.reset_master = bool(int(reest_flag))  # 0 or 1 (reselect)
+        self.subprocess = subprocess
 
         with open(self.inputfile, 'r') as file:
             for line in file.readlines():
@@ -23,8 +24,12 @@ class MasterSelect:
         self.graph2runms = os.path.join(self.GRAPHSFOLDER, "toslaves2run.xml")
         self.graph2runsm = os.path.join(self.GRAPHSFOLDER, "tomaster2run.xml")
         self.plf = platform.system()
+        
+        self.completed = open(self.DOWNLOAD_CACHE, "r").readlines()
 
         self.raw_files = self.get_files_in_directory(self.RAWDATAFOLDER, ".zip")
+        if subprocess:
+            self.raw_files = [f for f in self.raw_files if f.replace(".zip", "-SLC")+"\n" in self.completed]
         self.master_files = self.get_files_in_directory(self.MASTERFOLDER)
         self.slave_files = self.get_files_in_directory(self.SLAVESFOLDER)
         
@@ -35,6 +40,8 @@ class MasterSelect:
                 if (not file[17:25] in self.master_files or not file[17:25] in self.slave_files):
                     duplicates.append(file)
         self.raw_files = duplicates
+        
+        self.no_initial_master = False
 
     def modify_master(self, config_file, master_info):
         """Modify the project.conf file with the new MASTER and OLD_MASTER values."""
@@ -61,8 +68,9 @@ class MasterSelect:
         ))
 
     def move_slaves(self, exclude=None):
-        if len(os.listdir(self.RAWDATAFOLDER)) > 0:
-            for item in os.listdir(self.RAWDATAFOLDER):
+        if len(self.raw_files) > 0:
+            self.raw_files = os.listdir(self.RAWDATAFOLDER)
+            for item in self.raw_files:
                 src_path = os.path.join(self.RAWDATAFOLDER, item)
                 dest_path = os.path.join(self.SLAVESFOLDER, item[17:25])
                 if not os.path.exists(dest_path):
@@ -81,9 +89,9 @@ class MasterSelect:
             dest = os.path.join(self.MASTERFOLDER, date)
             if not date in os.listdir(self.MASTERFOLDER):
                 os.makedirs(dest, exist_ok=True)
+            shutil.move(src_dir, dest)
         else:
-            dest = self.MASTERFOLDER
-        shutil.move(src_dir, dest)
+            shutil.move(src_dir, self.MASTERFOLDER)
         
     def master_to_slave(self, om, cm):
         new_slave = os.path.join(self.SLAVESFOLDER, om, om+"_M").replace("_M", f"_{self.IW1}.dim")
@@ -106,9 +114,12 @@ class MasterSelect:
             process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             process.communicate()
             time.sleep(2)
-            os.remove(old_master)
-            shutil.rmtree(old_master.replace(".dim", ".data"))
-            print("Converting DONE")
+            try:
+                os.remove(old_master)
+                shutil.rmtree(old_master.replace(".dim", ".data"))
+            except:
+                pass
+            print("-> Converting DONE")
         
     def slave_to_master(self, om, cm):
         current_master = os.path.join(self.MASTERFOLDER, os.listdir(self.MASTERFOLDER)[0])
@@ -152,6 +163,7 @@ class MasterSelect:
         old_master = self.master_files[0] if self.master_files else self.MASTER.split("/")[-1] if "/" in self.MASTER else self.MASTER.split("\\")[-1]
         if not self.master_files:
             print("No current master, forcing re-selection.")
+            self.no_initial_master = True
             self.reset_master = True
 
         if self.reset_master:
@@ -190,7 +202,7 @@ class MasterSelect:
                         om = line.split("=")[1].strip()
                         
                 print("Converting old-new MASTER...")
-                if '.zip' in os.listdir(os.path.join(self.MASTERFOLDER, selected_master))[0]:
+                if '.zip' in selected_master:
                     print("Raw data detected. Skipping reformatting MASTER file...")
                 else:
                     self.master_to_slave(om, cm)

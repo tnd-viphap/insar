@@ -44,9 +44,10 @@ class Initialize:
             if not os.path.exists(file):
                 with open(file, 'w') as f:
                     f.close()
-        with open(datalake, 'w') as f:
-            json.dump([], f, indent=4)
-            f.close()
+        if not os.path.exists(datalake):
+            with open(datalake, 'w') as f:
+                json.dump([], f, indent=4)
+                f.close()
         n_cores = round(os.cpu_count() * 0.8)
         total_ram = round(psutil.virtual_memory().total / (1024 ** 3) * 0.8)
         if plf == "Windows":
@@ -134,6 +135,3 @@ if __name__ == "__main__":
         Initialize(bbox)
     except Exception as e:
         print(f"Engage project structure fails due to\n{e}\n")
-        
-
-

@@ -73,53 +73,6 @@ class Manager:
 
         self.failed_scripts = {}
 
-    def run_cmd(self):
-        for idx, script in enumerate(self.python_files):
-            if platform.system() == "Linux":
-                command = ["python3", script, self.conf_file]
-            else:
-                command = [
-                    "C:/Users/Admin/.conda/envs/insar/python.exe",
-                    script,
-                    self.conf_file,
-                ]
-                if idx == 2:
-                    command = [
-                        "C:/Users/Admin/.conda/envs/insar/python.exe",
-                        script,
-                        self.conf_file,
-                        str(0),
-                    ]
-
-            print(f"############## Running: Step {script.split('_')[1]} ##############")
-
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            stdout, stderr = process.communicate()
-
-            if stdout:
-                print("[STDOUT] " + script + ":\n" + stdout.decode())
-            if stderr:
-                print("[STDERR] " + script + ":\n" + stderr.decode())
-
-            if process.returncode != 0:
-                self.failed_scripts[script] = stderr.decode()
-                print(
-                    "[ERROR] "
-                    + script
-                    + " failed with return code "
-                    + str(process.returncode)
-                )
-
-        if self.failed_scripts:
-            print("\n====== Execution Summary ======")
-            print("[ERROR] The following scripts failed:")
-            for script, error in self.failed_scripts.items():
-                print(" - " + script + ": " + error.strip())
-        else:
-            print("\n[INFO] All scripts executed successfully.")
-
     def run_stages(self):
         # Initialze the project configuration
         print(
@@ -138,37 +91,37 @@ class Manager:
             print(f"-> Found {len(results)} products. Downloading...")
             downloader.download(self.RAWDATAFOLDER)
             time.sleep(2)
-
-            # Select master
-            print(f"############## Running: Step 3: Select MASTER ##############")
-            MasterSelect(self.reest_flag).select_master()
-            print("\n")
-
-            # Find master busrt
-            print(f"############## Running: Step 4: Find MASTER burst ##############")
-            Burst().find_burst()
-            print("\n")
-
-            # Master split and slaves split
-            print(f"############## Running: Step 5: Split MASTER ##############")
-            MasterSplitter().process()
-            print("\n")
-            print(f"############## Running: Step 6: Split SLAVES ##############")
-            SlavesSplitter().process()
-            print("\n")
-
-            # Run coregistration and make interferogram
-            print(
-                f"############## Running: Step 7: Coregistration and Interferogram ##############"
-            )
-            CoregIFG(150.0).process()
-            print('\n')
         else:
             print("-> No new products. Skip downloading and processing!")
+            
+        # Select master
+        print(f"############## Running: Step 3: Select MASTER ##############")
+        MasterSelect(self.reest_flag).select_master()
+        print("\n")
+
+        # Find master busrt
+        print(f"############## Running: Step 4: Find MASTER burst ##############")
+        Burst().find_burst()
+        print("\n")
+
+        # Master split and slaves split
+        print(f"############## Running: Step 5: Split MASTER ##############")
+        MasterSplitter().process()
+        print("\n")
+        print(f"############## Running: Step 6: Split SLAVES ##############")
+        SlavesSplitter().process()
+        print("\n")
+
+        # Run coregistration and make interferogram
+        print(
+            f"############## Running: Step 7: Coregistration and Interferogram ##############"
+        )
+        CoregIFG(150.0).process()
+        print('\n')
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.result_folder, self.renew_flag).process()
+        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag).process()
         print('\n')
 
         # StaMPS preparation
@@ -176,7 +129,6 @@ class Manager:
         StaMPSPrep(self.stamps_flag, self.da_threshold).process()
         print('\n')
         
-
 
 if __name__ == "__main__":
     bbox = [

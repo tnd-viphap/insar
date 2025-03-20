@@ -7,7 +7,15 @@ import random
 import sys
 import threading
 import time
+import shutil
 from datetime import datetime, timedelta
+from shapely.geometry import Point, Polygon
+from shapely import from_wkt
+
+from modules.snap2stamps.bin._2_master_sel import MasterSelect
+from modules.snap2stamps.bin._3_find_bursts import Burst
+from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
+from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 
 import asf_search as asf
 
@@ -91,7 +99,7 @@ class Download:
                         speed = downloaded / (elapsed_time + 1e-6)  # Bytes per second
 
                         with self.print_lock:
-                            sys.stdout.write(f"\r[{file_name}] {percent:.2f}% ({downloaded}/{expected_size} bytes) | {speed / 1e6:.2f} MB/s")
+                            #sys.stdout.write(f"\r[{file_name}] {percent:.2f}% ({downloaded}/{expected_size} bytes) | {speed / 1e6:.2f} MB/s")
                             sys.stdout.flush()
         print("\n")
 
@@ -104,24 +112,106 @@ class Download:
                 lines = cache.readlines()
                 file_id = file_id+'\n'
                 lines.append(file_id)
-        
-        lines = list(sorted(set(lines)))
-        with open(self.DOWNLOAD_CACHE, "w") as cache_file:  # Open in append mode
-            cache_file.writelines(lines)
-            cache_file.close()
-        cache.close()
+                lines = list(sorted(set(lines)))
+                with open(self.DOWNLOAD_CACHE, "w") as cache_file:  # Open in append mode
+                    cache_file.writelines(lines)
+                    cache_file.close()
+                cache.close()
+        else:
+            with open(self.DOWNLOAD_CACHE, "a") as cache:
+                cache.write(file_id+"\n")
+                cache.close()
 
         return file_name
 
     def download(self, savepath):
-        """Download files in parallel, resuming if needed."""
+        """
+        Download files in parallel, resuming if needed, 
+        with sequence trigger after 10 downloads and continuous disk space monitoring.
+        """
         os.makedirs(savepath, exist_ok=True)
+        
+        def check_and_clean_disk_space():
+            """Internal function to check disk space and perform cleaning if needed."""
+            stat = os.statvfs("/")
+            total = stat.f_blocks * stat.f_frsize
+            free = stat.f_bfree * stat.f_frsize
+            percentage = float(free) / float(total) * 100
+            
+            if percentage <= 30.0:
+                print("-> Disk space is about full. Performing data cleaning...")
+                incomplete_download = []
+                
+                # Identify and move incomplete downloads
+                for product in os.listdir(self.RAWDATAFOLDER):
+                    product_path = os.path.join(self.RAWDATAFOLDER, product)
+                    if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
+                        incomplete_path = os.path.join(self.DATAFOLDER, product).replace("\\", "/")
+                        incomplete_download.append(incomplete_path)
+                        shutil.move(product_path, self.DATAFOLDER)
+                
+                # Cleaning sequence
+                time.sleep(2)
+                MasterSelect(self.REEST_FLAG, True).select_master()
+                time.sleep(2)
+                
+                # Move incomplete files back to RAWDATAFOLDER
+                for file in incomplete_download:
+                    shutil.move(file, self.RAWDATAFOLDER)
+                
+                time.sleep(2)
+                Burst().find_burst()
+                time.sleep(2)
+                MasterSplitter().process()
+                time.sleep(2)
+                SlavesSplitter().process()
+                time.sleep(2)
+        
+        # Download tracking
+        download_count = 0
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             futures = {executor.submit(self._resume_download, result, savepath): result for result in self.search_result}
+            
             for future in concurrent.futures.as_completed(futures):
                 file_name = future.result()
                 if file_name:
                     self.logger.info(f"Downloaded: {file_name}")
+                    download_count += 1
+                    
+                    # Check disk space after each download
+                    check_and_clean_disk_space()
+                    
+                    # Trigger sequence after every 10 downloads
+                    if download_count % 10 == 0:
+                        print(f"-> Triggered processing sequence after {download_count} downloads")
+                        
+                        # Temporary move of current downloads
+                        incomplete_download = []
+                        for product in os.listdir(self.RAWDATAFOLDER):
+                            product_path = os.path.join(self.RAWDATAFOLDER, product)
+                            if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
+                                incomplete_path = os.path.join(self.DATAFOLDER, product).replace("\\", "/")
+                                incomplete_download.append(incomplete_path)
+                                shutil.move(product_path, self.DATAFOLDER)
+                        
+                        # Run cleaning sequence
+                        time.sleep(2)
+                        MasterSelect(self.REEST_FLAG, True).select_master()
+                        
+                        # Move incomplete files back to RAWDATAFOLDER
+                        for file in incomplete_download:
+                            shutil.move(file, self.RAWDATAFOLDER)
+                        
+                        time.sleep(2)
+                        Burst().find_burst()
+                        time.sleep(2)
+                        MasterSplitter().process()
+                        time.sleep(2)
+                        SlavesSplitter().process()
+                        time.sleep(2)
+                        
+                        print("-> Continue downloading...")
 
 class SLC_Search:
     def __init__(self):
@@ -156,13 +246,18 @@ class SLC_Search:
         return logger
 
     def _determine_date_range(self):
+        time.sleep(1)
         """Determine the search date range based on existing data."""
         if os.listdir(self.MASTERFOLDER) or os.listdir(self.SLAVESFOLDER):
-            if os.path.exists(self.DOWNLOAD_CACHE) and os.path.getsize(self.DOWNLOAD_CACHE) > 0:
+            if os.path.exists(self.DOWNLOAD_CACHE):
                 with open(self.DOWNLOAD_CACHE, "r") as file:
-                    latest_product = file.readlines()[-1].strip()
-                latest_date = datetime.strptime(latest_product[17:25], "%Y%m%d") + timedelta(1)
-                self.logger.info(f"Resuming from latest available data: {latest_date}")
+                    lines = file.readlines()
+                    if lines:
+                        latest_product = lines[-1].strip()
+                        latest_date = datetime.strptime(latest_product[17:25], "%Y%m%d") + timedelta(1)
+                    else:
+                        latest_date = datetime.strptime("20141001", "%Y%m%d")
+                self.logger.info(f"-> Resuming from latest available data: {latest_date}")
                 return latest_date, datetime.now()
             else:
                 images = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
@@ -174,25 +269,67 @@ class SLC_Search:
                 latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
                 return latest_date, datetime.now()
                 
-        self.logger.info("No data found in master/slaves, downloading from beginning.")
+        self.logger.info("-> No data found in master/slaves, downloading from beginning.")
         return datetime(2014, 10, 1), datetime.now()
+    
+    def _determine_best_overlap(self, results):
+        best = []
+        for result in results:
+            coordinates = result.geometry["coordinates"][0]
+            points = [Point(f[0], f[1]) for f in coordinates]
+            polygon = Polygon(points)
+            if polygon.contains_properly(from_wkt(self.AOI)):
+                best.append(result)
+        self.logger.info(f"-> Found {len(best)} useable products")
+        return best
 
     def search(self):
         """Perform a full search for Sentinel-1 data."""
-        # Load lake.json if it exists
-        if os.path.exists(self.DATALAKE):
-            try:
-                with open(self.DATALAKE, "r") as file:
-                    lake_data = json.load(file)
-                    if not isinstance(lake_data, list):
-                        lake_data = []
-            except json.JSONDecodeError:
-                lake_data = []
-        else:
-            with open(self.DATALAKE, 'w') as file:
-                json.dump([], file, indent=4)
-                file.close()
+        # Load existing lake data or initialize an empty list
+        try:
+            with open(self.DATALAKE, "r") as file:
+                lake_data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            lake_data = []
+
+        # Check for incomplete raw files
+        print("-> Finding incomplete products that are not in the searching date range...")
+        incomplete_files = []
+        for file in os.listdir(self.RAWDATAFOLDER):
+            # Identify potentially incomplete files (you might need to adjust this logic)
+            file_date = datetime.strptime(file[17:25], "%Y%m%d")
+            
+            # Check if file is not in processed folders
+            if not any(file in processed_dir for processed_dir in [self.MASTERFOLDER, self.SLAVESFOLDER]):
+                incomplete_files.append(file)
+
+        # Search for incomplete files first
+        incomplete_results = []
+        for incomplete_file in incomplete_files:
+            file_date = datetime.strptime(incomplete_file[17:25], "%Y%m%d")
+            
+            # Search around the incomplete file's date
+            start = file_date - timedelta(days=1)
+            end = file_date + timedelta(days=1)
+
+            results = asf.search(
+                platform=["Sentinel-1A", "Sentinel-1B"],
+                processingLevel="SLC",
+                intersectsWith=self.AOI,
+                flightDirection=self.DIRECTION,
+                frame=int(self.FRAME),
+                start=start,
+                end=end
+            )
+            for result in results:
+                if not result in lake_data:
+                    lake_data.append(result.geojson())
+            incomplete_results.extend(results)
+        print(f"-> Found {len(incomplete_results)} incomplete products")
+
+        # Proceed with regular search from latest date
         print(f"-> Search for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
+        
         while self.current_date <= self.end_date:
             start = datetime(self.current_date.year, self.current_date.month, 1)
             next_month = self.current_date.month + 1 if self.current_date.month < 12 else 1
@@ -210,18 +347,22 @@ class SLC_Search:
                 start=start,
                 end=end
             )
-            lake_data.extend([f.geojson() for f in results])
+            # Find the best overlapping footprint on AOI
+            results = self._determine_best_overlap(results)
+            
+            for result in results:
+                if not result in lake_data:
+                    lake_data.append(result.geojson())
+                    
             if results:
-                # Select one random result from the available images
+                
+                # Select one random result from the new available images
                 selected_result = random.choice(results)
                 
                 # Append new product to the download queue
                 self.final_results.append(selected_result)
                 
-                # Save the new product to lake.json
-                if not selected_result.geojson() in lake_data:
-                    lake_data.append(selected_result.properties)
-                
+                # Check for existing raw files and potential resume
                 if os.listdir(self.RAWDATAFOLDER):
                     for file in os.listdir(self.RAWDATAFOLDER):
                         if file[17:23] == selected_result.properties['fileName'][17:23]:
@@ -239,23 +380,36 @@ class SLC_Search:
                                 self.final_results.remove(selected_result)
                                 self.final_results.append(result[0])
                                 self.resume = True
+                elif os.listdir(self.MASTERFOLDER) and os.listdir(self.SLAVESFOLDER):
+                    master_month = os.listdir(self.MASTERFOLDER)[0][17:23]
+                    slaves_month = [f[0:6] for f in os.listdir(self.SLAVESFOLDER)]
+                    months = slaves_month.append(master_month)
+                    if selected_result and selected_result.properties['fileName'][17:23] in months:
+                        self.final_results.remove(selected_result)
+
             # Move to the next month
             self.current_date += timedelta(days=30)
-            
+        
+        # Combine incomplete results with regular search results
+        for result in incomplete_results:
+            if not result in self.final_results:
+                self.final_results.append(result)
+        
+        # Save updated lake data
         with open(self.DATALAKE, 'w') as file:
             json.dump(lake_data, file, indent=4) 
-            
-        # Final check
+        
+        # Final filtering of results
         processed_data = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
-        processed_month = [f[0:6] for f in processed_data]
-        self.final_results = [f for f in self.final_results if not f.geojson()["properties"]["fileID"][17:23] in processed_month]
-
+        if processed_data:
+            processed_month = [f[0:6] for f in processed_data]
+            self.final_results = [f for f in self.final_results if not f.geojson()["properties"]["fileID"][17:23] in processed_month]
         self.logger.info(f"Found {len(self.final_results)} images for download.")
-        return self.final_results
+        return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
 if __name__ == "__main__":
-    search = SLC_Search("Descending", 553)
+    search = SLC_Search()
     results = search.search()
-    if results[0:1]:
-        downloader = Download(results[0:1])
-        downloader.download(search.RAWDATAFOLDER)
+    #if results[0:1]:
+    #    downloader = Download(results[0:1])
+    #    downloader.download(search.RAWDATAFOLDER)
