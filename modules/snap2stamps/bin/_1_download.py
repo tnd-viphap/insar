@@ -381,9 +381,9 @@ class SLC_Search:
                                 self.final_results.append(result[0])
                                 self.resume = True
                 elif os.listdir(self.MASTERFOLDER) and os.listdir(self.SLAVESFOLDER):
-                    master_month = os.listdir(self.MASTERFOLDER)[0][17:23]
-                    slaves_month = [f[0:6] for f in os.listdir(self.SLAVESFOLDER)]
-                    months = slaves_month.append(master_month)
+                    master_month = str(os.listdir(self.MASTERFOLDER)[0])[0:6]
+                    slaves_month = [str(f)[0:6] for f in os.listdir(self.SLAVESFOLDER)]
+                    months = list(sorted(slaves_month + [master_month]))
                     if selected_result and selected_result.properties['fileName'][17:23] in months:
                         self.final_results.remove(selected_result)
 

@@ -311,9 +311,9 @@ class CoregIFG:
                             lines = cb_file.readlines()
                         lines.append(f"{outputname+'.dim'}\n")
                         lines = list(set(lines))
-                        with open(self.baseline_cache_path, "w") as cb_file:
-                            cb_file.writelines(lines)
-                            cb_file.close()
+                        with open(self.baseline_cache_path, "w") as cb:
+                            cb.writelines(lines)
+                            cb.close()
                     self.remove_poor_coreg(os.path.join(self.COREGFOLDER, outputname+'.dim'))
                     print(f"Slave {outputname}: Poor Interferogram (Bperp = {baseline} m) for PS processing. Skipping...")
                 else:

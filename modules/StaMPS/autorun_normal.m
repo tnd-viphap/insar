@@ -47,7 +47,7 @@ function process_patch_folders(current_result)
             getparm();
             setparm('n_cores', 30);
             setparm('plot_scatterer_size', 30);
-            stamps(1,1, 'y');
+            stamps(1,1);
             ps_info();
             fprintf("\n")
             % Stamps 2:
@@ -55,38 +55,32 @@ function process_patch_folders(current_result)
             setparm('max_topo_err', 2)
             setparm('gamma_change_convergence', 0.005);
             setparm('filter_grid_size', 50);
-            stamps(2,2, 'y');
+            stamps(2,2);
             fprintf('\n');
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 20);
+            setparm('percent_rand', 80);
             setparm('gamma_stdev_reject', 0);
-            stamps(3,3, 'y');
+            stamps(3,3);
             fprintf('\n');
             % Stamps 4:
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'n');
             setparm('weed_neighbours', 'n');
-            setparm('small_baseline_flag', 'n')
-            stamps(4,4, 'y');
-            setparm('small_baseline_flag', 'n')
+            stamps(4,4);
             fprintf('\n');
             % Stamps 5:
             fprintf("Step 5: Phase correction\n");
-            setparm('merge_resample_size', 0);
+            setparm('merge_resample_size', 10);
             setparm('scla_deramp', 'y');
             stamps(5,5, 'y');
             fprintf('\n');
-            load("./ps2.mat", "n_ps");
-            load("./ps2.mat", "n_ifg");
-            if (floor(n_ps / n_ifg) < 32)
-                setparm('unwrap_gold_n_win', 16);
-            else
-                setparm('unwrap_gold_n_win', 32);
-            end
-            % Stamps 6:
-            fprintf("Step 6: Phase unwrapping\n");
+            fprintf('Step 6: Phase unwrapping');
+            setparm('unwrap_grid_size', 10);
+            setparm('unwrap_time_win', 24);
+            setparm('unwrap_gold_n_win', 16);
+            setparm('unwrap_prefilter_flag', 'y');
             stamps(6,6, 'y');
             fprintf('\n');
             % Stamps 7:
@@ -96,6 +90,7 @@ function process_patch_folders(current_result)
             fprintf('\n');
             % Stamps 8:
             fprintf("Step 8: Atmospheric correction\n");
+            setparm('scn_time_win', 30);
             stamps(8,8, 'y');
             fprintf('\n');
             % Export to csv
