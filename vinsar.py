@@ -10,6 +10,7 @@ if __name__ == "__main__":
     
     # Parameters
     bbox = [106.6783, 10.7236, 106.7746, 10.8136]
+    oobj = "normal"
     reest_flag = 1
     max_perp = 150.0
     da_threshold = 0.4 
@@ -19,5 +20,5 @@ if __name__ == "__main__":
                       stamps_flag='TOMO', ptype=1,
                       stack_size=ministack_size, uni=unified_flag).run_stages()
     time.sleep(1)
-    StaMPSEXE('').run()
+    StaMPSEXE(oobj, '').run()
 

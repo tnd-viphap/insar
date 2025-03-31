@@ -8,11 +8,11 @@ import scipy.io as sio
 import pandas as pd
 
 class StaMPSEXE:
-    def __init__(self, display=' -nodisplay'):
+    def __init__(self, oobj="normal", display=' -nodisplay'):
         super().__init__()
         
         self.display = display
-        
+        self.oobj = oobj
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")+'/modules/snap2stamps/bin', "project.conf")
         self._load_config()
         print(f"############## Running: Step 10: StaMPS ##############")
@@ -109,7 +109,7 @@ class StaMPSEXE:
         print(f"-> Shapefile saved to {shapefile_name}")
     
     def run(self):
-        os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_normal.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
+        os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]

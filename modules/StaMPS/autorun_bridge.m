@@ -54,13 +54,14 @@ function process_patch_folders(current_result)
             fprintf("Step 2: Calculate coherence\n");
             setparm('max_topo_err', 10)
             setparm('gamma_change_convergence', 0.005);
-            setparm('filter_grid_size', 50);
+            setparm('filter_grid_size', 40);
+            setparm('clap_win', 16);
             stamps(2,2);
             fprintf('\n');
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 80); %proposed 1
+            setparm('percent_rand', 80);
             setparm('gamma_stdev_reject', 0);
             stamps(3,3);
             fprintf('\n');
@@ -68,6 +69,7 @@ function process_patch_folders(current_result)
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'n');
             setparm('weed_neighbours', 'n');
+            setparm()
             stamps(4,4);
             fprintf('\n');
             % Stamps 5:
@@ -78,8 +80,8 @@ function process_patch_folders(current_result)
             fprintf('\n');
             fprintf('Step 6: Phase unwrapping');
             setparm('unwrap_grid_size', 10);
+            setparm('unwrap_time_win', 180);
             setparm('unwrap_gold_n_win', 16);
-            setparm('unwrap_time_win', 24);
             setparm('unwrap_prefilter_flag', 'y');
             stamps(6,6, 'y');
             fprintf('\n');
@@ -90,7 +92,8 @@ function process_patch_folders(current_result)
             fprintf('\n');
             % Stamps 8:
             fprintf("Step 8: Atmospheric correction\n");
-            setparm('scn_time_win', 50);
+            setparm('scn_time_win', 180);
+            setparm('scn_wavelength', 50);
             stamps(8,8, 'y');
             fprintf('\n');
             % Export to csv

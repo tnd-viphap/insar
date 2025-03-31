@@ -52,15 +52,15 @@ function process_patch_folders(current_result)
             fprintf("\n")
             % Stamps 2:
             fprintf("Step 2: Calculate coherence\n");
-            setparm('max_topo_err', 10)
+            setparm('max_topo_err', 2)
             setparm('gamma_change_convergence', 0.005);
-            setparm('filter_grid_size', 50);
+            setparm('clap_win', 16);
             stamps(2,2);
             fprintf('\n');
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 80); %proposed 1
+            setparm('percent_rand', 80);
             setparm('gamma_stdev_reject', 0);
             stamps(3,3);
             fprintf('\n');
@@ -68,6 +68,7 @@ function process_patch_folders(current_result)
             fprintf("Step 4: Weed PS\n");
             setparm('weed_zero_elevation', 'n');
             setparm('weed_neighbours', 'n');
+            setparm('weed_standard_dev', 1.5);
             stamps(4,4);
             fprintf('\n');
             % Stamps 5:
@@ -78,7 +79,7 @@ function process_patch_folders(current_result)
             fprintf('\n');
             fprintf('Step 6: Phase unwrapping');
             setparm('unwrap_grid_size', 10);
-            setparm('unwrap_gold_n_win', 16);
+            setparm('unwrap_gold_n_win', 8);
             setparm('unwrap_time_win', 24);
             setparm('unwrap_prefilter_flag', 'y');
             stamps(6,6, 'y');
