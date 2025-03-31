@@ -94,6 +94,8 @@ class MasterSelect:
             shutil.move(src_dir, self.MASTERFOLDER)
         
     def master_to_slave(self, om, cm):
+        if not os.path.exists(os.path.join(self.SLAVESFOLDER, om)):
+            return
         new_slave = os.path.join(self.SLAVESFOLDER, om, om+"_M").replace("_M", f"_{self.IW1}.dim")
         old_master = os.path.join(self.SLAVESFOLDER, om, om+"_M.dim")
         graphxml = os.path.join(self.GRAPHSFOLDER, 'toslaves.xml')
@@ -203,12 +205,12 @@ class MasterSelect:
                         
                 print("Converting old-new MASTER...")
                 if '.zip' in selected_master:
-                    print("Raw data detected. Skipping reformatting MASTER file...")
+                    print("Raw data detected. Skipping reformatting MASTER file...") 
                 else:
+                    self.slave_to_master(om, cm)
+                    time.sleep(1)
                     self.master_to_slave(om, cm)
-                time.sleep(1)
-                self.slave_to_master(om, cm)
-                time.sleep(1)
+                    time.sleep(1)
             file.close()
             print("\n")
 
