@@ -11,6 +11,11 @@ class GeomConverter:
         gdf.set_crs(epsg=4326, inplace=True)
         gdf.to_file(f"./geom/{filename}")
         
+    def shptobbox(self, shp_file):
+        gdf = gpd.read_file(shp_file)
+        bbox = gdf.geometry.total_bounds
+        return list(bbox)
+        
     def wkt_to_bbox(self, wkt_string):
         try:
             # Parse the WKT string into a Shapely geometry
@@ -27,7 +32,8 @@ class GeomConverter:
 
 if __name__ == "__main__":
     #wkt_string = "POLYGON((108.8721 15.1294,108.8996 15.1294,108.8996 15.1569,108.8721 15.1569,108.8721 15.1294))"
-    bbox = [106.691059, 20.837039, 106.7762203, 20.899435]
+    #bbox = [106.691059, 20.837039, 106.7762203, 20.899435]
     converter = GeomConverter()
-    print(converter.bboxtowkt(bbox))
+    #print(converter.bboxtowkt(bbox))
     #print(converter.wkt_to_bbox(wkt_string))
+    print(converter.shptobbox(r"C:\Users\Admin\Downloads\region_viphap.shp"))
