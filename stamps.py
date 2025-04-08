@@ -80,11 +80,11 @@ class StaMPSEXE:
         
         # Format data
         ids = [f'PS_{int(x)}' for x in xy[:, 0]]
-        lon = [f'{float(x):.8f}' for x in lonlat[:, 0]]
-        lat = [f'{float(x):.8f}' for x in lonlat[:, 1]]
-        hgt = [f'{float(x):.1f}' for x in hgt]
-        coh = [f'{float(x):.1f}' for x in coh_ps]
-        vlos = [f'{float(x):.1f}' for x in ph_disp]
+        lon = [round(float(x), 8) for x in lonlat[:, 0]]
+        lat = [round(float(x), 8) for x in lonlat[:, 1]]
+        hgt = [round(float(x), 8) for x in hgt]
+        coh = [round(float(x), 8) for x in coh_ps]
+        vlos = [round(float(x), 8) for x in ph_disp]
         days = [f'D{pd.to_datetime(d - 693960, origin="1899-12-30", unit="D").strftime("%Y%m%d")}' for d in day]
         
         d_mm0 = ph_mm - ph_mm[:, [0]]  # First measurement as reference

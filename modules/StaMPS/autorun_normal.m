@@ -60,8 +60,7 @@ function process_patch_folders(current_result)
             % Stamps 3:
             fprintf("Step 3: Select PS\n");
             setparm('select_method', 'PERCENT');
-            setparm('percent_rand', 80); %proposed 1
-            setparm('gamma_stdev_reject', 0);
+            setparm('percent_rand', 80);
             stamps(3,3);
             fprintf('\n');
             % Stamps 4:
@@ -73,24 +72,25 @@ function process_patch_folders(current_result)
             % Stamps 5:
             fprintf("Step 5: Phase correction\n");
             setparm('merge_resample_size', 10);
-            setparm('scla_deramp', 'y');
             stamps(5,5, 'y');
             fprintf('\n');
             fprintf('Step 6: Phase unwrapping');
-            setparm('unwrap_grid_size', 10);
-            setparm('unwrap_gold_n_win', 16);
             setparm('unwrap_time_win', 24);
-            setparm('unwrap_prefilter_flag', 'y');
+            setparm('unwrap_gold_n_win', 8);
+            setparm('unwrap_grid_size', 10);
             stamps(6,6, 'y');
             fprintf('\n');
             % Stamps 7:
             aps_linear();
             fprintf("Step 7: Phase unwrapping correction\n");
+            setparm('scla_deramp', 'y');
             stamps(7,7, 'y');
+            stamps(6, 6, 'y');
+            stamps(7, 7, 'y');
             fprintf('\n');
             % Stamps 8:
             fprintf("Step 8: Atmospheric correction\n");
-            setparm('scn_time_win', 50);
+            setparm('scn_time_win', 30);
             stamps(8,8, 'y');
             fprintf('\n');
             % Export to csv
