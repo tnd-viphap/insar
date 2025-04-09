@@ -17,18 +17,21 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 
 class Manager:
-    def __init__(self, bbox, direction, frame, reest_flag=1, max_perp=150.0, da_threshold=0.45,
-                 result_folder="", renew_flag=0, stamps_flag='NORMAL', ptype=None,
+    def __init__(self, bbox, direction, frame, reest_flag=1, identity_master=None, max_perp=150.0, da_threshold=0.45,
+                 result_folder="", renew_flag=0, time_range=None,
+                 stamps_flag='NORMAL', ptype=None,
                  stack_size=5, uni=0):
         super().__init__()
         self.bbox = bbox
         self.direction = direction
         self.frame = frame
         self.reest_flag = reest_flag
+        self.identity_master = identity_master
         self.max_perp = max_perp
         self.da_threshold = da_threshold
         self.result_folder=result_folder
         self.renew_flag=renew_flag
+        self.time_range = time_range
         self.stamps_flag = stamps_flag
         if self.stamps_flag != 'NORMAL' and ptype == None:
             print("TomoSAR requires processing type flag (comsar):\n-> 0: PSDS\n->1: ComSAR")
@@ -96,7 +99,7 @@ class Manager:
             
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(self.reest_flag).select_master()
+        MasterSelect(self.reest_flag, self.identity_master).select_master()
         print("\n")
 
         # Find master busrt
@@ -121,7 +124,7 @@ class Manager:
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag).process()
+        StaMPSExporter(self.time_range, self.stamps_flag, self.result_folder, self.renew_flag).process()
         print('\n')
 
         # StaMPS preparation
