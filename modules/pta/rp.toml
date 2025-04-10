@@ -1,0 +1,17 @@
+[radiometric_analysis]
+input_type = "beta_nought"              # input radiometric quantity
+azimuth_block_size = 2000               # scene partitioning block size in pixel along azimuth
+range_pixel_margin = 150                # margin in pixel to exclude near and far range from profile
+radiometric_correction_exponent = 1.0   # radiometric correction exponent applied when converting radiometric quantity
+
+[radiometric_analysis.advanced_configuration.profile_extraction_parameters]
+outlier_removal = false                     # enabling/disabling outlier removal filter
+smoothening_filter = false                  # enabling/disabling smoothening filter
+filtering_kernel_size = [11, 11]            # size of the smoothening filter kernel
+outliers_kernel_size = [5, 5]               # size of the outliers removal kernel
+outliers_percentile_boundaries = [20, 90]   # outliers percentile boundaries to be preserved
+
+[radiometric_analysis.advanced_configuration.histogram_parameters]
+x_bins_step = 10            # number of bins along the x axis [look angles/azimuth times]
+y_bins_num = 101            # number of bins along the y axis [intensity (dB)]
+y_bins_center_margin = 3    # extent of the intensity graph (in dB) from the central bin
