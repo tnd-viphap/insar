@@ -9,16 +9,16 @@ evaluate_pslr = true            # on/off PSLR computation
 evaluate_islr = true            # on/off ISLR computation
 evaluate_sslr = true            # on/off SSLR computation
 evaluate_localization = true    # on/off Localization Errors computation
-ale_validity_limits = [99, 99]  # set Absolute Localization Error validity limits in meters [rng, az]
+ale_validity_limits = [25, 25]  # set Absolute Localization Error validity limits in meters [rng, az]
 
 [point_target_analysis.corrections]
 enable_etad_corrections = false                      # on/off ETAD corr.
 enable_solid_tides_correction = false                 # on/off Solid Earth Tides corr.
 enable_plate_tectonics_correction = false             # on/off Plate Tectonics corr.
 enable_sensor_specific_processing_corrections = true # on/off Sensor specific corr.
-enable_ionospheric_correction = false                # on/off Ionospheric corr.
+enable_ionospheric_correction = false              # on/off Ionospheric corr.
 enable_tropospheric_correction = false               # on/off Tropospheric corr.
-etad_product_path = "modules/pta/S1A_AUX_ITC_V20160627T000000_G20230406T084701.SAFE"    # path to the ETAD product
+etad_product_path = "data/S1A_IW_ETA__AXDV_20250301T223610_20250301T223640_058117_072D83_0EE0.SAFE"    # path to the ETAD product
 
 [point_target_analysis.corrections.ionosphere]
 ionospheric_maps_directory = ""                # path to the tec map directory
@@ -36,7 +36,7 @@ zero_doppler_abs_squint_threshold_deg = 1.0 # squint angle threshold below which
 masking_method = "peak"                     # masking method for computing IRF quantities
 
 [point_target_analysis.advanced_configuration.rcs_parameters]
-interpolation_factor = 8           # processing interpolation factor
+interpolation_factor = 32           # processing interpolation factor
 roi_dimension = 128                # roi (squared) in pixel for processing image
 calibration_factor = 1.0           # rcs calibration factor
 resampling_factor = 1.0            # rcs resampling factor

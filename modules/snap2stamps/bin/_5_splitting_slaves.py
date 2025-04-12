@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 from modules.utils.single_search_download import Search_Download, Downloader
 from modules.snap2stamps.bin._3_find_bursts import Burst
+from pta import PTA
 
 class SlavesSplitter:
     def __init__(self):
@@ -122,6 +123,8 @@ class SlavesSplitter:
                                 time.sleep(1)
                                 shutil.rmtree(folder_path)
                                 continue
+                        # Running PTA
+                        PTA(files[0]).pta()
                     time.sleep(1)
 
                     graphxml = os.path.join(self.GRAPHSFOLDER, 'slave_split_applyorbit.xml') if len(files) == 1 else os.path.join(self.GRAPHSFOLDER, 'slaves_assemble_split_applyorbit.xml')
