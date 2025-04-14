@@ -1,8 +1,7 @@
 import os
-import platform
-import subprocess
 import time
 import sys
+import shutil
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 
 from modules.snap2stamps.bin._0_engage import Initialize
@@ -120,6 +119,10 @@ class Manager:
         print(
             f"############## Running: Step 7: Coregistration and Interferogram ##############"
         )
+        if bool(self.reest_flag):
+            shutil.rmtree("process/coreg")
+            shutil.rmtree("process/ifg")
+        time.sleep(2)
         CoregIFG(150.0).process()
         print('\n')
 

@@ -307,8 +307,9 @@ class CoregIFG:
                 baseline = self.parse_baseline(os.path.join(self.IFGFOLDER, outputname+'.dim'))["perp_bs"]
                 if abs(baseline) >= self.max_perp:
                     if os.path.exists(self.baseline_cache_path):
-                        with open(self.baseline_cache_path, "a") as cb_file:
+                        with open(self.baseline_cache_path, "r") as cb_file:
                             lines = cb_file.readlines()
+                            cb_file.close()
                         lines.append(f"{outputname+'.dim'}\n")
                         lines = list(set(lines))
                         with open(self.baseline_cache_path, "w") as cb:
