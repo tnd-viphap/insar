@@ -81,7 +81,7 @@ class Manager:
         print(
             f"############## Running: Step 1: Gather project structure ##############"
         )
-        Initialize(self.bbox, self.direction, self.frame, self.ptype, self.stack_size, self.uni)
+        Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, self.stack_size, self.uni)
         print("\n")
         
         # Do searching for data
@@ -123,7 +123,7 @@ class Manager:
             shutil.rmtree("process/coreg")
             shutil.rmtree("process/ifg")
         time.sleep(2)
-        CoregIFG(150.0).process()
+        CoregIFG(self.max_perp).process()
         print('\n')
 
         # StaMPS export

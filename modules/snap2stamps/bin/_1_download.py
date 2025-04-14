@@ -31,12 +31,14 @@ class Download:
         if self.download_on:
             start_date = self.download_on[0]
             end_date = self.download_on[1]
-            start_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])>=int(start_date)][0]
-            if end_date:
-                end_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])<=int(end_date)][-1]+1
-                self.search_result = self.search_result[start_idx:end_idx]
-            else:
-                self.search_result = self.search_result[start_idx:]
+            start_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])>=int(start_date)]
+            if start_idx:
+                start_idx = start_idx[0]
+                if end_date:
+                    end_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])<=int(end_date)][-1]+1
+                    self.search_result = self.search_result[start_idx:end_idx]
+                else:
+                    self.search_result = self.search_result[start_idx:]
         # Read input file
         inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         with open(inputfile, 'r') as file:

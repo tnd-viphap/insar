@@ -4,13 +4,14 @@ import psutil
 import platform
 
 class Initialize:
-    def __init__(self, bbox, direction, frame, ptype=None, stack_size=None, unified_flag=None):
+    def __init__(self, bbox, direction, frame, max_perp=None, ptype=None, stack_size=None, unified_flag=None):
         super().__init__()
         plf = platform.system()
         
         self.bbox = bbox
         self.direction = direction
         self.frame = frame
+        self.max_perp = max_perp
         self.ptype = ptype
         self.stack_size = stack_size
         self.unified_flag = unified_flag
@@ -62,7 +63,7 @@ class Initialize:
                                     lonmin, latmin, lonmax, latmax,
                                     dc, bc, bsc, datalake, self.direction, self.frame, datafolder, self.ptype,
                                     self.stack_size, self.unified_flag,
-                                    gpt, n_cores, total_ram])
+                                    gpt, n_cores, total_ram, self.max_perp])
         
     # Update config
     def modify_master(self, config_file, path):
@@ -124,6 +125,8 @@ class Initialize:
                     lines[idx] = "CPU=" + str(path[25]) + '\n'
                 elif line.startswith("CACHE"):
                     lines[idx] = "CACHE=" + str(path[26]) + 'G\n'
+                elif line.startswith("MAX_PERP"):
+                    lines[idx] = "MAX_PERP=" + str(path[27]) + '\n'
             
         with open(config_file, "w") as file:
             file.writelines(lines)
