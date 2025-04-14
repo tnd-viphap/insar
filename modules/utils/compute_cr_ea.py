@@ -17,7 +17,6 @@ def shift_target_point(pta_data: str):
     
     # Read PTA data
     pta = pd.read_csv(pta_data)
-    pta = pta.loc[(pta['target_name'].str.contains('on')) & (pta['polarization'].str.contains('V/V'))]
     pta['latitude_corrected_[deg]'] = None
     pta['longitude_corrected_[deg]'] = None
     
@@ -50,7 +49,7 @@ def shift_target_point(pta_data: str):
         pta.at[index, 'latitude_corrected_[deg]'] = new_lat
     new_pta = pta.copy()
     pta = None
-    new_pta.to_csv(pta_data.replace('.csv', '_corrected.csv'), index=False)
+    new_pta.to_csv(pta_data, index=False)
     return new_pta["latitude_corrected_[deg]"], new_pta["longitude_corrected_[deg]"]
     
 if __name__ == "__main__":

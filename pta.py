@@ -66,7 +66,7 @@ class PTA:
             sct_pta_graphs(graphs_data=data_for_graphs, results_df=results_df, output_dir=pta_output_graphs)
         
             # check for valid ground range and azimuth localization error
-            if abs(float(results_df["ground_range_localization_error_[m]"])) <= 2.3 and abs(float(results_df["azimuth_range_localization_error"])) <= 14.1:
+            if abs(float(results_df["ground_range_localization_error_[m]"])) <= 2.3 and abs(float(results_df["azimuth_localization_error"])) <= 14.1:
                 print(f"-> Update CR localization {count} times for {prod_date}")
                 os.remove(main_folder)
                 time.sleep(1)
@@ -74,7 +74,7 @@ class PTA:
 
             # Update coordinates
             lat_cors, lon_cors = shift_target_point(pta_target_file)
-            alts = target_data.loc[(target_data['target_name'].str.contains('on')) & (target_data['polarization'].str.contains('V/V'))]["altitude_m"]
+            alts = target_data["altitude_m"]
             for lat, lon, alt in zip(lat_cors, lon_cors, alts):
                 x, y, z, = gps2ecef_pyproj(lat, lon, alt)
                 for axis, key in zip([x, y, z], ["longitude_deg", "latitude_deg", "altitude_m"]):
