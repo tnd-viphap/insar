@@ -20,14 +20,23 @@ from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 import asf_search as asf
 
 class Download:
-    def __init__(self, search_result):
+    def __init__(self, search_result, download_on=None):
         super().__init__()
         
         self.logger = logging.getLogger()
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
-        
+        self.download_on = download_on
+        if self.download_on:
+            start_date = self.download_on[0]
+            end_date = self.download_on[1]
+            start_idx = [self.search_result.index(f) for f in self.search_result if f.properties["fileID"][17:25]==start_date][0]
+            if end_date:
+                end_idx = [self.search_result.index(f) for f in self.search_result if f.properties["fileID"][17:25]==end_date][0]
+                self.search_result = self.search_result[start_idx:end_idx]
+            else:
+                self.search_result = self.search_result[start_idx:]
         # Read input file
         inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         with open(inputfile, 'r') as file:

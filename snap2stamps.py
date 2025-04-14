@@ -17,21 +17,22 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 
 class Manager:
-    def __init__(self, bbox, direction, frame, reest_flag=1, identity_master=None, max_perp=150.0, da_threshold=0.45,
-                 result_folder="", renew_flag=0, time_range=None,
+    def __init__(self, bbox, direction, frame, download_on, reest_flag=1, identity_master=None, max_perp=150.0, da_threshold=0.45,
+                 result_folder="", renew_flag=0, process_range=None,
                  stamps_flag='NORMAL', ptype=None,
                  stack_size=5, uni=0):
         super().__init__()
         self.bbox = bbox
         self.direction = direction
         self.frame = frame
+        self.download_on = download_on
         self.reest_flag = reest_flag
         self.identity_master = identity_master
         self.max_perp = max_perp
         self.da_threshold = da_threshold
         self.result_folder=result_folder
         self.renew_flag=renew_flag
-        self.time_range = time_range
+        self.process_range = process_range
         self.stamps_flag = stamps_flag
         if self.stamps_flag != 'NORMAL' and ptype == None:
             print("TomoSAR requires processing type flag (comsar):\n-> 0: PSDS\n->1: ComSAR")
@@ -89,7 +90,7 @@ class Manager:
         print("-> Searching for new products...")
         results = SLC_Search().search()
         time.sleep(2)
-        downloader = Download(results)
+        downloader = Download(results, self.download_on)
         if results:
             print(f"-> Found {len(results)} products. Downloading...")
             downloader.download(self.RAWDATAFOLDER)
@@ -124,7 +125,7 @@ class Manager:
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.time_range, self.stamps_flag, self.result_folder, self.renew_flag).process()
+        StaMPSExporter(self.process_range, self.stamps_flag, self.result_folder, self.renew_flag).process()
         print('\n')
 
         # StaMPS preparation
