@@ -26,7 +26,9 @@ if __name__ == "__main__":
     oobj = "normal"
 
     ## Running phases
-    session = Manager(bbox, direction, frame_no, download_range, reest_flag, max_perp, da_threshold, renew_flag=renew_flag,
+    session = Manager(bbox, direction, frame_no, download_range, reest_flag,
+                      identity_master=identity_master,
+                      max_perp, da_threshold, renew_flag=renew_flag,
                       process_range=process_range,
                       stamps_flag='TOMO', ptype=1,
                       stack_size=ministack_size, uni=unified_flag).run_stages()
