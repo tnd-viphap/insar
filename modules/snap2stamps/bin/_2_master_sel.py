@@ -157,85 +157,8 @@ class MasterSelect:
                 print(f"-> No data found. Skipping...\n")
 
     def select_master(self):
-        selected_master = self.all_files[int(len(self.all_files) // 2)] if len(self.all_files) > 2 else self.all_files[0]
-        if self.reset_master:
-            print(f"Selected MASTER = {selected_master}\n")
-            master_in = "r" if selected_master in self.raw_files else "s" if selected_master in self.slave_files else "m"
-        else:
-            master_in = "m"
-        old_master = self.master_files[0] if self.master_files else self.MASTER.split("/")[-1] if "/" in self.MASTER else self.MASTER.split("\\")[-1]
-        if not self.master_files:
-            print("No current master, forcing re-selection.")
-            self.no_initial_master = True
-            self.reset_master = True
-
-        if self.reset_master and self.identity_master==None:
-            print("Reselecting MASTER...") 
-            
-            master_folder = os.path.join(self.MASTERFOLDER, selected_master[17:25] if master_in=="r" else selected_master)
-            output_name = f"{master_folder}/{selected_master}_M.dim" if self.plf == "Linux" else \
-                        master_folder + f"/{selected_master[17:25] if master_in=='r' else selected_master}_M.dim"
-
-            # Move master file
-            if master_folder == os.path.split(self.MASTER)[0].split("/")[-1]:
-                print("-> No MASTER date changes. Skipping reselecting...\n")
-                sys.exit(0)
-            if master_in == "s":
-                print("-> New MASTER found in /slaves/")
-                self.move_master(os.path.join(self.SLAVESFOLDER, selected_master))
-            elif master_in == "r":
-                print("-> New MASTER found in /raw/")
-                self.move_master(os.path.join(self.RAWDATAFOLDER, selected_master))
-            time.sleep(1)
-            
-            # Move slaves
-            self.move_slaves(selected_master)
-
-            print(f"Moved {selected_master} to {master_folder}")
-            self.modify_master(os.path.dirname(os.path.abspath(__file__)), [output_name, old_master])
-            print("New MASTER updated to configuration\n")
-            
-            # Convert master-slave
-            with open(self.inputfile, "r") as file:
-                lines = file.readlines()
-                for line in lines:
-                    if line.startswith("MASTER="):
-                        cm = line.split("=")[1].strip()
-                    if line.startswith("OLD_MASTER"):
-                        om = line.split("=")[1].strip()
-                        
-                print("Converting old-new MASTER...")
-                if '.zip' in selected_master:
-                    print("Raw data detected. Skipping reformatting MASTER file...") 
-                else:
-                    self.slave_to_master(om, cm)
-                    time.sleep(1)
-                    self.master_to_slave(om, cm)
-                    time.sleep(1)
-            file.close()
-            print("\n")
-
-        elif not self.reset_master and self.identity_master==None:
-            master_subfolders = [folder for folder in os.listdir(self.MASTERFOLDER) if os.path.isdir(os.path.join(self.MASTERFOLDER, folder))]
-            empty_master_subfolder = next((sub for sub in master_subfolders if not os.listdir(os.path.join(self.MASTERFOLDER, sub))), None)
-
-            if empty_master_subfolder:
-                try:
-                    print(f"Detected empty master folder: {empty_master_subfolder}, searching for {selected_master}...")
-                    possible_locations = [self.SLAVESFOLDER, self.RAWDATAFOLDER]
-                    for loc in possible_locations:
-                        if selected_master in os.listdir(loc):
-                            print(f"Moving {selected_master} from {loc} to master folder {empty_master_subfolder}")
-                            shutil.move(os.path.join(loc, selected_master), os.path.join(self.MASTERFOLDER, empty_master_subfolder))
-                            break
-                except:
-                    print("Selected master data is missing. Check manually")
-
-            self.move_slaves(selected_master)
-            self.modify_master(os.path.dirname(os.path.abspath(__file__)), [None, old_master])
-            print("Keeping current MASTER.")
-        elif self.identity_master!=None:
-            selected_master = [f for f in self.all_files if self.identity_master in f][0]
+        if self.identity_master:
+            selected_master = [f for f in self.all_files if str(self.identity_master) in f][0]
             print(f"Selected MASTER = {selected_master}\n")
             if self.reset_master:
                 print(f"Selected MASTER = {selected_master}\n")
@@ -286,6 +209,84 @@ class MasterSelect:
                     time.sleep(1)
             file.close()
             print("\n")
+        else:
+            selected_master = self.all_files[int(len(self.all_files) // 2)] if len(self.all_files) > 2 else self.all_files[0]
+            if self.reset_master:
+                print(f"Selected MASTER = {selected_master}\n")
+                master_in = "r" if selected_master in self.raw_files else "s" if selected_master in self.slave_files else "m"
+            else:
+                master_in = "m"
+            old_master = self.master_files[0] if self.master_files else self.MASTER.split("/")[-1] if "/" in self.MASTER else self.MASTER.split("\\")[-1]
+            if not self.master_files:
+                print("No current master, forcing re-selection.")
+                self.no_initial_master = True
+                self.reset_master = True
+
+            if self.reset_master:
+                print("Reselecting MASTER...") 
+                
+                master_folder = os.path.join(self.MASTERFOLDER, selected_master[17:25] if master_in=="r" else selected_master)
+                output_name = f"{master_folder}/{selected_master}_M.dim" if self.plf == "Linux" else \
+                            master_folder + f"/{selected_master[17:25] if master_in=='r' else selected_master}_M.dim"
+
+                # Move master file
+                if master_folder == os.path.split(self.MASTER)[0].split("/")[-1]:
+                    print("-> No MASTER date changes. Skipping reselecting...\n")
+                    sys.exit(0)
+                if master_in == "s":
+                    print("-> New MASTER found in /slaves/")
+                    self.move_master(os.path.join(self.SLAVESFOLDER, selected_master))
+                elif master_in == "r":
+                    print("-> New MASTER found in /raw/")
+                    self.move_master(os.path.join(self.RAWDATAFOLDER, selected_master))
+                time.sleep(1)
+                
+                # Move slaves
+                self.move_slaves(selected_master)
+
+                print(f"Moved {selected_master} to {master_folder}")
+                self.modify_master(os.path.dirname(os.path.abspath(__file__)), [output_name, old_master])
+                print("New MASTER updated to configuration\n")
+                
+                # Convert master-slave
+                with open(self.inputfile, "r") as file:
+                    lines = file.readlines()
+                    for line in lines:
+                        if line.startswith("MASTER="):
+                            cm = line.split("=")[1].strip()
+                        if line.startswith("OLD_MASTER"):
+                            om = line.split("=")[1].strip()
+                            
+                    print("Converting old-new MASTER...")
+                    if '.zip' in selected_master:
+                        print("Raw data detected. Skipping reformatting MASTER file...") 
+                    else:
+                        self.slave_to_master(om, cm)
+                        time.sleep(1)
+                        self.master_to_slave(om, cm)
+                        time.sleep(1)
+                file.close()
+                print("\n")
+
+            else:
+                master_subfolders = [folder for folder in os.listdir(self.MASTERFOLDER) if os.path.isdir(os.path.join(self.MASTERFOLDER, folder))]
+                empty_master_subfolder = next((sub for sub in master_subfolders if not os.listdir(os.path.join(self.MASTERFOLDER, sub))), None)
+
+                if empty_master_subfolder:
+                    try:
+                        print(f"Detected empty master folder: {empty_master_subfolder}, searching for {selected_master}...")
+                        possible_locations = [self.SLAVESFOLDER, self.RAWDATAFOLDER]
+                        for loc in possible_locations:
+                            if selected_master in os.listdir(loc):
+                                print(f"Moving {selected_master} from {loc} to master folder {empty_master_subfolder}")
+                                shutil.move(os.path.join(loc, selected_master), os.path.join(self.MASTERFOLDER, empty_master_subfolder))
+                                break
+                    except:
+                        print("Selected master data is missing. Check manually")
+
+                self.move_slaves(selected_master)
+                self.modify_master(os.path.dirname(os.path.abspath(__file__)), [None, old_master])
+                print("Keeping current MASTER.")
 
 if __name__ == "__main__":
     try:
