@@ -1,5 +1,5 @@
 #!/bin/bash
-LAST_RUN_FILE="$HOME/.last_run_script
+LAST_RUN_FILE="$HOME/.last_run_script"
 TODAY=$(date +%s)
 
 if [ -f "$LAST_RUN_FILE" ]; then
