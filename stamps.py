@@ -1,11 +1,16 @@
 import os
 import sys
 import time
+
 import geopandas as gpd
-from shapely.geometry import Point
+import jenkspy
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import numpy as np
-import scipy.io as sio
 import pandas as pd
+import scipy.io as sio
+from shapely.geometry import Point
+
 
 class StaMPSEXE:
     def __init__(self, oobj="normal", display=' -nodisplay'):
@@ -94,9 +99,20 @@ class StaMPSEXE:
         header = ['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + days
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
-        for key in gis_data.keys():
-            if key != 'CODE':
-                gis_data[key] = gis_data[key].astype(np.float32)
+        # Choose the number of classes
+        n_classes = 10  # adjust based on how much detail you want
+
+        # Compute Jenks natural breaks
+        vlos_values = gis_data['VLOS'].values
+        breaks = jenkspy.jenks_breaks(vlos_values, n_classes=n_classes)
+
+        # Create colormap (Spectral has max 11 distinct steps)
+        cmap = cm.get_cmap('Spectral', n_classes)
+        norm = mcolors.BoundaryNorm(breaks, cmap.N)
+
+        # Assign class index and corresponding color
+        gis_data['BINS'] = np.digitize(vlos_values, breaks, right=True) - 1
+        gis_data['COLOR'] = gis_data['BINS'].apply(lambda i: mcolors.to_hex(cmap(i)) if 0 <= i < cmap.N else "#000000")
         
         # Save to CSV
         gis_data.to_csv(filename, index=False)
@@ -116,7 +132,7 @@ class StaMPSEXE:
         patch_identifier = [f for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
             os.chdir(path)
-            self.ps_export_gis(os.path.join(path, 'attempt.csv'), os.path.join(self.DATAFOLDER, 'geom') + f"/{self.CURRENT_RESULT.split('/')[-1]}_{identity}.shp", [], [], 'ortho')
+            self.ps_export_gis(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), os.path.join(self.DATAFOLDER, 'geom') + f"/{self.CURRENT_RESULT.split('/')[-1]}_{identity}.shp", [], [], 'ortho')
             os.chdir(self.CURRENT_RESULT) 
         os.chdir(self.PROJECTFOLDER)
 if __name__ == "__main__":
