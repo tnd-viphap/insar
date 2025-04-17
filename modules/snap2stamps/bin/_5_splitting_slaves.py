@@ -124,7 +124,7 @@ class SlavesSplitter:
                                 shutil.rmtree(folder_path)
                                 continue
                         # Running PTA
-                        PTA(files[0]).pta()
+                        PTA(files[0], None).pta()
                     time.sleep(1)
 
                     graphxml = os.path.join(self.GRAPHSFOLDER, 'slave_split_applyorbit.xml') if len(files) == 1 else os.path.join(self.GRAPHSFOLDER, 'slaves_assemble_split_applyorbit.xml')
