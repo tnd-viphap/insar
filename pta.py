@@ -16,24 +16,24 @@ class PTA:
     def __init__(self, prod, eof=None):
 
         # Read input file
-        # inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "modules/snap2stamps/bin/project.conf")
-        # with open(inputfile, 'r') as file:
-        #     for line in file.readlines():
-        #         key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-        #         if key:
-        #             setattr(self, key, value)
+        inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "modules/snap2stamps/bin/project.conf")
+        with open(inputfile, 'r') as file:
+            for line in file.readlines():
+                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
+                if key:
+                    setattr(self, key, value)
         
         self.config = SCTConfiguration.from_toml("modules/pta/pta.toml")
         self.prod = prod
         self.eof = eof
         
         prod_date = os.path.split(self.prod)[-1][17:25]
-        self.pta_output_folder = f"dev/pta/{prod_date}"
-        self.pta_target_file = f"dev/pta/{prod_date}/pta_target.csv"
-        self.pta_output_result_file = f"dev/pta/{prod_date}/pta_results.csv"
-        self.pta_output_graphs = f"dev/pta/{prod_date}/pta_graphs"
-        if not os.path.exists("dev/pta"):
-            os.makedirs("dev/pta")
+        self.pta_output_folder = f"{self.PROJECTFOLDER}/process/pta/{prod_date}"
+        self.pta_target_file = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_target.csv"
+        self.pta_output_result_file = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_results.csv"
+        self.pta_output_graphs = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_graphs"
+        if not os.path.exists(f"{self.PROJECTFOLDER}/process/pta"):
+            os.makedirs(f"{self.PROJECTFOLDER}/process/pta")
         if not os.path.exists(self.pta_output_folder):
             os.makedirs(self.pta_output_folder)
         if not os.path.exists(self.pta_output_graphs):
@@ -169,6 +169,7 @@ class PTA:
         results_df = pd.concat(dfs, ignore_index=True)
         results_df.to_csv(self.pta_output_result_file, index=False)
         shutil.rmtree(target_results_dir)
+        shutil.rmtree(self.extract_folder_name)
 
 
 if __name__ == "__main__":
