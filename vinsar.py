@@ -1,6 +1,7 @@
 #type:ignore
 from snap2stamps import Manager
 from stamps import StaMPSEXE
+from crlink import CRLink
 import time
 import os
 
@@ -33,5 +34,10 @@ if __name__ == "__main__":
                       stamps_flag='TOMO', ptype=1,
                       stack_size=ministack_size, uni=unified_flag).run_stages()
     time.sleep(1)
-    StaMPSEXE(oobj, '').run()
+    ps_results = StaMPSEXE(oobj, '').run()
+
+    ## Phase 3: CRLink
+    n_rovers =
+    crlink = CRLink(ps_results, n_rovers).run()
+
 

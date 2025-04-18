@@ -56,7 +56,7 @@ class Initialize:
         elif plf == "Linux":
             gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap9/bin/gpt'
         
-        self.modify_master(config_file, [project_folder, graphs_folder, log_folder,
+        self.update_config(config_file, [project_folder, graphs_folder, log_folder,
                                     master_folder, slaves_folder, rawdata_folder,
                                     coreg_folder, ifg_folder, stamp_folder,
                                     config_file,
@@ -66,7 +66,7 @@ class Initialize:
                                     gpt, n_cores, total_ram, self.max_perp])
         
     # Update config
-    def modify_master(self, config_file, path):
+    def update_config(self, config_file, path):
         lines = ''''''
         with open(config_file, 'r') as file:
             lines = file.readlines()

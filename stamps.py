@@ -138,6 +138,7 @@ class StaMPSEXE:
         print(f"-> Shapefile saved to {shapefile_name}")
     
     def run(self):
+        self.csv_files = []
         os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
@@ -145,8 +146,10 @@ class StaMPSEXE:
         patch_identifier = [f for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
             os.chdir(path)
+            self.csv_files.append(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.csv'))
             self.ps_export_gis(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), os.path.join(self.DATAFOLDER, 'geom') + f"/{self.CURRENT_RESULT.split('/')[-1]}_{identity}.shp", [], [], 'ortho')
             os.chdir(self.CURRENT_RESULT) 
         os.chdir(self.PROJECTFOLDER)
+        return self.csv_files
 if __name__ == "__main__":
     StaMPSEXE('').run()
