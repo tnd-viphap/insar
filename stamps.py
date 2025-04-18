@@ -113,6 +113,19 @@ class StaMPSEXE:
         # Assign class index and corresponding color
         gis_data['BINS'] = np.digitize(vlos_values, breaks, right=True) - 1
         gis_data['COLOR'] = gis_data['BINS'].apply(lambda i: mcolors.to_hex(cmap(i)) if 0 <= i < cmap.N else "#000000")
+
+        group_df = gis_data.groupby('COLOR')
+        legend_values = {"legend_settings": []}
+        color_dict = []
+        for idx, row in group_df["VLOS"].describe().iterrows():
+            color_dict.append({
+                "upper_threshold": row["max"],
+                "color": idx
+            })
+        legend_values["legend_settings"] = color_dict
+        gis_data = gis_data.drop(columns=["BINS", "COLOR"])
+        gis_data["COLOR"] = None
+        gis_data.loc[0, "COLOR"] = legend_values
         
         # Save to CSV
         gis_data.to_csv(filename, index=False)
