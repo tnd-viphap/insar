@@ -87,11 +87,12 @@ class CRLink:
         # Load psi data
         psi = gpd.read_file(self.psi_file)
         
-        # Retrieve PTA results
-        target_data = self._get_total_loc_err()
+        # Get estimated errors
+        self._get_total_loc_err()
 
+        # Search for PS points in error radius range
         found_points = []
-        for _, value in target_data.items():
+        for _, value in self.target_data.items():
             # Get search radius for searching nearby points among PS ones
             search_radius = np.sqrt((value["ground_range_localization_error_[m]"])**2 + (value["azimuth_localization_error_[m]"])**2)
             
@@ -118,13 +119,12 @@ class CRLink:
                 ps_idx = distances.index(min_dist)
                 nearby["target_name"] = value["target_name"]
                 found_points.append(nearby.iloc[ps_idx])
-        
         if found_points:
             self.insar_points = pd.DataFrame(found_points)
             del found_points
             self.insar_points.to_csv(self.psi_file.replace("INSAR", "CRLink"), index=False)
 
-    def _cr_with_gnss(self, n_rovers):
+    def _cr_with_gnss(self):
         # Load GNSS data
         gnss_data = pd.read_csv(self.local_gnss_file)
         
@@ -132,68 +132,71 @@ class CRLink:
         gnss_data['TIMESTAMP'] = pd.to_datetime(gnss_data['TIMESTAMP'])
         
         # Get slave dates
-        slave_dates = [d for d in os.listdir(self.SLAVESFOLDER) if os.path.isdir(os.path.join(self.SLAVESFOLDER, d))]
-        slave_dates = [pd.to_datetime(d, format="%Y%m%d") for d in slave_dates]
+        if len(os.listdir(self.SLAVESFOLDER)) > 0:
+            slave_dates = [d for d in os.listdir(self.SLAVESFOLDER) if os.path.isdir(os.path.join(self.SLAVESFOLDER, d))]
+            slave_dates = [pd.to_datetime(d, format="%Y%m%d") for d in slave_dates]
         
-        # Process each target
-        self.gnss_results = []
-        for target_name, target_info in self.target_data.items():
-            # Find GNSS data for each slave date
-            for slave_date in slave_dates:
-                # Get GNSS data for this date
-                date_data = gnss_data[gnss_data['TIMESTAMP'].dt.date == slave_date.date()]
-                
-                if len(date_data) == 0:
-                    continue
-                
-                # Process each rover
-                for rover in range(1, n_rovers + 1 if n_rovers else len([col for col in gnss_data.columns if 'Delta_E' in col]) + 1):
-                    # Get displacement columns for this rover
-                    e_col = f'Delta_E{rover}'
-                    n_col = f'Delta_N{rover}'
-                    u_col = f'Delta_U{rover}'
+            # Process each target
+            self.gnss_results = []
+            for target_name, target_info in self.target_data.items():
+                # Find GNSS data for each slave date
+                for slave_date in slave_dates:
+                    # Get GNSS data for this date
+                    date_data = gnss_data[gnss_data['TIMESTAMP'].dt.date == slave_date.date()]
                     
-                    if not all(col in date_data.columns for col in [e_col, n_col, u_col]):
+                    if len(date_data) == 0:
                         continue
                     
-                    # Calculate average displacement for this rover on this date
-                    avg_e = date_data[e_col].mean()
-                    avg_n = date_data[n_col].mean()
-                    avg_u = date_data[u_col].mean()
+                    # Process each rover
+                    for rover in range(1, self.n_rovers + 1 if self.n_rovers else len([col for col in gnss_data.columns if 'Delta_E' in col]) + 1):
+                        # Get displacement columns for this rover
+                        e_col = f'Delta_E{rover}'
+                        n_col = f'Delta_N{rover}'
+                        u_col = f'Delta_U{rover}'
+                        
+                        if not all(col in date_data.columns for col in [e_col, n_col, u_col]):
+                            continue
+                        
+                        # Calculate average displacement for this rover on this date
+                        avg_e = date_data[e_col].mean()
+                        avg_n = date_data[n_col].mean()
+                        avg_u = date_data[u_col].mean()
 
-                    # Convert to VLOS of GNSS metrics
-                    incidence_angle = target_info["incidence_angle_[deg]"]
-                    azimuth_angle = target_info["azimuth_angle_[deg]"]
-                    gnss_vlos = -(avg_e*np.cos(azimuth_angle*np.pi/180) + avg_n*np.sin(azimuth_angle*np.pi/180))*np.cos(incidence_angle*np.pi/180) - avg_u*np.cos(incidence_angle*np.pi/180)
-                    
-                    # Calculate total horizontal displacement
-                    total_horizontal = np.sqrt(avg_e**2 + avg_n**2)
-                    
-                    # Store results
-                    self.gnss_results.append({
-                        'target_name': target_name,
-                        'date': slave_date.strftime('%Y%m%d'),
-                        'rover': rover,
-                        'longitude': target_info["longitude_corrected_[deg]"],
-                        'latitude': target_info["latitude_corrected_[deg]"],
-                        'total_h_error_m': total_horizontal,
-                        'ground_range_error_m': target_info["ground_range_localization_error_[m]"],
-                        'azimuth_error_m': target_info["azimuth_localization_error_[m]"],
-                        'gnss_vlos_m': gnss_vlos
-                    })
-        
-        # Convert results to DataFrame and save
-        if self.gnss_results:
-            result_dfs = []
-            for result in self.gnss_results:
-                result_dfs.append(pd.DataFrame(result))
-            self.gnss_results = pd.concat(result_dfs, ignore_index=True)
-            output_file = self.local_gnss_file.replace('output.csv', f'GNSS_CRLink.csv')
-            self.gnss_results.to_csv(output_file, index=False)
-            print(f"-> GNSS-CR link results saved to {output_file}")
+                        # Convert to VLOS of GNSS metrics
+                        incidence_angle = target_info["incidence_angle_[deg]"]
+                        azimuth_angle = target_info["azimuth_angle_[deg]"]
+                        gnss_vlos = -(avg_e*np.cos(azimuth_angle*np.pi/180) + avg_n*np.sin(azimuth_angle*np.pi/180))*np.cos(incidence_angle*np.pi/180) - avg_u*np.cos(incidence_angle*np.pi/180)
+                        
+                        # Calculate total horizontal displacement
+                        total_horizontal = np.sqrt(avg_e**2 + avg_n**2)
+                        
+                        # Store results
+                        self.gnss_results.append({
+                            'target_name': target_name,
+                            'date': slave_date.strftime('%Y%m%d'),
+                            'rover': rover,
+                            'longitude': target_info["longitude_corrected_[deg]"],
+                            'latitude': target_info["latitude_corrected_[deg]"],
+                            'total_h_error_m': total_horizontal,
+                            'ground_range_error_m': target_info["ground_range_localization_error_[m]"],
+                            'azimuth_error_m': target_info["azimuth_localization_error_[m]"],
+                            'gnss_vlos_m': gnss_vlos
+                        })
+                        
+            # Convert results to DataFrame and save
+            if self.gnss_results:
+                result_dfs = []
+                for result in self.gnss_results:
+                    result_dfs.append(pd.DataFrame(result))
+                self.gnss_results = pd.concat(result_dfs, ignore_index=True)
+                output_file = self.local_gnss_file.replace('output.csv', f'GNSS_CRLink.csv')
+                self.gnss_results.to_csv(output_file, index=False)
+                print(f"-> GNSS-CR link results saved to {output_file}")
+            else:
+                print("-> No matching GNSS data found for the CR points")
+            del result_dfs
         else:
-            print("-> No matching GNSS data found for the CR points")
-        del result_dfs
+            print("-> Empty SLAVES data")
 
     def _combined_insar_gnss(self):
         # Combined INSAR and GNSS results
@@ -212,5 +215,8 @@ if __name__ == "__main__":
     #from modules.snap2stamps.bin._0_engage import Initialize
     #Initialize([108.8721, 15.1294, 108.8996, 15.1569], "DESCENDING", 540, 150.0, 0, 5, 0)
     #time.sleep(2)
-    cr_link = CRLink("data/geom/INSAR_20210427_PSDS_v7_PATCH_1.shp")
-    cr_link.run()
+    #cr_link = CRLink("data/geom/INSAR_20210427_PSDS_v7_PATCH_1.shp", 2)
+    #cr_link._fetch_gnss_data()
+    #cr_link._get_total_loc_err()
+    #cr_link._cr_with_gnss()
+    None
