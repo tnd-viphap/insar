@@ -123,9 +123,10 @@ class StaMPSEXE:
                 "color": idx
             })
         legend_values["legend_settings"] = color_dict
+        legend_values["legend_settings"] = sorted(legend_values["legend_settings"], key=lambda x: x['upper_threshold'])
         gis_data = gis_data.drop(columns=["BINS", "COLOR"])
         gis_data["COLOR"] = None
-        gis_data.loc[0, "COLOR"] = legend_values
+        gis_data.at[0, "COLOR"] = legend_values
         
         # Save to CSV
         gis_data.to_csv(filename, index=False)
