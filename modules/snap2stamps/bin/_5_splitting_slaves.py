@@ -49,6 +49,26 @@ class SlavesSplitter:
                 folder_path = os.path.join(self.SLAVESFOLDER, acdatefolder)
                 files = glob.glob(folder_path + '/*.zip')
                 out_file.write(str(files) + '\n')
+
+                try:
+                    folder_date = datetime.strptime(acdatefolder, "%Y%m%d")
+                    last_modified_date = datetime.fromtimestamp(os.path.getmtime(folder_path))
+                    days_diff = int(abs((last_modified_date - folder_date).days))
+                    
+                    if days_diff <= 21 and datetime.now() >= folder_date + timedelta(days=21):
+                        print(f"-> Image {acdatefolder} has new orbit data. Renewing...")
+                        if os.path.exists(folder_path):
+                            shutil.rmtree(folder_path)
+                            os.makedirs(folder_path)
+                            for file in os.listdir(self.COREGFOLDER):
+                                if acdatefolder in file:
+                                    if os.path.isfile(os.path.join(self.COREGFOLDER, file)):
+                                        os.remove(os.path.join(self.COREGFOLDER, file))
+                                    elif os.path.isdir(os.path.join(self.COREGFOLDER, file)):
+                                        shutil.rmtree(os.path.join(self.COREGFOLDER, file))
+                except:
+                    print(f"-> Error checking folder date {acdatefolder}")
+                    pass
                 
                 if not os.listdir(folder_path):
                     print(f"-> Found no data. Re-downloading data for {acdatefolder}...")
