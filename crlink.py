@@ -52,36 +52,48 @@ class CRLink:
 
     def _get_total_loc_err(self):
         pta_folder = f"{self.PROJECTFOLDER}process/pta/"
+        if not os.path.exists(pta_folder):
+            os.makedirs(pta_folder)
         pta_result_folders = os.listdir(pta_folder)
         pta_result_files = []
 
         # Get all pta_results.csv in each pta folder
-        for folder in pta_result_folders:
-            for file in os.listdir(pta_folder+folder):
-                if "pta_results.csv" in file:
-                    pta_result_files.append(pta_folder+folder+"/"+file)
+        if pta_result_folders:
+            for folder in pta_result_folders:
+                for file in os.listdir(pta_folder+folder):
+                    if "pta_results.csv" in file:
+                        pta_result_files.append(pta_folder+folder+"/"+file)
 
-        data = []
-        for file in pta_result_files:
-            datum = pd.read_csv(file)
-            data.append(datum)
+            data = []
+            if pta_result_files:
+                for file in pta_result_files:
+                    datum = pd.read_csv(file)
+                    data.append(datum)
+                data = pd.concat(data, ignore_index=True)
+            else:
+                print("-> Missing PTA on data")
+        else:
+            data = None
             
         # Compute average error
-        data = pd.concat(data, ignore_index=True)
-        target_names = data["target_name"].unique().tolist()
-        
-        self.target_data = {}
-        grouped = data.groupby("target_name")
-        del data
-        for group in target_names:
-            self.target_data[group] = {
-                "incidence_angle_[deg]": grouped.get_group(group)["incidence_angle_[deg]"].mean(),
-                "azimuth_angle_[deg]": 90 - ((np.pi)**-1)*180*grouped.get_group(group)["squint_angle_[rad]"].mean(),
-                "ground_range_localization_error_[m]": grouped.get_group(group)["ground_range_localization_error_[m]"].max(),
-                "azimuth_localization_error_[m]": grouped.get_group(group)["azimuth_localization_error_[m]"].max(),
-                "latitude_corrected_[deg]": grouped.get_group(group)["latitude_corrected_[deg]"].mean(),
-                "longitude_corrected_[deg]": grouped.get_group(group)["longitude_corrected_[deg]"].mean()
-            }
+        if len(data) > 0:
+            target_names = data["target_name"].unique().tolist()
+            
+            self.target_data = {}
+            grouped = data.groupby("target_name")
+            del data
+            for group in target_names:
+                self.target_data[group] = {
+                    "target_name": grouped.get_group(group)["target_name"],
+                    "incidence_angle_[deg]": grouped.get_group(group)["incidence_angle_[deg]"].mean(),
+                    "azimuth_angle_[deg]": 90 - ((np.pi)**-1)*180*grouped.get_group(group)["squint_angle_[rad]"].mean(),
+                    "ground_range_localization_error_[m]": grouped.get_group(group)["ground_range_localization_error_[m]"].max(),
+                    "azimuth_localization_error_[m]": grouped.get_group(group)["azimuth_localization_error_[m]"].max(),
+                    "latitude_corrected_[deg]": grouped.get_group(group)["latitude_corrected_[deg]"].mean(),
+                    "longitude_corrected_[deg]": grouped.get_group(group)["longitude_corrected_[deg]"].mean()
+                }
+        else:
+            print("-> Missing PTA on data")
 
     def _cr_with_insar(self):
         # Load psi data
@@ -105,24 +117,32 @@ class CRLink:
 
             # Capture nearby points
             nearby = psi.loc[gdf_geom.covers(psi.geometry)]
+            nearby = nearby.reset_index()
+            nearby["target_id"] = value["target_name"]
             
             # Compute the nearest point
-            cr_point = np.array([value["longitude_corrected_[deg]"], value["latitude_corrected_[deg]"]])
+            cr_point = np.array([float(value["longitude_corrected_[deg]"]), float(value["latitude_corrected_[deg]"])])
             if len(nearby) > 0:
                 distances = []
                 for idx, row in nearby.iterrows():
-                    ps_point = np.array([row["LON"], row["LAT"]])
+                    ps_point = np.array([float(row["LON"]), float(row["LAT"])])
                     distance = np.linalg.norm(ps_point - cr_point)
                     distances.append(distance)
                 # Get the point
-                min_dist = np.min(distances)
-                ps_idx = distances.index(min_dist)
-                nearby["target_name"] = value["target_name"]
-                found_points.append(nearby.iloc[ps_idx])
+                try:
+                    min_dist = np.min(distances)
+                    if min_dist != 'nan':
+                        ps_idx = distances.index(min_dist)
+                        found_points.append(nearby.loc[ps_idx])
+                    else:
+                        found_points.append(nearby.loc[0])
+                except:
+                    print(f"-> No {value['target_name'].values[0].upper()} point found on PS data")
+
         if found_points:
-            self.insar_points = pd.DataFrame(found_points)
+            self.insar_points = gpd.GeoDataFrame(found_points)
             del found_points
-            self.insar_points.to_csv(self.psi_file.replace("INSAR", "CRLink"), index=False)
+            self.insar_points.to_file(self.psi_file.replace("INSAR", "CRLink"), index=False)
 
     def _cr_with_gnss(self):
         # Load GNSS data
@@ -212,11 +232,12 @@ class CRLink:
         self._combined_insar_gnss()
 
 if __name__ == "__main__":
-    #from modules.snap2stamps.bin._0_engage import Initialize
-    #Initialize([108.8721, 15.1294, 108.8996, 15.1569], "DESCENDING", 540, 150.0, 0, 5, 0)
-    #time.sleep(2)
-    #cr_link = CRLink("data/geom/INSAR_20210427_PSDS_v7_PATCH_1.shp", 2)
+    from modules.snap2stamps.bin._0_engage import Initialize
+    Initialize([108.8721, 15.1294, 108.8996, 15.1569], "DESCENDING", 540, 150.0, 0, 5, 0)
+    time.sleep(2)
+    cr_link = CRLink("dev/pta/ps_data/INSAR_20200408_PSDS_v2_PATCH_1.shp", 2)
     #cr_link._fetch_gnss_data()
-    #cr_link._get_total_loc_err()
+    cr_link._get_total_loc_err()
+    cr_link._cr_with_insar()
     #cr_link._cr_with_gnss()
     None
