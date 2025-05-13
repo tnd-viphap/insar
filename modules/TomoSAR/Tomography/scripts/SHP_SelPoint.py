@@ -1,9 +1,12 @@
 import time
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 from scipy.ndimage import label
-from concurrent.futures import ProcessPoolExecutor
-from BWStest import BWS
 from tqdm import tqdm
+
+from modules.TomoSAR.Tomography.scripts.BWStest import BWS
+
 
 class SHP:
     def __init__(self, slcstack, calwin=[15, 15], alpha=0.05):

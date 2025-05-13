@@ -1,13 +1,17 @@
 import time
-from Parameter_input import Input
-from SHP_SelPoint import SHP
-from PSDS_estimator import PSDS
-import numpy as np
-from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import numpy as np
+from tqdm import tqdm
+
+from modules.TomoSAR.Tomography.scripts.mt_prep_snap_psds import PSDS_Prep
+from modules.TomoSAR.Tomography.scripts.Parameter_input import Input
+from modules.TomoSAR.Tomography.scripts.PSDS_estimator import PSDS
+from modules.TomoSAR.Tomography.scripts.SHP_SelPoint import SHP
+
+
 class TomoSARControl:
-    def __init__(self):
+    def __init__(self, patch_info=None):
         print("###### TOMOSAR Processing ######")
         # For SHP analysis
         self.CalWin = [7, 25]  # [row, col]
@@ -15,6 +19,9 @@ class TomoSARControl:
         self.BroNumthre = 20
         self.Cohthre = 0.25
         self.Cohthre_slc_filt = 0.05
+        self.patch_info = patch_info
+        if not self.patch_info:
+            self.patch_info = ["1", "1", "50", "50"]
 
         print("Step 1: Preparing inputs and SHP analysis...\n")
         self.input = Input(False)
@@ -209,7 +216,9 @@ class TomoSARControl:
                  self.BroNumthre, self.Cohthre,
                  self.Cohthre_slc_filt,
                  self.input.InSAR_processor).run()
-
+            master_date = self.CURRENT_RESULT.split("_")[1]
+            print("-> Preparing patches...")
+            PSDS_Prep(master_date, self.CURRENT_RESULT, self.DA_THRESHOLD, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1])
 
 if __name__ == "__main__":
     TomoSARControl().run()

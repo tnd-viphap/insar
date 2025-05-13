@@ -1,13 +1,15 @@
-import os
-import sys
 import glob
-from pathlib import Path
-import time
-from ps_parms import Parms
-from mt_extract_cands import MTExtractCands
+import os
 import platform
-from datetime import datetime
 import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+from modules.TomoSAR.Tomography.scripts.mt_extract_cands import MTExtractCands
+from modules.TomoSAR.Tomography.scripts.ps_parms import Parms
+
 
 class PSDS_Prep:
     def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
