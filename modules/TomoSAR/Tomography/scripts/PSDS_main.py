@@ -216,9 +216,11 @@ class TomoSARControl:
                  self.BroNumthre, self.Cohthre,
                  self.Cohthre_slc_filt,
                  self.input.InSAR_processor).run()
-            master_date = self.CURRENT_RESULT.split("_")[1]
+            result_folder = self.input.read_conf_value("CURRENT_RESULT")
+            master_date = result_folder.split("_")[1]
+            da_threshold = self.input.read_conf_value("DA_THRESHOLD")
             print("-> Preparing patches...")
-            PSDS_Prep(master_date, self.CURRENT_RESULT, self.DA_THRESHOLD, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1])
+            PSDS_Prep(master_date, result_folder, da_threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1])
 
 if __name__ == "__main__":
     TomoSARControl().run()
