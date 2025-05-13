@@ -1,11 +1,13 @@
 import os
 import platform
 import shutil
-import time
 import sys
+import time
+
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 
 from modules.snap2stamps.bin._9_1_mt_prep_snap import MTPrepSNAP
+from modules.TomoSAR.Tomography.scripts.PSDS_main import TomoSARControl
 
 
 class StaMPSPrep:
@@ -43,6 +45,7 @@ class StaMPSPrep:
                     command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT,
                             str(self.threshold), str(self.patch_info[0]), str(self.patch_info[1]), str(self.patch_info[2]), str(self.patch_info[-1])]
             else:
+                # TomoSARControl().run()
                 os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{self.PROJECTFOLDER}modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
                 flag = 'comsar' if self.COMSAR == "1" else 'psds'
                 command = [f"mt_prep_snap_{flag}", self.master_date, self.CURRENT_RESULT, str(self.threshold), "1", "1", "50", "50"]

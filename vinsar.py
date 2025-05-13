@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     ## Running phases
     session = Manager(bbox, direction, frame_no, download_range, reest_flag,
-                      identity_master=identity_master,
+                      identity_master,
                       max_perp, da_threshold, renew_flag=renew_flag,
                       process_range=process_range,
                       stamps_flag='TOMO', ptype=1,
