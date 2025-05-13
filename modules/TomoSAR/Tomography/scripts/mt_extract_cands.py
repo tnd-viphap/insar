@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import logging
 from typing import Optional, List
+import platform
 
 class MTExtractCands:
     """
@@ -27,11 +28,18 @@ class MTExtractCands:
         self.maskfile = None
         
         # Set the executable path
-        self.selsbc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selsbc_patch.exe"
-        self.selpsc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selpsc_patch.exe"
-        self.psclonlat = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "psclonlat.exe"
-        self.pscdem = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscdem.exe"
-        self.pscphase = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscphase.exe"
+        if platform.system() == "Linux":
+            self.selsbc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "selsbc_patch"
+            self.selpsc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "selpsc_patch"
+            self.psclonlat = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "psclonlat"
+            self.pscdem = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "pscdem"
+            self.pscphase = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "pscphase"
+        else:
+            self.selsbc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selsbc_patch.exe"
+            self.selpsc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selpsc_patch.exe"
+            self.psclonlat = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "psclonlat.exe"
+            self.pscdem = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscdem.exe"
+            self.pscphase = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscphase.exe"
 
     def _read_project_conf(self, key):
         """Read value from project configuration file"""
@@ -81,6 +89,7 @@ class MTExtractCands:
             bool: True if processing succeeded, False otherwise
         """
         self.logger.info(f"   -> Patch: {patch}")
+        os.chdir(patch)
         # Process candidates
         if docands:
             if os.path.exists(f"{self.work_dir}/selsbc.in"):
@@ -143,7 +152,7 @@ class MTExtractCands:
                 "pscands.1.ph"
             ]
             os.system(' '.join(cmd))
-                
+        os.chdir("..")        
         return True
         
     def run(self) -> bool:

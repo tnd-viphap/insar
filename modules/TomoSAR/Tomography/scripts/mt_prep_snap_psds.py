@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from ps_parms import Parms
 from mt_extract_cands import MTExtractCands
+import platform
 
 class PSDS_Prep:
     def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
@@ -23,7 +24,10 @@ class PSDS_Prep:
             maskfile (str): Optional mask file path
         """
         self.conf_path = Path(__file__).parent.parent.parent.parent / "snap2stamps" / "bin" / "project.conf"
-        self.calamp_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "calamp.exe"
+        if platform.system() == "Linux":
+            self.calamp_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "calamp"
+        else:
+            self.calamp_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "calamp.exe"
 
         self.master_date = master_date
         self.data_dir = Path(data_dir.replace('\\', '/'))
@@ -177,6 +181,7 @@ class PSDS_Prep:
                 file = file.replace('\\', '/')
                 f.write(f"{file}\n")
         command = f"{self.calamp_path} {self.work_dir}/calamp.in {self.width} {self.work_dir}/calamp.out f 1 {self.maskfile}"
+        print(command)
         os.system(command)
             
         # Write dimensions to files
@@ -237,5 +242,3 @@ if __name__ == "__main__":
     prep = PSDS_Prep(master_date, data_dir, da_thresh, rg_patches, az_patches, 
                      rg_overlap, az_overlap, maskfile)
     prep.run()
-
-    
