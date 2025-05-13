@@ -7,6 +7,9 @@ import subprocess
 import logging
 from typing import Optional, List
 import platform
+import multiprocessing
+from functools import partial
+from datetime import datetime
 
 class MTExtractCands:
     """
@@ -26,6 +29,14 @@ class MTExtractCands:
         self.precision = "f"
         self.byteswap = 1
         self.maskfile = None
+        self.num_cores = 4
+        
+        # Set up log file
+        log_dir = Path(self.work_dir) / "logs"
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = log_dir / f"mt_extract_cands_{timestamp}.log"
+        self._setup_file_logger()
         
         # Set the executable path
         if platform.system() == "Linux":
@@ -58,11 +69,53 @@ class MTExtractCands:
         logger.setLevel(logging.INFO)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(message)s')
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)
             logger.addHandler(handler)
         return logger
+
+    def _setup_file_logger(self):
+        """Setup file logging configuration"""
+        file_handler = logging.FileHandler(self.log_file)
+        file_handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+
+    def _run_command(self, cmd: List[str], patch: str) -> bool:
+        """
+        Run a command and log its output
+        
+        Args:
+            cmd: Command to run
+            patch: Current patch being processed
             
+        Returns:
+            bool: True if command succeeded, False otherwise
+        """
+        try:
+            self.logger.info(f"Executing command in patch {patch}: {' '.join(cmd)}")
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            stdout, stderr = process.communicate()
+            
+            if stdout:
+                self.logger.info(f"Command output:\n{stdout}")
+            if stderr:
+                self.logger.warning(f"Command warnings/errors:\n{stderr}")
+                
+            if process.returncode != 0:
+                self.logger.error(f"Command failed with return code {process.returncode}")
+                return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Error executing command: {str(e)}")
+            return False
+
     def process_patch(self, 
                      patch: str,
                      dophase: bool = True,
@@ -88,86 +141,92 @@ class MTExtractCands:
         Returns:
             bool: True if processing succeeded, False otherwise
         """
-        self.logger.info(f"   -> Patch: {patch}")
-        os.chdir(patch)
-        # Process candidates
-        if docands:
-            if os.path.exists(f"{self.work_dir}/selsbc.in"):
-                # Select SB candidates
-                cmd = [
-                    str(self.selsbc_path).replace('\\', '/'),
-                    f"{self.work_dir[1:]}/selsbc.in",
-                    "patch.in",
-                    "pscands.1.ij",
-                    "pscands.1.da",
-                    "mean_amp.flt",
-                    precision,
-                    str(int(self.byteswap))
-                ]
-                if maskfile:
-                    cmd.append(maskfile)
-            else:
-                # Select PS candidates
-                cmd = [
-                    str(self.selpsc_path).replace('\\', '/'),
-                    f"{self.work_dir}/selpsc.in",
-                    "patch.in",
-                    "pscands.1.ij",
-                    "pscands.1.da",
-                    "mean_amp.flt",
-                    precision,
-                    str(int(self.byteswap))
-                ]
-                if maskfile:
-                    cmd.append(maskfile)
+        try:
+            print(f"   -> Patch: {patch}")
+            os.chdir(patch)
+            
+            # Process candidates
+            if docands:
+                if os.path.exists(f"{self.work_dir}/selsbc.in"):
+                    # Select SB candidates
+                    cmd = [
+                        str(self.selsbc_path).replace('\\', '/'),
+                        f"{self.work_dir[1:]}/selsbc.in",
+                        "patch.in",
+                        "pscands.1.ij",
+                        "pscands.1.da",
+                        "mean_amp.flt",
+                        precision,
+                        str(int(self.byteswap))
+                    ]
+                    if maskfile:
+                        cmd.append(maskfile)
+                else:
+                    # Select PS candidates
+                    cmd = [
+                        str(self.selpsc_path).replace('\\', '/'),
+                        f"{self.work_dir}/selpsc.in",
+                        "patch.in",
+                        "pscands.1.ij",
+                        "pscands.1.da",
+                        "mean_amp.flt",
+                        precision,
+                        str(int(self.byteswap))
+                    ]
+                    if maskfile:
+                        cmd.append(maskfile)
+                        
+                with open(self.log_file, 'a') as log:
+                    log.write(f"\n=== Processing {patch} with {'selsbc_patch' if os.path.exists(f'{self.work_dir}/selsbc.in') else 'selpsc_patch'} ===\n")
+                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
                     
-            os.system(' '.join(cmd))
-                
-        # Process lon/lat
-        if dolonlat:
-            cmd = [
-                str(self.psclonlat).replace('\\', '/'),
-                f"{self.work_dir}/psclonlat.in",
-                "pscands.1.ij",
-                "pscands.1.ll"
-            ]
-            os.system(' '.join(cmd))
-                
-        # Process DEM
-        if dodem:
-            cmd = [
-                str(self.pscdem).replace('\\', '/'),
-                f"{self.work_dir}/pscdem.in",
-                "pscands.1.ij",
-                "pscands.1.hgt"
-            ]
-            os.system(' '.join(cmd))
-                
-        # Process phase
-        if dophase:
-            cmd = [
-                str(self.pscphase).replace('\\', '/'),
-                f"{self.work_dir}/pscphase.in",
-                "pscands.1.ij",
-                "pscands.1.ph"
-            ]
-            os.system(' '.join(cmd))
-        os.chdir("..")        
-        return True
+            # Process lon/lat
+            if dolonlat:
+                cmd = [
+                    str(self.psclonlat).replace('\\', '/'),
+                    f"{self.work_dir}/psclonlat.in",
+                    "pscands.1.ij",
+                    "pscands.1.ll"
+                ]
+                with open(self.log_file, 'a') as log:
+                    log.write(f"\n=== Processing {patch} with psclonlat ===\n")
+                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                    
+            # Process DEM
+            if dodem:
+                cmd = [
+                    str(self.pscdem).replace('\\', '/'),
+                    f"{self.work_dir}/pscdem.in",
+                    "pscands.1.ij",
+                    "pscands.1.hgt"
+                ]
+                with open(self.log_file, 'a') as log:
+                    log.write(f"\n=== Processing {patch} with pscdem ===\n")
+                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                    
+            # Process phase
+            if dophase:
+                cmd = [
+                    str(self.pscphase).replace('\\', '/'),
+                    f"{self.work_dir}/pscphase.in",
+                    "pscands.1.ij",
+                    "pscands.1.ph"
+                ]
+                with open(self.log_file, 'a') as log:
+                    log.write(f"\n=== Processing {patch} with pscphase ===\n")
+                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+            os.chdir("..")        
+            return True
+        except Exception as e:
+            self.logger.error(f"Error processing patch {patch}: {str(e)}")
+            return False
         
-    def run(self) -> bool:
+    def run(self, num_cores: Optional[int] = None) -> bool:
         """
-        Run the extraction process for all patches
+        Run the extraction process for all patches in parallel
         
         Args:
-            dophase: Whether to extract phase data
-            dolonlat: Whether to extract lon/lat data
-            dodem: Whether to extract DEM data
-            docands: Whether to extract candidate data
-            precision: Data precision ('s' for short, 'f' for float)
-            byteswap: Whether to byteswap the data
-            maskfile: Optional mask file path
-            patch_list: Path to patch list file (default: patch.list)
+            num_cores: Number of CPU cores to use (default: all available cores)
             
         Returns:
             bool: True if all processing succeeded, False otherwise
@@ -180,22 +239,33 @@ class MTExtractCands:
         except FileNotFoundError:
             self.logger.error(f"Patch list file {patch_list_file} not found")
             return False
+
+        # Set number of cores to use
+        if num_cores is None:
+            num_cores = self.num_cores
+        else:
+            num_cores = min(num_cores, self.num_cores)
             
-        # Process each patch
-        success = True
-        for patch in patches:
-            success = self.process_patch(
-                patch,
-                dophase=self.dophase,
-                dolonlat=self.dolonlat,
-                dodem=self.dodem,
-                docands=self.docands,
-                precision=self.precision,
-                byteswap=self.byteswap,
-                maskfile=self.maskfile
-            )
-            if not success:
-                break
+        # Create a partial function with the fixed parameters
+        process_func = partial(
+            self.process_patch,
+            dophase=self.dophase,
+            dolonlat=self.dolonlat,
+            dodem=self.dodem,
+            docands=self.docands,
+            precision=self.precision,
+            byteswap=self.byteswap,
+            maskfile=self.maskfile
+        )
+            
+        # Process patches in parallel
+        with multiprocessing.Pool(processes=num_cores) as pool:
+            results = pool.map(process_func, patches)
+                
+        # Check if all patches were processed successfully
+        success = all(results)
+        if not success:
+            self.logger.error("Some patches failed to process")
                 
         return success
 
@@ -263,19 +333,15 @@ if __name__ == "__main__":
         default="patch.list",
         help="Path to patch list file"
     )
+    parser.add_argument(
+        "--cores",
+        type=int,
+        help="Number of CPU cores to use (default: all available cores)"
+    )
     
     args = parser.parse_args()
     
     extractor = MTExtractCands()
-    success = extractor.run(
-        dophase=bool(args.dophase),
-        dolonlat=bool(args.dolonlat),
-        dodem=bool(args.dodem),
-        docands=bool(args.docands),
-        precision=args.precision,
-        byteswap=bool(args.byteswap),
-        maskfile=args.maskfile if args.maskfile else None,
-        patch_list=args.patch_list
-    )
+    success = extractor.run(num_cores=args.cores)
     
     sys.exit(0 if success else 1)

@@ -6,6 +6,8 @@ import time
 from ps_parms import Parms
 from mt_extract_cands import MTExtractCands
 import platform
+from datetime import datetime
+import subprocess
 
 class PSDS_Prep:
     def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
@@ -37,6 +39,12 @@ class PSDS_Prep:
         self.az_overlap = az_overlap
         self.maskfile = maskfile
         self.work_dir = self.data_dir
+        
+        # Set up log file
+        log_dir = self.work_dir / "logs"
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = log_dir / f"mt_prep_snap_psds_{timestamp}.log"
         
         # Check if small baseline processing
         self.sb_flag = (self.data_dir / "SMALL_BASELINES").exists()
@@ -181,8 +189,24 @@ class PSDS_Prep:
                 file = file.replace('\\', '/')
                 f.write(f"{file}\n")
         command = f"{self.calamp_path} {self.work_dir}/calamp.in {self.width} {self.work_dir}/calamp.out f 1 {self.maskfile}"
-        print(command)
-        os.system(command)
+        
+        # Run calamp and log its output
+        with open(self.log_file, 'w') as log:
+            log.write(f"=== Running calamp command ===\n")
+            log.write(f"Command: {command}\n\n")
+            log.write("Output:\n")
+            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            stdout, stderr = process.communicate()
+            if stdout:
+                log.write(stdout)
+            if stderr:
+                log.write(f"\nErrors/Warnings:\n{stderr}")
+            log.write(f"\nReturn code: {process.returncode}\n")
+            
+        if process.returncode != 0:
+            print(f"Error: calamp failed with return code {process.returncode}")
+            print(f"Check log file for details: {self.log_file}")
+            sys.exit(1)
             
         # Write dimensions to files
         with open(self.work_dir / "width.txt", 'w') as f:
