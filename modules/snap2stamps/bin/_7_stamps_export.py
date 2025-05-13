@@ -100,7 +100,7 @@ class StaMPSExporter:
 
         sorted_dimfiles = sorted(glob.glob(self.COREGFOLDER + '/*' + self.IW1 + '.dim'))
         if self.time_range:
-            sorted_dimfiles = [f for f in sorted_dimfiles if self.time_range[0] <= f.split('_')[-1].split('.')[0] <= self.time_range[1]]
+            sorted_dimfiles = [f for f in sorted_dimfiles if int(self.time_range[0]) <= int(f.split('_')[-1].split('.')[0]) <= int(self.time_range[1] if self.time_range[1] else int(sorted_dimfiles[-1].split('_')[-1].split('.')[0]))]
         
         
         with open(self.BASELINE_CACHE, "r") as file:
