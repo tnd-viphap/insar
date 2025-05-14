@@ -194,6 +194,7 @@ class StaMPSEXE:
         header = ['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + days
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
+        gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
 
         # Rasterize the data
         print("-> Rasterizing data...")
@@ -201,9 +202,9 @@ class StaMPSEXE:
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")
         if gdf.crs.is_geographic:
             gdf = gdf.to_crs(epsg=32648)
+        print("Interpolating data...")
         buffer = 16  # normal resampling spacing
         columns = ['LON', 'LAT', 'HEIGHT', 'VLOS', 'COHERENCE'] + [c for c in gdf.columns if re.match(r'^D', c)]
-        print("Interpolating data...")
         stacked_array, transform = self.rasterize_preserve_and_stack(gdf, columns, pixel_size=10.0, window_radius=buffer)
         print("Converting raster to points...")
         interpolated_data = self.raster_to_points(stacked_array, transform, columns)
@@ -260,8 +261,9 @@ class StaMPSEXE:
         patch_identifier = [f for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
             os.chdir(path)
-            self.csv_files.append(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.csv'))
-            self.ps_export_gis(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.csv'), os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
+            csv_filename = os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}_cr.csv')
+            self.csv_files.append(csv_filename)
+            self.ps_export_gis(csv_filename, os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
             os.chdir(self.CURRENT_RESULT) 
         os.chdir(self.PROJECTFOLDER)
         return self.csv_files
