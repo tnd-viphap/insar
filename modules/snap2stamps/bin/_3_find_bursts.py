@@ -42,6 +42,8 @@ class Burst:
         zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.MASTERFOLDER}/*/*.zip")]
         if zip:
             s1.load_zip(os.path.join(self.PROJECTFOLDER, zip[0].replace("./", "")))
+            if not os.path.exists(os.path.join(self.DATAFOLDER, "geom")):
+                os.makedirs(os.path.join(self.DATAFOLDER, "geom"))
             s1.to_shapefile(f"{self.DATAFOLDER}geom/master_bursts.shp")
             
             # Find bursts
