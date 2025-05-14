@@ -7,14 +7,13 @@ import subprocess
 import time
 
 class StaMPSExporter:
-    def __init__(self, time_range, stamps_flag, project_result, renew_flag, to_remove=None):
+    def __init__(self, stamps_flag, project_result, renew_flag, to_remove=None):
         super().__init__()
         
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         self.bar_message = '\n#####################################################################\n'
         self.renew_flag = bool(int(renew_flag))
         self.stamps_flag = stamps_flag
-        self.time_range = time_range
         self._load_config()
         self.project_result = project_result
         if not os.path.exists(os.path.join(self.STAMPFOLDER, self.project_result)):
@@ -99,9 +98,6 @@ class StaMPSExporter:
         self.out_file.write(self.bar_message)
 
         sorted_dimfiles = sorted(glob.glob(self.COREGFOLDER + '/*' + self.IW1 + '.dim'))
-        if self.time_range:
-            sorted_dimfiles = [f for f in sorted_dimfiles if int(self.time_range[0]) <= int(f.split('_')[-1].split('.')[0]) <= int(self.time_range[1] if self.time_range[1] else int(sorted_dimfiles[-1].split('_')[-1].split('.')[0]))]
-        
         
         with open(self.BASELINE_CACHE, "r") as file:
             for line in file.readlines():
