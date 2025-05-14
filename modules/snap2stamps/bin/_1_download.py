@@ -367,10 +367,14 @@ class SLC_Search:
                     lake_data.append(result.geojson())
                     
             if results:
+                selected_result = random.choice(results)
+                self.final_results.append(selected_result)
                 if self.max_date:
                     # Deduplicate results by acquisition date (fileID[17:25])
                     unique_results = {}
                     for r in results:
+                        if r == selected_result:
+                            continue
                         date_key = r.properties['fileID'][17:25]
                         if date_key not in unique_results:
                             unique_results[date_key] = r
@@ -380,39 +384,75 @@ class SLC_Search:
                     new_results = [r for date, r in unique_results.items() if date not in existing_dates]
 
                     # Select up to max_date new unique results
-                    selected_entries = new_results[:self.max_date]
-                    self.final_results.extend(selected_entries)
-                else:
-                    # Select one random result from the new available images
-                    selected_result = random.choice(results)
-                    existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
-                    if selected_result.properties['fileID'][17:25] not in existing_dates:
-                        self.final_results.append(selected_result)
+                    self.selected_entries = new_results[:self.max_date]
+                    self.final_results.extend(self.selected_entries)
                 
-                # Check for existing raw files and potential resume
+                # Combine selected entries
+                all_entries = self.selected_entries + [selected_result]
+
                 if os.listdir(self.RAWDATAFOLDER):
-                    for file in os.listdir(self.RAWDATAFOLDER):
-                        if file[17:23] == selected_result.properties['fileName'][17:23]:
-                            print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
-                            result = asf.search(
-                                platform=["Sentinel-1A"],
-                                processingLevel="SLC",
-                                intersectsWith=self.AOI,
-                                flightDirection=self.DIRECTION,
-                                frame=int(self.FRAME),
-                                start=datetime.strptime(file[17:25], "%Y%m%d")-timedelta(1),
-                                end=datetime.strptime(file[17:25], "%Y%m%d")+timedelta(1)
-                            )
-                            if result:
-                                self.final_results.remove(selected_result)
-                                self.final_results.append(result[0])
-                                self.resume = True
+                    if not self.max_date:
+                        # --- Case: max_date is NOT set ---
+                        for file in os.listdir(self.RAWDATAFOLDER):
+                            raw_month = file[17:23]
+                            selected_month = selected_result.properties['fileName'][17:23]
+                            if raw_month == selected_month:
+                                print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
+                                result = asf.search(
+                                    platform=["Sentinel-1A"],
+                                    processingLevel="SLC",
+                                    intersectsWith=self.AOI,
+                                    flightDirection=self.DIRECTION,
+                                    frame=int(self.FRAME),
+                                    start=datetime.strptime(file[17:25], "%Y%m%d") - timedelta(1),
+                                    end=datetime.strptime(file[17:25], "%Y%m%d") + timedelta(1)
+                                )
+                                if result:
+                                    self.final_results.remove(selected_result)
+                                    self.final_results.append(result[0])
+                                    self.resume = True
+                                break  # We only care about the first match in the month
+
+                    else:
+                        # --- Case: max_date IS set ---
+                        # Group all entries by their month
+                        target_month = selected_result.properties['fileName'][17:23]
+                        month_entries = [r for r in all_entries if r.properties['fileID'][17:23] == target_month]
+
+                        for file in os.listdir(self.RAWDATAFOLDER):
+                            raw_month = file[17:23]
+                            if raw_month == target_month:
+                                print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
+                                result = asf.search(
+                                    platform=["Sentinel-1A"],
+                                    processingLevel="SLC",
+                                    intersectsWith=self.AOI,
+                                    flightDirection=self.DIRECTION,
+                                    frame=int(self.FRAME),
+                                    start=datetime.strptime(file[17:25], "%Y%m%d") - timedelta(1),
+                                    end=datetime.strptime(file[17:25], "%Y%m%d") + timedelta(1)
+                                )
+                                if result:
+                                    for r in month_entries:
+                                        self.final_results.remove(r)
+                                    self.final_results.append(result[0])
+                                    self.resume = True
+                                break  # Stop after first match for that month
+
                 elif os.listdir(self.MASTERFOLDER) and os.listdir(self.SLAVESFOLDER):
                     master_month = str(os.listdir(self.MASTERFOLDER)[0])[0:6]
                     slaves_month = [str(f)[0:6] for f in os.listdir(self.SLAVESFOLDER)]
                     months = list(sorted(slaves_month + [master_month]))
-                    if selected_result and selected_result.properties['fileName'][17:23] in months:
-                        self.final_results.remove(selected_result)
+
+                    target_month = selected_result.properties['fileName'][17:23]
+                    if not self.max_date:
+                        if selected_result and target_month in months:
+                            self.final_results.remove(selected_result)
+                    else:
+                        month_entries = [r for r in all_entries if r.properties['fileID'][17:23] == target_month]
+                        if target_month in months:
+                            for r in month_entries:
+                                self.final_results.remove(r)
 
             # Move to the next month
             self.current_date += timedelta(days=30)
