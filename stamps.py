@@ -129,7 +129,7 @@ class StaMPSEXE:
         gis_data.at[0, "COLOR"] = legend_values
         
         # Save to CSV
-        gis_data.to_csv(filename, index=False)
+        gis_data.to_csv(filename, index=False, encoding='utf-8')
         print(f"-> Data saved to {filename}")
         
         # Convert to Shapefile
@@ -148,7 +148,7 @@ class StaMPSEXE:
         for path, identity in zip(patch_paths, patch_identifier):
             os.chdir(path)
             self.csv_files.append(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.csv'))
-            self.ps_export_gis(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), os.path.join(self.DATAFOLDER, 'geom') + f"/{self.CURRENT_RESULT.split('/')[-1]}_{identity}.shp", [], [], 'ortho')
+            self.ps_export_gis(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.csv'), os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split('/')[-1]}_{identity}.shp'), [], [], 'ortho')
             os.chdir(self.CURRENT_RESULT) 
         os.chdir(self.PROJECTFOLDER)
         return self.csv_files
