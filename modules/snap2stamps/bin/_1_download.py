@@ -225,7 +225,7 @@ class Download:
                         print("-> Continue downloading...")
 
 class SLC_Search:
-    def __init__(self):
+    def __init__(self, max_date=None):
         super().__init__()
         
         # Read input file
@@ -246,6 +246,7 @@ class SLC_Search:
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
         self.resume = False
+        self.max_date = max_date
 
     def _setup_logger(self):
         """Set up logging."""
@@ -324,7 +325,7 @@ class SLC_Search:
             end = file_date + timedelta(days=1)
 
             results = asf.search(
-                platform=["Sentinel-1A", "Sentinel-1B"],
+                platform=["Sentinel-1A"],
                 processingLevel="SLC",
                 intersectsWith=self.AOI,
                 flightDirection=self.DIRECTION,
@@ -350,7 +351,7 @@ class SLC_Search:
             self.logger.info(f"Searching data from {start.strftime('%d/%m/%Y')} to {end.strftime('%d/%m/%Y')}")
 
             results = asf.search(
-                platform=["Sentinel-1A", "Sentinel-1B"],
+                platform=["Sentinel-1A"],
                 processingLevel="SLC",
                 intersectsWith=self.AOI,
                 flightDirection=self.DIRECTION,
@@ -366,12 +367,27 @@ class SLC_Search:
                     lake_data.append(result.geojson())
                     
             if results:
-                
-                # Select one random result from the new available images
-                selected_result = random.choice(results)
-                
-                # Append new product to the download queue
-                self.final_results.append(selected_result)
+                if self.max_date:
+                    # Deduplicate results by acquisition date (fileID[17:25])
+                    unique_results = {}
+                    for r in results:
+                        date_key = r.properties['fileID'][17:25]
+                        if date_key not in unique_results:
+                            unique_results[date_key] = r
+
+                    # Filter out already selected dates in final_results
+                    existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
+                    new_results = [r for date, r in unique_results.items() if date not in existing_dates]
+
+                    # Select up to max_date new unique results
+                    selected_entries = new_results[:self.max_date]
+                    self.final_results.extend(selected_entries)
+                else:
+                    # Select one random result from the new available images
+                    selected_result = random.choice(results)
+                    existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
+                    if selected_result.properties['fileID'][17:25] not in existing_dates:
+                        self.final_results.append(selected_result)
                 
                 # Check for existing raw files and potential resume
                 if os.listdir(self.RAWDATAFOLDER):
@@ -379,7 +395,7 @@ class SLC_Search:
                         if file[17:23] == selected_result.properties['fileName'][17:23]:
                             print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
                             result = asf.search(
-                                platform=["Sentinel-1A", "Sentinel-1B"],
+                                platform=["Sentinel-1A"],
                                 processingLevel="SLC",
                                 intersectsWith=self.AOI,
                                 flightDirection=self.DIRECTION,

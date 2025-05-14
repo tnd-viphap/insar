@@ -14,6 +14,7 @@ if __name__ == "__main__":
     bbox = 
     direction =
     frame_no = 
+    max_date = 
     download_range = 
     reest_flag = 
     identity_master = 
@@ -27,7 +28,8 @@ if __name__ == "__main__":
     oobj = 
 
     ## Running phases
-    session = Manager(bbox, direction, frame_no, download_range, reest_flag,
+    session = Manager(bbox, direction, frame_no, download_range, max_date,
+                      reest_flag,
                       identity_master,
                       max_perp, da_threshold, renew_flag=renew_flag,
                       process_range=process_range,

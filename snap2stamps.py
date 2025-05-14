@@ -16,7 +16,7 @@ from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
 
 
 class Manager:
-    def __init__(self, bbox, direction, frame, download_on, reest_flag=1, identity_master=None, max_perp=150.0, da_threshold=0.45,
+    def __init__(self, bbox, direction, frame, download_on, max_date, reest_flag=1, identity_master=None, max_perp=150.0, da_threshold=0.45,
                  result_folder="", renew_flag=0, process_range=None,
                  stamps_flag='NORMAL', ptype=None,
                  stack_size=5, uni=0):
@@ -24,6 +24,7 @@ class Manager:
         self.bbox = bbox
         self.direction = direction
         self.frame = frame
+        self.max_date = max_date
         self.download_on = download_on
         self.reest_flag = reest_flag
         self.identity_master = identity_master
@@ -87,7 +88,7 @@ class Manager:
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
-        results = SLC_Search().search()
+        results = SLC_Search(self.max_date).search()
         time.sleep(2)
         downloader = Download(results, self.download_on)
         if results:
