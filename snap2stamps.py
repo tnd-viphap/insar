@@ -120,7 +120,7 @@ class Manager:
         print(
             f"############## Running: Step 7: Coregistration and Interferogram ##############"
         )
-        if bool(self.reest_flag):
+        if bool(self.reest_flag) and bool(self.renew_flag):
             shutil.rmtree("process/coreg")
             shutil.rmtree("process/ifg")
         time.sleep(2)
