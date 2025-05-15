@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 
-import os
-import sys
-from pathlib import Path
-import subprocess
 import logging
-from typing import Optional, List
-import platform
 import multiprocessing
-from functools import partial
+import os
+import platform
+import subprocess
+import sys
 from datetime import datetime
+from functools import partial
+from pathlib import Path
+from typing import List, Optional
+
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+sys.path.append(project_path)
 
 class MTExtractCands:
     """
@@ -19,7 +22,7 @@ class MTExtractCands:
     def __init__(self):
         """Initialize MTExtractCands class"""
         self.logger = self._setup_logger()
-        self.project_conf_path = Path(__file__).parent.parent.parent.parent / "snap2stamps" / "bin" / "project.conf"
+        self.project_conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
         self.work_dir = self._read_project_conf("CURRENT_RESULT")
 
         self.dophase = 1
@@ -40,17 +43,17 @@ class MTExtractCands:
         
         # Set the executable path
         if platform.system() == "Linux":
-            self.selsbc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "selsbc_patch"
-            self.selpsc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "selpsc_patch"
-            self.psclonlat = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "psclonlat"
-            self.pscdem = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "pscdem"
-            self.pscphase = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "pscphase"
+            self.selsbc_path = Path(os.path.join(project_path, "modules/StaMPS/bin/selsbc_patch"))
+            self.selpsc_path = Path(os.path.join(project_path, "modules/StaMPS/bin/selpsc_patch"))
+            self.psclonlat = Path(os.path.join(project_path, "modules/StaMPS/bin/psclonlat"))
+            self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/bin/pscdem"))
+            self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/bin/pscphase"))
         else:
-            self.selsbc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selsbc_patch.exe"
-            self.selpsc_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "selpsc_patch.exe"
-            self.psclonlat = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "psclonlat.exe"
-            self.pscdem = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscdem.exe"
-            self.pscphase = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "pscphase.exe"
+            self.selsbc_path = Path(os.path.join(project_path, "modules/StaMPS/src/selsbc_patch.exe"))
+            self.selpsc_path = Path(os.path.join(project_path, "modules/StaMPS/src/selpsc_patch.exe"))
+            self.psclonlat = Path(os.path.join(project_path, "modules/StaMPS/src/psclonlat.exe"))
+            self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/src/pscdem.exe"))
+            self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/src/pscphase.exe"))
 
     def _read_project_conf(self, key):
         """Read value from project configuration file"""

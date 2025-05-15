@@ -1,10 +1,13 @@
+import os
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 from tqdm import tqdm
 
-from modules.TomoSAR.Tomography.scripts.mt_prep_snap_psds import PSDS_Prep
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+
 from modules.TomoSAR.Tomography.scripts.Parameter_input import Input
 from modules.TomoSAR.Tomography.scripts.PSDS_estimator import PSDS
 from modules.TomoSAR.Tomography.scripts.SHP_SelPoint import SHP
@@ -216,11 +219,6 @@ class TomoSARControl:
                  self.BroNumthre, self.Cohthre,
                  self.Cohthre_slc_filt,
                  self.input.InSAR_processor).run()
-            result_folder = self.input.read_conf_value("CURRENT_RESULT")
-            master_date = result_folder.split("_")[1]
-            da_threshold = self.input.read_conf_value("DA_THRESHOLD")
-            print("-> Preparing patches...")
-            PSDS_Prep(master_date, result_folder, da_threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1])
 
 if __name__ == "__main__":
     TomoSARControl().run()

@@ -1,13 +1,18 @@
-import os
-import numpy as np
 import glob
+import os
+import sys
 import warnings
+
+import numpy as np
+
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+sys.path.append(project_path)
 warnings.filterwarnings("ignore")
 
 class Input:
     def __init__(self, output=True):
 
-        self.project_conf = os.path.join(os.path.split(os.path.abspath(__file__))[0].split('/modules')[0], "modules/snap2stamps/bin/project.conf").replace("\\", "/")
+        self.project_conf = os.path.join(project_path, "modules/snap2stamps/bin/project.conf").replace("\\", "/")
 
         self.COMSAR_fetch = self.read_conf_value('COMSAR')
         self.ComSAR_flag = self.COMSAR_fetch.lower() in ('true', '1')

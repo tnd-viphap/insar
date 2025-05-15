@@ -7,6 +7,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+sys.path.append(project_path)
+
 from modules.TomoSAR.Tomography.scripts.mt_extract_cands import MTExtractCands
 from modules.TomoSAR.Tomography.scripts.ps_parms import Parms
 
@@ -27,11 +30,11 @@ class PSDS_Prep:
             az_overlap (int): Overlapping pixels between patches in azimuth (default: 50)
             maskfile (str): Optional mask file path
         """
-        self.conf_path = Path(__file__).parent.parent.parent.parent / "snap2stamps" / "bin" / "project.conf"
+        self.conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
         if platform.system() == "Linux":
-            self.calamp_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "bin" / "calamp"
+            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/bin/calamp"))
         else:
-            self.calamp_path = Path(__file__).parent.parent.parent.parent / "StaMPS" / "src" / "calamp.exe"
+            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/src/calamp.exe"))
 
         self.master_date = master_date
         self.data_dir = Path(data_dir.replace('\\', '/'))
