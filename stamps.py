@@ -5,7 +5,7 @@ import time
 
 import geopandas as gpd
 import jenkspy
-import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
@@ -197,16 +197,15 @@ class StaMPSEXE:
         gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
 
         # Rasterize the data
-        print("-> Rasterizing data...")
+        print("-> Interpolating data...")
         coordinates = gpd.GeoSeries([Point(float(lon[i]), float(lat[i])) for i in range(len(lon))])
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")
         if gdf.crs.is_geographic:
             gdf = gdf.to_crs(epsg=32648)
-        print("Interpolating data...")
         buffer = 16  # normal resampling spacing
         columns = ['LON', 'LAT', 'HEIGHT', 'VLOS', 'COHERENCE'] + [c for c in gdf.columns if re.match(r'^D', c)]
         stacked_array, transform = self.rasterize_preserve_and_stack(gdf, columns, pixel_size=10.0, window_radius=buffer)
-        print("Converting raster to points...")
+        print("-> Converting raster to points...")
         interpolated_data = self.raster_to_points(stacked_array, transform, columns)
         interpolated_data["CODE"] = ""
         for idx, row in interpolated_data.iterrows():
@@ -222,8 +221,8 @@ class StaMPSEXE:
         breaks = jenkspy.jenks_breaks(vlos_values, n_classes=n_classes)
 
         # Create colormap (Spectral has max 11 distinct steps)
-        cmap = cm.get_cmap('Spectral', n_classes)
-        #norm = mcolors.BoundaryNorm(breaks, cmap.N)
+        cmap = plt.get_cmap('Spectral', n_classes)
+        # norm = mcolors.BoundaryNorm(breaks, cmap.N)
 
         # Assign class index and corresponding color
         interpolated_data['BINS'] = np.digitize(vlos_values, breaks, right=True) - 1
@@ -244,17 +243,18 @@ class StaMPSEXE:
         interpolated_data.at[0, "COLOR"] = legend_values
         
         # Save to CSV
-        interpolated_data.to_file(csv_filename, driver='CSV', index=False, encoding='utf-8')
-        print(f"-> CSV data saved to {csv_filename}")
+        gis_data = interpolated_data.drop(columns=["geometry"])
+        gis_data.to_csv(csv_filename.replace('_cr', ''), index=False)
+        print(f"-> CSV data saved to {csv_filename.replace('cr', '')}")
         
         # Convert to Shapefile
-        interpolated_data.set_crs("EPSG:4326", inplace=True)
+        interpolated_data.to_crs(epsg=4326, inplace=True)
         interpolated_data.to_file(shapefile_name, driver='ESRI Shapefile')
         print(f"-> Shapefile saved to {shapefile_name}")
     
     def run(self):
         self.csv_files = []
-        os.system(f"matlab -nojvm -nosplash{self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
+        #os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
@@ -268,4 +268,4 @@ class StaMPSEXE:
         os.chdir(self.PROJECTFOLDER)
         return self.csv_files
 if __name__ == "__main__":
-    StaMPSEXE('').run()
+    StaMPSEXE().run()
