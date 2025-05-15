@@ -230,17 +230,18 @@ class CoregIFG:
                     sorted_slavesplittedfolder.append(os.path.join(self.SLAVESFOLDER, folder, file))
         sorted_slavesplittedfolder = sorted(sorted_slavesplittedfolder)
         tailm = self.MASTER.split('/')[-1].split('_')[0]
-        if not None in self.time_range and len(self.time_range) > 1:
-            start_time = int(self.time_range[0])
-            end_time = int(self.time_range[1])
-            sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if start_time <= int(os.path.split(f)[1].split("_")[0]) <= end_time]
-        elif None in self.time_range:
-            if len(self.time_range) <= 1:
-                pass
-            elif self.time_range[0] == None:
-                sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if int(os.path.split(f)[1].split("_")[0]) <= int(self.time_range[1])]
-            elif self.time_range[1] == None:
-                sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if int(os.path.split(f)[1].split("_")[0]) >= int(self.time_range[0])]
+        if self.time_range:
+            if not None in self.time_range and len(self.time_range) > 1:
+                start_time = int(self.time_range[0])
+                end_time = int(self.time_range[1])
+                sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if start_time <= int(os.path.split(f)[1].split("_")[0]) <= end_time]
+            elif None in self.time_range:
+                if len(self.time_range) <= 1:
+                    pass
+                elif self.time_range[0] == None:
+                    sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if int(os.path.split(f)[1].split("_")[0]) <= int(self.time_range[1])]
+                elif self.time_range[1] == None:
+                    sorted_slavesplittedfolder = [f for f in sorted_slavesplittedfolder if int(os.path.split(f)[1].split("_")[0]) >= int(self.time_range[0])]
 
         for dimfile in sorted_slavesplittedfolder:
             k += 1
