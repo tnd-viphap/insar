@@ -147,7 +147,10 @@ class PSDS_Prep:
                 psds_files = list(self.data_dir.glob("diff0/*.psds"))
             for psds_file in psds_files:
                 psds_file = str(psds_file).replace('\\', '/')
-                f.write(f"{psds_file}\n")
+                if platform.system() == "Linux":
+                    f.write(f"{psds_file}\n")
+                else:
+                    f.write("    "+psds_file+"\n")
                 
         # Write width to pscdem.in
         with open(self.work_dir / "pscdem.in", 'w') as f:
@@ -225,7 +228,10 @@ class PSDS_Prep:
             f.write(f"{self.width}\n")
             with open(self.work_dir / "calamp.out", 'r') as f2:
                 for line in f2.readlines():
-                    f.write(line)
+                    if platform.system() == "Linux":
+                        f.write(line)
+                    else:
+                        f.write("     "+line)
             
         self.create_patches()
         self.prepare_psds_files()
