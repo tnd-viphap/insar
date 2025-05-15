@@ -137,12 +137,12 @@ class StaMPSEXE:
         if not os.path.exists("ps_plot_ts_v-dao.mat"):
             command = "matlab -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
             os.system(command)
-        print("-> TS V-dao done")
+        print("   -> TS V-dao done")
         
         if not os.path.exists("ps_plot_v-dao.mat"):
             command = "matlab -nosplash -nodisplay -r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
             os.system(command)
-        print("-> V-dao done")
+        print("   -> V-dao done")
         
         # Load necessary data
         ph_disp = sio.loadmat("ps_plot_v-dao.mat")['ph_disp'].flatten()
@@ -195,24 +195,40 @@ class StaMPSEXE:
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
         gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
-
-        # Rasterize the data
-        print("-> Interpolating data...")
         coordinates = gpd.GeoSeries([Point(float(lon[i]), float(lat[i])) for i in range(len(lon))])
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")
+        gdf.to_file(f'{self.DATAFOLDER}geom/temp_cr.shp', driver='ESRI Shapefile')
+
+        # Rasterize the data
+        print("   -> Interpolating data...")
+        gdf = gpd.read_file(f'{self.DATAFOLDER}geom/temp_cr.shp')  # or create it manually
+        gdf = gdf.set_crs(4326)
         if gdf.crs.is_geographic:
             gdf = gdf.to_crs(epsg=32648)
-        buffer = 16  # normal resampling spacing
-        columns = ['LON', 'LAT', 'HEIGHT', 'VLOS', 'COHERENCE'] + [c for c in gdf.columns if re.match(r'^D', c)]
-        stacked_array, transform = self.rasterize_preserve_and_stack(gdf, columns, pixel_size=10.0, window_radius=buffer)
-        print("-> Converting raster to points...")
+        
+        # Use smaller buffer for more precise pixel centers
+        buffer = 8  # reduced from 16 for better precision
+        columns = ['HEIGHT', 'VLOS', 'COHERENCE'] + [c for c in gdf.columns if re.match(r'^D', c)]
+        stacked_array, transform = self.rasterize_preserve_and_stack(gdf, columns, pixel_size=10, window_radius=buffer)
+        
+        print("   -> Converting raster to points...")
         interpolated_data = self.raster_to_points(stacked_array, transform, columns)
-        interpolated_data["CODE"] = ""
-        for idx, row in interpolated_data.iterrows():
-            row["CODE"] = "PS_" + str(idx)
+        
+        # Ensure proper coordinate conversion back to WGS84
+        interpolated_data = interpolated_data.to_crs(epsg=4326)
+        
+        # Update LON and LAT columns with the new coordinates
+        interpolated_data['LON'] = None
+        interpolated_data['LAT'] = None
+        interpolated_data['LON'] = interpolated_data.geometry.x
+        interpolated_data['LAT'] = interpolated_data.geometry.y
+        
+        # Generate unique PS codes
+        interpolated_data["CODE"] = [f"PS_{i}" for i in range(len(interpolated_data))]
+        
         del gis_data
         del gdf
-        print("-> Adding color schema...")
+        print("   -> Adding color schema...")
         # Choose the number of classes
         n_classes = 10  # adjust based on how much detail you want
 
@@ -243,14 +259,23 @@ class StaMPSEXE:
         interpolated_data.at[0, "COLOR"] = legend_values
         
         # Save to CSV
-        gis_data = interpolated_data.drop(columns=["geometry"])
+        gis_data = pd.DataFrame(interpolated_data.drop(columns=["geometry"]))
         gis_data.to_csv(csv_filename.replace('_cr', ''), index=False)
-        print(f"-> CSV data saved to {csv_filename.replace('cr', '')}")
+        print(f"   -> CSV data saved to {csv_filename.replace('_cr', '')}")
         
         # Convert to Shapefile
-        interpolated_data.to_crs(epsg=4326, inplace=True)
+        interpolated_data = interpolated_data.to_crs(epsg=4326)
+        interpolated_data = interpolated_data.drop(columns=["COLOR"])
         interpolated_data.to_file(shapefile_name, driver='ESRI Shapefile')
-        print(f"-> Shapefile saved to {shapefile_name}")
+        print(f"   -> Shapefile saved to {shapefile_name}")
+        
+        # Clean up temporary file
+        if os.path.exists(f'{self.DATAFOLDER}geom/temp_cr.shp'):
+            os.remove(f'{self.DATAFOLDER}geom/temp_cr.shp')
+            os.remove(f'{self.DATAFOLDER}geom/temp_cr.shx')
+            os.remove(f'{self.DATAFOLDER}geom/temp_cr.dbf')
+            os.remove(f'{self.DATAFOLDER}geom/temp_cr.prj')
+            os.remove(f'{self.DATAFOLDER}geom/temp_cr.cpg')
     
     def run(self):
         self.csv_files = []
