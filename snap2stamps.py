@@ -124,12 +124,12 @@ class Manager:
             shutil.rmtree("process/coreg")
             shutil.rmtree("process/ifg")
         time.sleep(2)
-        CoregIFG(self.max_perp).process()
+        CoregIFG(self.max_perp, self.process_range).process()
         print('\n')
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.process_range, self.stamps_flag, self.result_folder, self.renew_flag).process()
+        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag).process()
         print('\n')
 
         # StaMPS preparation
