@@ -7,18 +7,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 
-from modules.TomoSAR.Tomography.scripts.mt_extract_cands import MTExtractCands
-from modules.TomoSAR.Tomography.scripts.ps_parms import Parms
+from modules.tomo.extract_pixels import MTExtractCands
+from modules.tomo.ps_parms import Parms
 
 
-class PSDS_Prep:
+class StampsPrep:
     def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
                  rg_overlap=50, az_overlap=50, maskfile=None):
         """
-        Initialize PSDS preparation class
+        Initialize Stamps preparation class
         
         Args:
             master_date (str): Master date in YYYYMMDD format
@@ -31,6 +31,7 @@ class PSDS_Prep:
             maskfile (str): Optional mask file path
         """
         self.conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
+        self._load_config()
         if platform.system() == "Linux":
             self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/bin/calamp"))
         else:
@@ -38,10 +39,10 @@ class PSDS_Prep:
 
         self.master_date = master_date
         self.data_dir = Path(data_dir.replace('\\', '/'))
-        self.rg_patches = rg_patches
-        self.az_patches = az_patches
-        self.rg_overlap = rg_overlap
-        self.az_overlap = az_overlap
+        self.rg_patches = int(rg_patches)
+        self.az_patches = int(az_patches)
+        self.rg_overlap = int(rg_overlap)
+        self.az_overlap = int(az_overlap)
         self.maskfile = maskfile
         self.work_dir = self.data_dir
         
@@ -49,7 +50,7 @@ class PSDS_Prep:
         log_dir = self.work_dir / "logs"
         log_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_file = log_dir / f"mt_prep_snap_psds_{timestamp}.log"
+        self.log_file = log_dir / f"stamps_prep_{timestamp}.log"
         
         # Check if small baseline processing
         self.sb_flag = (self.data_dir / "SMALL_BASELINES").exists()
@@ -64,6 +65,13 @@ class PSDS_Prep:
         self.width = None
         self.length = None
         self.rsc_file = None
+
+    def _load_config(self):
+        with open(self.conf_path, 'r') as file:
+            for line in file.readlines():
+                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
+                if key:
+                    setattr(self, key, value)  # Dynamically set variables
         
     def find_rsc_file(self):
         """Find the RSC file based on processing type"""
@@ -136,15 +144,15 @@ class PSDS_Prep:
                 with open(self.work_dir / "patch.list", 'a') as f:
                     f.write(f"PATCH_{patch_num}\n")
                     
-    def prepare_psds_files(self):
+    def prepare_files(self):
         """Prepare PSDs files for processing"""
         # Write width to pscphase.in
         with open(self.work_dir / "pscphase.in", 'w') as f:
             f.write(f"{self.width}\n")
             if self.sb_flag:
-                psds_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.psds"))
+                psds_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.diff"))
             else:
-                psds_files = list(self.data_dir.glob("diff0/*.psds"))
+                psds_files = list(self.data_dir.glob("diff0/*.diff"))
             for psds_file in psds_files:
                 psds_file = str(psds_file).replace('\\', '/')
                 if platform.system() == "Linux":
@@ -193,7 +201,7 @@ class PSDS_Prep:
         if os.path.exists(selfile):
             os.remove(selfile)
         with open(self.work_dir / "calamp.in", 'w') as f:
-            for file in glob.glob(f"{self.data_dir}/*slc/*.psar"):
+            for file in glob.glob(f"{self.data_dir}/*slc/*.*slc"):
                 file = file.replace('\\', '/')
                 f.write(f"{file}\n")
         command = f"{self.calamp_path} {self.work_dir}/calamp.in {self.width} {self.work_dir}/calamp.out f 1 {self.maskfile}"
@@ -203,18 +211,34 @@ class PSDS_Prep:
             log.write(f"=== Running calamp command ===\n")
             log.write(f"Command: {command}\n\n")
             log.write("Output:\n")
-            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            stdout, stderr = process.communicate()
-            if stdout:
-                log.write(stdout)
-            if stderr:
-                log.write(f"\nErrors/Warnings:\n{stderr}")
-            log.write(f"\nReturn code: {process.returncode}\n")
-            
-        if process.returncode != 0:
-            print(f"Error: calamp failed with return code {process.returncode}")
-            print(f"Check log file for details: {self.log_file}")
-            sys.exit(1)
+            try:
+                # Use subprocess.run instead of Popen for better control
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    check=False,  # Don't raise exception on non-zero return code
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                )
+                
+                if process.stdout:
+                    log.write(process.stdout)
+                if process.stderr:
+                    log.write(f"\nErrors/Warnings:\n{process.stderr}")
+                log.write(f"\nReturn code: {process.returncode}\n")
+                
+                if process.returncode != 0:
+                    print(f"Error: calamp failed with return code {process.returncode}")
+                    print(f"Check log file for details: {self.log_file}")
+                    sys.exit(1)
+                    
+            except Exception as e:
+                error_msg = f"Error executing calamp command: {str(e)}"
+                print(error_msg)
+                log.write(f"\n{error_msg}\n")
+                sys.exit(1)
             
         # Write dimensions to files
         with open(self.work_dir / "width.txt", 'w') as f:
@@ -234,7 +258,7 @@ class PSDS_Prep:
                         f.write("     "+line)
             
         self.create_patches()
-        self.prepare_psds_files()
+        self.prepare_files()
         
         print(f"-> Processing {self.rg_patches} patch(es) in range and {self.az_patches} in azimuth")
         print(f"-> Amplitude Dispersion Threshold: {self.da_thresh}")
@@ -253,7 +277,7 @@ class PSDS_Prep:
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("usage: mt_prep_snap_psds.py yyyymmdd datadir da_thresh [rg_patches az_patches rg_overlap az_overlap maskfile]")
+        print("usage: stamps_prep.py yyyymmdd datadir da_thresh [rg_patches az_patches rg_overlap az_overlap maskfile]")
         print("    yyyymmdd                 = master date")
         print("    datadir                  = data directory (with expected structure)")
         print("    da_thresh                = (delta) amplitude dispersion threshold")
@@ -274,6 +298,6 @@ if __name__ == "__main__":
     az_overlap = int(sys.argv[7]) if len(sys.argv) > 7 else 50
     maskfile = sys.argv[8] if len(sys.argv) > 8 else None
     
-    prep = PSDS_Prep(master_date, data_dir, da_thresh, rg_patches, az_patches, 
+    prep = StampsPrep(master_date, data_dir, da_thresh, rg_patches, az_patches, 
                      rg_overlap, az_overlap, maskfile)
     prep.run()

@@ -6,16 +6,20 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from tqdm import tqdm
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from modules.TomoSAR.Tomography.scripts.Parameter_input import Input
-from modules.TomoSAR.Tomography.scripts.PSDS_estimator import PSDS
-from modules.TomoSAR.Tomography.scripts.SHP_SelPoint import SHP
+from modules.tomo.comsar_estimator import ComSAR
+from modules.tomo.input_parm import Input
+from modules.tomo.psds_estimator import PSDS
+from modules.tomo.shp import SHP
 
 
 class TomoSARControl:
     def __init__(self, patch_info=None):
         print("###### TOMOSAR Processing ######")
+        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].split("modules")[0], "modules/snap2stamps/bin/project.conf")
+        self._load_config()
+        
         # For SHP analysis
         self.CalWin = [7, 25]  # [row, col]
         self.Alpha = 0.05
@@ -32,6 +36,13 @@ class TomoSARControl:
         _shp = SHP(self.slcstack["datastack"], self.CalWin, self.Alpha)
         self.shp = _shp.run()
         print("\n")
+
+    def _load_config(self):
+        with open(self.inputfile, 'r') as file:
+            for line in file.readlines():
+                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
+                if key:
+                    setattr(self, key, value)  # Dynamically set variables
         
     @staticmethod
     def compute_coherence_chunk(args):
@@ -172,7 +183,7 @@ class TomoSARControl:
                     # For many chunks, use parallel processing with progress tracking
                     print(f"-> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
                     
-                    with ProcessPoolExecutor(max_workers=26) as executor:
+                    with ProcessPoolExecutor(max_workers=min(8, int(self.CPU))) as executor:
                         futures = [executor.submit(TomoSARControl.compute_coherence_chunk, args) for args in args_list]
                         
                         for future in tqdm(
@@ -189,25 +200,20 @@ class TomoSARControl:
         end_time = time.time()
         print(f"-> Coherence estimation operation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
         return Coh, reference_ind
-    
-    def intf_conv(self):
-        None
 
     def run(self):
         if self.input.ComSAR_flag:
             print("Step 2: COMSAR estimation\n")
-            # COMSAR(self.slcstack["datastack"],
-            #        self.slcstack["filename"],
-            #        self.interfstack["datastack"],
-            #        self.interfstack["filename"],
-            #        self.shp,
-            #        self.input.InSAR_path,
-            #        self.BroNumthre,
-            #        self.Cohthre,
-            #        self.input.miniStackSize,
-            #        self.Cohthre_slc_filt,
-            #        self.input.Unified_flag,
-            #        self.input.InSAR_processor).run()
+            ComSAR(self.slcstack,
+                   self.interfstack,
+                   self.shp,
+                   self.input.InSAR_path,
+                   self.BroNumthre,
+                   self.Cohthre,
+                   self.input.miniStackSize,
+                   self.Cohthre_slc_filt,
+                   self.input.Unified_flag,
+                   self.input.InSAR_processor).run()
         else:
             print("Step 2: PSDS estimation\n")
             print("-> Computing SHP-based coherence started...")

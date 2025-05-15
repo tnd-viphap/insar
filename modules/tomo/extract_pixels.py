@@ -11,7 +11,7 @@ from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 
 class MTExtractCands:
@@ -38,7 +38,7 @@ class MTExtractCands:
         log_dir = Path(self.work_dir) / "logs"
         log_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_file = log_dir / f"mt_extract_cands_{timestamp}.log"
+        self.log_file = log_dir / f"extract_cands_{timestamp}.log"
         self._setup_file_logger()
         
         # Set the executable path

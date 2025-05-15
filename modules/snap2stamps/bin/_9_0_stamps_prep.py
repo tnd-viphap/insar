@@ -4,11 +4,12 @@ import shutil
 import sys
 import time
 
-sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
+sys.path.append(os.path.join(os.path.abspath(__file__), "../../../.."))
 
-from modules.snap2stamps.bin._9_1_mt_prep_snap import MTPrepSNAP
-from modules.TomoSAR.Tomography.scripts.PSDS_main import TomoSARControl
-from modules.TomoSAR.Tomography.scripts.mt_prep_snap_psds import PSDS_Prep
+from modules.tomo.tomo import TomoSARControl
+from modules.tomo.psds_prep import PSDS_Prep
+from modules.tomo.stamps_prep import StampsPrep
+from modules.tomo.comsar_prep import ComSAR_Prep
 
 class StaMPSPrep:
     def __init__(self, stamps_flag, threshold, patch_info=None):
@@ -19,7 +20,7 @@ class StaMPSPrep:
         
         self.plf = platform.system()
         
-        self.master_date = os.path.split(self.MASTER)[1].split("_")[0]
+        self.master_date = os.path.split(self.CURRENT_RESULT)[1].split("_")[1]
         self.threshold = threshold
         self.patch_info = patch_info
         if self.patch_info is None:
@@ -34,28 +35,23 @@ class StaMPSPrep:
                     setattr(self, key, value)  # Dynamically set variables
                     
     def process(self):
-        shutil.copy(f"{self.PROJECTFOLDER}modules/TomoSAR/Tomography/scripts/Parameter_input.m", self.CURRENT_RESULT)
-        os.chdir(self.CURRENT_RESULT)
-        # Default for Linux
-        if self.stamps_flag == 'NORMAL':
-            command = ["mt_prep_snap", self.master_date, self.CURRENT_RESULT, str(self.threshold), self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]]
-        else:
-            # Python-based PSDS_main.m
-            # TomoSARControl().run()
-            # Python-based mt_prep_snap_psds.m
-            # print("-> Preparing patches...")
-            # PSDS_Prep(self.master_date, self.CURRENT_RESULT, self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1])
-            os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{self.PROJECTFOLDER}modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" > {self.CURRENT_RESULT}/TOMO_STAMPS.log")
-            flag = 'comsar' if self.COMSAR == "1" else 'psds'
-            command = [f"mt_prep_snap_{flag}", self.master_date, self.CURRENT_RESULT, str(self.threshold), self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]]
         timeStarted = time.time()
-        os.system(" ".join(command))
+        os.chdir(self.CURRENT_RESULT)
+        if self.stamps_flag == 'NORMAL':
+            StampsPrep(self.master_date, self.CURRENT_RESULT, self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]).run()
+        else:
+            flag = 'comsar' if self.COMSAR == "1" else 'psds'
+            # Python-based PSDS_main.m
+            TomoSARControl().run()
+            # Python-based mt_prep_snap_psds.m
+            print(f"-> Preparing {flag} patches...")
+            if flag == 'comsar':
+                ComSAR_Prep(self.master_date, self.CURRENT_RESULT, self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]).run()
+            else:
+                PSDS_Prep(self.master_date, self.CURRENT_RESULT, self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]).run()
         timeDelta = time.time() - timeStarted
-        print(f'Finished process in {timeDelta} seconds.')
+        print(f'-> Finished process in {timeDelta} seconds.')
             
 if __name__ == "__main__":
-    try:
-        StaMPSPrep(0.4, None).process()
-    except Exception as e:
-        print(f"StaMPS Preparation fails to execute due to\n{e}")
+    StaMPSPrep('TOMO', 0.4, None).process()
     

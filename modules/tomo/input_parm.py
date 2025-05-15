@@ -5,7 +5,7 @@ import warnings
 
 import numpy as np
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 warnings.filterwarnings("ignore")
 
