@@ -38,7 +38,6 @@ class ComSAR:
         - Coh_cal: np.ndarray, coherence metric, shape (nlines, nwidths)
         - v_PL: np.ndarray, amplitude estimates, shape (nlines, nwidths, n_slc)
         """
-        print("-> Performing phase linking...")
         if idx:
             self.reference_idx = idx
         n_slc, _, nlines, nwidths = coh.shape
@@ -243,7 +242,7 @@ class ComSAR:
         chunk_width = chunk_width_multiplier * (2 * RadiusCol + 1)
         num_chunks = (nwidths + chunk_width - 1) // chunk_width
         
-        print(f"-> {n_slc * (n_slc-1)//2} pairs detected. Progressing...")
+        print(f"   -> {n_slc * (n_slc-1)} pairs detected. Progressing...")
         
         # Process pairs in parallel
         for ii in range(n_slc):
@@ -306,11 +305,11 @@ class ComSAR:
         CalWin = self.shp["CalWin"]
         RadiusRow = (CalWin[0] - 1) // 2
         RadiusCol = (CalWin[1] - 1) // 2
-        slcstack = np.pad(self.slcImg_despeckle.astype(np.float32),
+        slcstack = np.pad(slcImg_despeckle.astype(np.float32),
                           ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol), (0, 0)),
                           mode='symmetric')
         
-        for ii in tqdm(range(npages), total=npages, desc="-> ADP. DESPECKLING: ", unit="pair"):
+        for ii in tqdm(range(npages), total=npages, desc="   -> ADP. DESPECKLING: ", unit="pair"):
             temp = slcstack[:, :, ii]
             num = 0
             for jj in range(nwidths):
@@ -324,7 +323,6 @@ class ComSAR:
                     num += 1
 
         elapsed = time.time() - start_time
-        print(f"-> DeSpeckling operation completed in {elapsed / 60:.2f} minute(s).")
         return slcImg_despeckle
         
     def interf_export(self, path, extension):
