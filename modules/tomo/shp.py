@@ -86,13 +86,13 @@ class SHP:
         # Split tasks into chunks of ~10,000
         block_size = self.CalWin[0] * self.CalWin[1] * self.slcstack.shape[2]
         bytes_per_task = block_size * 4  # float32
-        memory_limit = 500 * 1024 * 1024  # 500 MB
+        memory_limit = 100 * 1024 * 1024  # 100 MB
         chunk_size = max(1, memory_limit // bytes_per_task)
         task_batches = [tasks[i:i + chunk_size] for i in range(0, total_pixels, chunk_size)]
 
         print("-> SHP family parallel computation started...")
         idx = 0
-        with ProcessPoolExecutor(max_workers=min(8, int(self.CPU))) as executor, tqdm(total=total_pixels, desc="-> SHP Computation", unit="pixel") as pbar:
+        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor, tqdm(total=total_pixels, desc="-> SHP Computation", unit="pixel") as pbar:
             for result_batch in executor.map(SHP.process_batch, task_batches):
                 for mask in result_batch:
                     _PixelInd[:, idx] = mask

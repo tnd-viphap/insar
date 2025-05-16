@@ -36,7 +36,7 @@ class StaMPSPrep:
                     
     def process(self):
         timeStarted = time.time()
-        os.chdir(self.CURRENT_RESULT)
+        # os.chdir(self.CURRENT_RESULT)
         if self.stamps_flag == 'NORMAL':
             StampsPrep(self.master_date, self.CURRENT_RESULT, self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1]).run()
         else:

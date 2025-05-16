@@ -177,13 +177,13 @@ class TomoSARControl:
                         bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} chunks [{elapsed}<{remaining}]'
                     ):
                         ii_res, ss_res, start, end, result = TomoSARControl.compute_coherence_chunk(args)
-                        Coh[ii_res, ss_res, :, start:end] = result
-                        Coh[ss_res, ii_res, :, start:end] = result.conjugate()
+                        Coh[ii_res, ss_res, :, start:end] = np.abs(result)
+                        Coh[ss_res, ii_res, :, start:end] = np.abs(result.conjugate())
                 else:
                     # For many chunks, use parallel processing with progress tracking
                     print(f"-> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
                     
-                    with ProcessPoolExecutor(max_workers=min(8, int(self.CPU))) as executor:
+                    with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
                         futures = [executor.submit(TomoSARControl.compute_coherence_chunk, args) for args in args_list]
                         
                         for future in tqdm(
