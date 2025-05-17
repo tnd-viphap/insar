@@ -38,8 +38,6 @@ class ComSAR:
         - Coh_cal: np.ndarray, coherence metric, shape (nlines, nwidths)
         - v_PL: np.ndarray, amplitude estimates, shape (nlines, nwidths, n_slc)
         """
-        if idx:
-            self.reference_idx = idx
         n_slc, _, nlines, nwidths = coh.shape
 
         phi_PL = np.zeros((nlines, nwidths, n_slc), dtype=np.float32)
@@ -52,14 +50,14 @@ class ComSAR:
                 if not np.all(np.isfinite(self.W)):
                     continue
 
-                phi, temp_coh, v = self._linking()
+                phi, temp_coh, v = self._linking(idx=idx)
                 phi_PL[kk, jj, :] = phi
                 v_PL[kk, jj, :] = v
                 Coh_cal[kk, jj] = (np.sum(np.abs(temp_coh)) - n_slc) / (n_slc**2 - n_slc)
         
         return phi_PL, Coh_cal, v_PL
 
-    def _linking(self, method=1):
+    def _linking(self, idx=None, method=1):
         """
         Python version of MATLAB phase_linking function.
         
@@ -74,6 +72,8 @@ class ComSAR:
         - W_cal: np.ndarray, calibrated coherence matrix
         - v_ml: np.ndarray, normalized complex amplitude vector
         """
+        if idx is None:
+            idx = self.reference_idx
         
         N = self.W.shape[0]
 
@@ -96,12 +96,12 @@ class ComSAR:
             eigvals, eigvecs = np.linalg.eig(R)
             min_idx = np.argmin(np.real(eigvals))
             phi_emi = np.angle(eigvecs[:, min_idx])
-            phi = phi_emi - phi_emi[self.reference_idx]
+            phi = phi_emi - phi_emi[idx]
 
         elif method == 2:
             # MLE method
             U, _, _ = np.linalg.svd(self.W + 1e-14 * np.eye(N))
-            phi_initial = np.angle(U[:, 0] / U[self.reference_idx, 0])
+            phi_initial = np.angle(U[:, 0] / U[idx, 0])
             phi_mle = phi_initial.copy()
             for _ in range(10):
                 for p in range(N):
@@ -109,7 +109,7 @@ class ComSAR:
                     S = R[not_p, p] * np.exp(-1j * phi_initial[not_p])
                     phi_mle[p] = -np.angle(np.sum(S))
                 phi_initial = phi_mle.copy()
-            phi = phi_mle - phi_mle[self.reference_idx]
+            phi = phi_mle - phi_mle[idx]
 
         else:
             raise ValueError("Unknown method. Use 1 for EMI, 2 for MLE.")
@@ -125,20 +125,6 @@ class ComSAR:
         W_cal = O.conj().T @ self.W @ O
 
         return phi, W_cal, v_ml
-    
-    def interf_filtering(self):
-        print("-> Applying filter strategies on interferogram...")
-        self.phi_PL = np.delete(self.phi_PL, self.reference_idx, axis=2)
-        mask_coh = self.Coh_cal > self.Cohthre
-        mask_PS = self.shp["BroNum"] > self.BroNumthre
-        # Combine masks
-        mask = np.logical_and(mask_PS, mask_coh)
-
-        # Repeat mask along the 3rd axis
-        mask = np.repeat(mask[:, :, np.newaxis], len(self.interfstack["filename"]), axis=2)
-
-        # Apply the phase update to infstack
-        self.interfstack["datastack"][mask] = np.abs(self.interfstack["datastack"][mask]) * np.exp(1j * self.phi_PL[mask])
 
     @staticmethod
     def compute_slc_coherence_chunk(args):
@@ -217,8 +203,6 @@ class ComSAR:
         Returns:
         - Coh: 4D numpy array (n_slc, n_slc, nlines, nwidths), dtype complex64
         """
-        print("-> Computing SLC coherence matrix...")
-        start_time = time.time()
         
         nlines, nwidths, n_slc = data.shape
         
@@ -241,8 +225,6 @@ class ComSAR:
         chunk_width_multiplier = max(1, 4)  # Adjust based on memory considerations
         chunk_width = chunk_width_multiplier * (2 * RadiusCol + 1)
         num_chunks = (nwidths + chunk_width - 1) // chunk_width
-        
-        print(f"   -> {n_slc * (n_slc-1)} pairs detected. Progressing...")
         
         # Process pairs in parallel
         for ii in range(n_slc):
@@ -275,7 +257,7 @@ class ComSAR:
                         Coh[ii_res, ss_res, :, start:end] = np.abs(result)
                         Coh[ss_res, ii_res, :, start:end] = np.abs(result).conjugate()
                 else:
-                    print(f"-> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
+                    # print(f"   -> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
                     
                     with ProcessPoolExecutor(max_workers=min(8, int(os.cpu_count()))) as executor:
                         futures = [executor.submit(self.compute_slc_coherence_chunk, args) for args in args_list]
@@ -291,21 +273,17 @@ class ComSAR:
                             Coh[ii_res, ss_res, :, start:end] = np.abs(result)
                             Coh[ss_res, ii_res, :, start:end] = np.abs(result).conjugate()
         
-        end_time = time.time()
-        print(f"-> SLC coherence estimation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
-        
         return Coh
     
-    def slc_despeckle(self):
+    def slc_despeckle(self, data):
         print("-> Reducing speckle noise on SLC stack...")
-        start_time = time.time()
-        nlines, nwidths, npages = self.slcstack["datastack"].shape
-        slcImg_despeckle = np.abs(self.slcstack["datastack"])
+        nlines, nwidths, npages = data.shape
+        self.slcImg_despeckle = np.abs(data)
         
         CalWin = self.shp["CalWin"]
         RadiusRow = (CalWin[0] - 1) // 2
         RadiusCol = (CalWin[1] - 1) // 2
-        slcstack = np.pad(slcImg_despeckle.astype(np.float32),
+        slcstack = np.pad(self.slcImg_despeckle.astype(np.float32),
                           ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol), (0, 0)),
                           mode='symmetric')
         
@@ -319,11 +297,8 @@ class ComSAR:
                     MliWindow = temp[y_global - RadiusRow: y_global + RadiusRow + 1,
                                     x_global - RadiusCol: x_global + RadiusCol + 1]
                     MliValues = MliWindow.flatten()[self.shp["PixelInd"][:, num]]
-                    slcImg_despeckle[kk, jj, ii] = np.mean(MliValues)
+                    self.slcImg_despeckle[kk, jj, ii] = np.mean(MliValues)
                     num += 1
-
-        elapsed = time.time() - start_time
-        return slcImg_despeckle
         
     def interf_export(self, path, extension):
         """
@@ -337,15 +312,15 @@ class ComSAR:
         - InSAR_processor: str, either 'snap' or 'isce'
         """
         print("-> Exporting interferogram...")
-        nlines, nwidths, n_interf = self.interfstack["datastack"].shape
+        nlines, nwidths, n_interf = self.interfstack_ComSAR.shape
 
         real_index = np.arange(0, nwidths * 2, 2)
         imag_index = np.arange(1, nwidths * 2, 2)
         line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
 
-        master_id = self.slcstack["filename"][self.reference_idx]
+        master_id = self.slcstack_ComSAR_filename[self.reference_ComSAR_ind+1]
         for i in range(n_interf):
-            slave_id = self.interfstack["filename"][i]
+            slave_id = self.interfstack_ComSAR_filename[i]
             if self.InSAR_processor == 'snap':
                 filename = os.path.join(path, f"{master_id}_{slave_id}{extension}")
                 fid = open(filename, 'wb')
@@ -357,7 +332,7 @@ class ComSAR:
             else:
                 raise ValueError("InSAR_processor not supported. Use 'snap' or 'isce'.")
 
-            data = np.squeeze(self.interfstack["datastack"][:, :, i])
+            data = np.squeeze(self.interfstack_ComSAR[:, :, i])
             for k in range(nlines):
                 line_cpx[real_index] = np.real(data[k, :])
                 line_cpx[imag_index] = np.imag(data[k, :])
@@ -377,29 +352,29 @@ class ComSAR:
         - InSAR_processor: str, either 'snap' or 'isce'
         - reference_index: int, index of reference SLC (0-based)
         """
-        nlines, nwidths, n_slc = self.slcstack["datastack"].shape
+        nlines, nwidths, n_slc = self.slcstack_ComSAR.shape
         real_index = np.arange(0, nwidths * 2, 2)
         imag_index = np.arange(1, nwidths * 2, 2)
         line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
 
         for i in range(n_slc):
             if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{self.slcstack['filename'][i]}{extension}")
+                filename = os.path.join(path, f"{self.slcstack_ComSAR_filename[i]}{extension}")
                 fid = open(filename, 'wb')
             elif self.InSAR_processor == 'isce':
-                if i == self.reference_idx:
+                if i == self.reference_ComSAR_ind:
                     out_dir = os.path.join(path, "reference")
                     os.makedirs(out_dir, exist_ok=True)
                     filename = os.path.join(out_dir, f"reference.slc{extension}")
                 else:
-                    out_dir = os.path.join(path, str(self.slcstack["filename"][i]))
+                    out_dir = os.path.join(path, str(self.slcstack_ComSAR_filename[i]))
                     os.makedirs(out_dir, exist_ok=True)
                     filename = os.path.join(out_dir, f"secondary.slc{extension}")
                 fid = open(filename, 'wb')
             else:
                 raise ValueError("Unsupported InSAR_processor. Use 'snap' or 'isce'.")
 
-            data = np.squeeze(self.slcstack["datastack"][:, :, i])
+            data = np.squeeze(self.slcstack_ComSAR[:, :, i])
             for k in range(nlines):
                 line_cpx[real_index] = np.real(data[k, :])
                 line_cpx[imag_index] = np.imag(data[k, :])
@@ -412,34 +387,32 @@ class ComSAR:
 
         # Normalize the interferogram stack
         non_zero_mask = self.interfstack["datastack"] != 0
-        interfstack = self.interfstack["datastack"].copy()
-        interfstack[non_zero_mask] = interfstack[non_zero_mask] / np.abs(interfstack[non_zero_mask])
+        self.interfstack["datastack"][non_zero_mask] = self.interfstack["datastack"][non_zero_mask] / np.abs(self.interfstack["datastack"][non_zero_mask])
         reference_ind = list(set(self.slcstack["filename"]) - set(self.interfstack["filename"]))[0]
         reference_idx = self.slcstack["filename"].index(reference_ind)
 
         # Build full interferogram stack including reference image
         inf_full = np.zeros((nlines, nwidths, n_slc), dtype=np.complex64)
         if reference_idx > 0:
-            inf_full[:, :, :reference_idx] = interfstack[:, :, :reference_idx]
+            inf_full[:, :, :reference_idx] = self.interfstack["datastack"][:, :, :reference_idx]
             inf_full[:, :, reference_idx] = np.abs(self.slcstack["datastack"][:, :, reference_idx - 1])
-            inf_full[:, :, reference_idx + 1:] = interfstack[:, :, reference_idx:]
+            inf_full[:, :, reference_idx + 1:] = self.interfstack["datastack"][:, :, reference_idx:]
         else:
             inf_full[:, :, 0] = np.abs(self.slcstack["datastack"][:, :, 0])
-            inf_full[:, :, 1:n_slc] = interfstack
+            inf_full[:, :, 1:n_slc] = self.interfstack["datastack"]
 
-        interfstack = inf_full
+        self.interfstack["datastack"] = inf_full
         del inf_full
 
         # Get SLC amplitude
-        interfstack = np.abs(self.slcstack["datastack"]) * np.exp(1j * np.angle(interfstack))
+        self.interfstack["datastack"] = np.abs(self.slcstack["datastack"]) * np.exp(1j * np.angle(self.interfstack["datastack"]))
 
         # Initial mini stack indices (0-based)
         mini_ind = list(range(0, n_slc, self.miniStackSize))
 
         # Check if reference index is in mini_ind
-        if reference_idx in mini_ind:
-            self.reference_ComSAR_ind = mini_ind.index(reference_idx)
-        else:
+        self.reference_ComSAR_ind = mini_ind.index(reference_idx) if reference_idx in mini_ind else 0
+        if self.reference_ComSAR_ind == 0:
             # Add reference index and sort
             mini_ind.append(reference_idx)
             mini_ind = sorted(mini_ind)
@@ -463,22 +436,24 @@ class ComSAR:
         # Ensure last index is not equal to n_slc (need 2 images per mini-stack)
         if mini_ind[-1] == n_slc - 1:
             mini_ind[-1] = mini_ind[-1] - 1
+            
+        print("-> Performing coherence estimation and phase linking...")
 
         # Number of mini stacks
         numMiniStacks = len(mini_ind)
 
         # Compressed SLCs stack
-        compressed_SLCs = np.zeros((nlines, nwidths, numMiniStacks), dtype=np.complex64)
+        self.compressed_SLCs = np.zeros((nlines, nwidths, numMiniStacks), dtype=np.complex64)
 
         if self.Unified_flag:
-            Unified_ind = np.arange(mini_ind[0], n_slc)
+            self.Unified_ind = np.arange(mini_ind[0], n_slc)
             try:
-                reference_UnifiedSAR_ind = list(Unified_ind).index(reference_idx)
+                self.reference_UnifiedSAR_ind = list(self.Unified_ind).index(reference_idx)
             except ValueError:
-                reference_UnifiedSAR_ind = -1  # not found
+                self.reference_UnifiedSAR_ind = -1  # not found
 
-            N_unified_SAR = len(Unified_ind)
-            Unified_SAR = np.zeros((nlines, nwidths, N_unified_SAR), dtype=np.float32)
+            self.N_unified_SAR = len(self.Unified_ind)
+            self.Unified_SAR = np.zeros((nlines, nwidths, self.N_unified_SAR), dtype=np.float32)
 
         for k in range(numMiniStacks):
             if k == numMiniStacks - 1:
@@ -487,25 +462,22 @@ class ComSAR:
                 cal_ind = np.arange(mini_ind[k], mini_ind[k+1])
 
             # Coherence matrix from selected stack
-            Coh_temp = self.slc_cov(interfstack[:, :, cal_ind], self.shp)
+            Coh_temp = self.slc_cov(self.interfstack["datastack"][:, :, cal_ind], self.shp)
 
             # Phase linking
             phi_PL, _, v_PL = self.interf_linking(Coh_temp)
 
             # Compress SLCs via coherent summation
-            compressed_SLCs[:, :, k] = np.sum(v_PL * interfstack[:, :, cal_ind], axis=2)
-
+            self.compressed_SLCs[:, :, k] = np.sum(v_PL * self.interfstack["datastack"][:, :, cal_ind], axis=2)
             if self.Unified_flag:
-                Unified_SAR[:, :, cal_ind - mini_ind[0]] = phi_PL
-
-            print(f"-> Compressed SAR progress: {k+1}/{len(mini_ind)} is finished.")
+                self.Unified_SAR[:, :, cal_ind - mini_ind[0]] = phi_PL
 
         # Optional SHP recomputation
         # if compressed_SLCs.shape[2] > 15:
-        #     self.shp = SHP_SelPoint(np.abs(compressed_SLCs), CalWin, Alpha)
+        #     self.shp = SHP_SelPoint(np.abs(compressed_SLCs), self.shp["CalWin"], Alpha)
 
         # Phase linking on compressed SLCs
-        cov_compressed_slc = self.slc_cov(compressed_SLCs, self.shp)
+        cov_compressed_slc = self.slc_cov(self.compressed_SLCs, self.shp)
         phi_PL_compressed, Coh_cal, _ = self.interf_linking(cov_compressed_slc, self.reference_ComSAR_ind)
 
         if self.Unified_flag:
@@ -517,39 +489,39 @@ class ComSAR:
                     cal_ind = np.arange(mini_ind[k], mini_ind[k+1])
                 
                 # Equation 3 in [1]
-                Unified_SAR[:, :, cal_ind - mini_ind[0]] += np.repeat(
+                self.Unified_SAR[:, :, cal_ind - mini_ind[0]] += np.repeat(
                     phi_PL_compressed[:, :, k:k+1], 
                     len(cal_ind), 
                     axis=2
                 )
 
             # Remove reference from unified SAR
-            Unified_SAR = np.delete(Unified_SAR, reference_UnifiedSAR_ind, axis=2)
+            self.Unified_SAR = np.delete(self.Unified_SAR, self.reference_UnifiedSAR_ind, axis=2)
 
             # Phase filtering
             mask_coh = Coh_cal > self.Cohthre
             mask_PS = self.shp["BroNum"] > self.BroNumthre
             mask = np.logical_and(mask_PS, mask_coh)  # PS keep
-            mask = np.repeat(mask[:, :, np.newaxis], N_unified_SAR - 1, axis=2)
+            mask = np.repeat(mask[:, :, np.newaxis], self.N_unified_SAR - 1, axis=2)
 
             # Get indices without reference
-            Unified_ind_no_ref = np.delete(Unified_ind, reference_UnifiedSAR_ind)
-            interfstack_ComSAR = self.interfstack[:, :, Unified_ind_no_ref]
-            interfstack_ComSAR[mask] = np.abs(interfstack_ComSAR[mask]) * np.exp(1j * Unified_SAR[mask])
+            Unified_ind_no_ref = self.Unified_ind
+            Unified_ind_no_ref = np.delete(Unified_ind_no_ref, self.reference_UnifiedSAR_ind)
+            self.interfstack_ComSAR = self.interfstack["datastack"][:, :, Unified_ind_no_ref]
+            self.interfstack_ComSAR[mask] = np.abs(self.interfstack_ComSAR[mask]) * np.exp(1j * self.Unified_SAR[mask])
 
             # DeSpeckle for unified SLCs
-            slcstack_ComSAR = self.slcstack["datastack"][:, :, Unified_ind]
-            mli_despeckle = self.slc_despeckle()  # Assuming this returns the despeckled image
+            self.slcstack_ComSAR = self.slcstack["datastack"][:, :, self.Unified_ind]
+            self.slc_despeckle(data = self.slcstack_ComSAR)  # Assuming this returns the despeckled image
             mask_coh = Coh_cal > self.Cohthre_slc_filt
             mask = np.logical_and(mask_PS, mask_coh)  # PS keep
-            mask = np.repeat(mask[:, :, np.newaxis], N_unified_SAR, axis=2)
-            slcstack_ComSAR[mask] = np.abs(mli_despeckle[mask]) * np.exp(1j * np.angle(slcstack_ComSAR[mask]))
+            mask = np.repeat(mask[:, :, np.newaxis], self.N_unified_SAR, axis=2)
+            self.slcstack_ComSAR[mask] = np.abs(self.slcImg_despeckle[mask]) * np.exp(1j * np.angle(self.slcstack_ComSAR[mask]))
 
             # Update filenames for unified ComSAR
-            self.slcstack_ComSAR_filename = [self.slcstack["filename"][i] for i in Unified_ind]
-            self.interfstack_ComSAR_filename = self.interfstack["filename"][
-                np.any(np.isin(self.interfstack["filename"], self.slcstack_ComSAR_filename), axis=1)
-            ]
+            self.slcstack_ComSAR_filename = [self.slcstack["filename"][i] for i in self.Unified_ind]
+            mask = np.isin(self.interfstack["filename"], self.slcstack_ComSAR_filename)
+            self.interfstack_ComSAR_filename = [self.interfstack["filename"][i] for i in np.where(mask)[0]]
 
         else:
             # Work only with compressed data
@@ -562,23 +534,23 @@ class ComSAR:
             mask = np.repeat(mask[:, :, np.newaxis], numMiniStacks - 1, axis=2)
 
             # Get indices without reference
-            mini_ind_no_ref = np.delete(mini_ind, self.reference_ComSAR_ind)
-            interfstack_ComSAR = interfstack[:, :, mini_ind_no_ref]
-            interfstack_ComSAR[mask] = np.abs(interfstack_ComSAR[mask]) * np.exp(1j * phi_PL_compressed[mask])
+            mini_ind_no_ref = mini_ind.copy()
+            mini_ind_no_ref = np.delete(mini_ind_no_ref, self.reference_ComSAR_ind)
+            self.interfstack_ComSAR = self.interfstack["datastack"][:, :, mini_ind_no_ref]
+            self.interfstack_ComSAR[mask] = np.abs(self.interfstack_ComSAR[mask]) * np.exp(1j * phi_PL_compressed[mask])
 
             # DeSpeckle for Compressed SLCs
-            slcstack_ComSAR = self.slcstack["datastack"][:, :, mini_ind]
-            mli_despeckle = self.slc_despeckle()  # Assuming this returns the despeckled image
+            self.slcstack_ComSAR = self.slcstack["datastack"][:, :, mini_ind]
+            self.slc_despeckle(data = self.compressed_SLCs)  # Assuming this returns the despeckled image
             mask_coh = Coh_cal > self.Cohthre_slc_filt
             mask = np.logical_and(mask_PS, mask_coh)
             mask = np.repeat(mask[:, :, np.newaxis], numMiniStacks, axis=2)
-            slcstack_ComSAR[mask] = np.abs(mli_despeckle[mask]) * np.exp(1j * np.angle(compressed_SLCs[mask]))
+            self.slcstack_ComSAR[mask] = np.abs(self.slcImg_despeckle[mask]) * np.exp(1j * np.angle(self.compressed_SLCs[mask]))
 
             # Update filenames for compressed ComSAR
             self.slcstack_ComSAR_filename = [self.slcstack["filename"][i] for i in mini_ind]
-            self.interfstack_ComSAR_filename = self.interfstack["filename"][
-                np.any(np.isin(self.interfstack["filename"], self.slcstack_ComSAR_filename), axis=1)
-            ]
+            mask = np.isin(self.interfstack["filename"], self.slcstack_ComSAR_filename)
+            self.interfstack_ComSAR_filename = [self.interfstack["filename"][i] for i in np.where(mask)[0]]
 
         # Export results
         self.interf_export(self.InSAR_path + '/diff0', '.comp')
