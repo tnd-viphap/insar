@@ -318,26 +318,29 @@ class ComSAR:
         imag_index = np.arange(1, nwidths * 2, 2)
         line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
 
-        master_id = self.slcstack_ComSAR_filename[self.reference_ComSAR_ind+1]
+        if self.Unified_flag:
+            master_id = self.slcstack_ComSAR_filename[self.reference_UnifiedSAR_ind]
+        else:
+            master_id = self.slcstack_ComSAR_filename[self.reference_ComSAR_ind]
         for i in range(n_interf):
             slave_id = self.interfstack_ComSAR_filename[i]
-            if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{master_id}_{slave_id}{extension}")
-                fid = open(filename, 'wb')
-            elif self.InSAR_processor == 'isce':
-                isce_dir = os.path.join(path, str(slave_id))
-                os.makedirs(isce_dir, exist_ok=True)
-                filename = os.path.join(isce_dir, f"isce_minrefdem.int{extension}")
-                fid = open(filename, 'wb')
-            else:
-                raise ValueError("InSAR_processor not supported. Use 'snap' or 'isce'.")
+        if self.InSAR_processor == 'snap':
+            filename = os.path.join(path, f"{master_id}_{slave_id}{extension}")
+            fid = open(filename, 'wb')
+        elif self.InSAR_processor == 'isce':
+            isce_dir = os.path.join(path, str(slave_id))
+            os.makedirs(isce_dir, exist_ok=True)
+            filename = os.path.join(isce_dir, f"isce_minrefdem.int{extension}")
+            fid = open(filename, 'wb')
+        else:
+            raise ValueError("InSAR_processor not supported. Use 'snap' or 'isce'.")
 
-            data = np.squeeze(self.interfstack_ComSAR[:, :, i])
-            for k in range(nlines):
-                line_cpx[real_index] = np.real(data[k, :])
-                line_cpx[imag_index] = np.imag(data[k, :])
-                fid.write(line_cpx.tobytes())
-            fid.close()
+        data = np.squeeze(self.interfstack_ComSAR[:, :, i])
+        for k in range(nlines):
+            line_cpx[real_index] = np.real(data[k, :])
+            line_cpx[imag_index] = np.imag(data[k, :])
+            fid.write(line_cpx.tobytes())
+        fid.close()
         
     def slc_export(self, path, extension):
         print("-> Exporting SLC stack...")
