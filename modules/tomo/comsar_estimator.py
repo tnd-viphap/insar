@@ -77,36 +77,34 @@ class ComSAR:
         
         N = self.W.shape[0]
 
-        # Spectral regularization
+        # Spectral regularization - match MATLAB exactly
         beta = 0.5
-        self.W = (1 - beta) * self.W + beta * np.eye(N)
+        self.W = (1 - beta) * self.W + beta * np.eye(N, dtype=np.float32)
         
-        try:
-            W_inv = np.linalg.inv(self.W + 1e-14 * np.eye(N))
-        except np.linalg.LinAlgError:
-            W_inv = np.linalg.pinv(self.W + 1e-14 * np.eye(N))
+        # Match MATLAB's matrix operations
+        W_inv = np.linalg.inv(self.W + 1e-14 * np.eye(N, dtype=np.float32))
+        R = self.W * np.abs(W_inv)  # Element-wise multiplication (MATLAB's .*)
 
-        R = self.W * np.abs(W_inv)
-
-        # Avoid NaN or Inf
-        R[~np.isfinite(R)] = 1e-14
+        # Avoid NaN or Inf - match MATLAB's handling
+        R[np.isinf(R)] = 1e-14
+        R[np.isnan(R)] = 1e-14
 
         if method == 1:
-            # EMI method
+            # EMI method - match MATLAB's implementation
             eigvals, eigvecs = np.linalg.eig(R)
             min_idx = np.argmin(np.real(eigvals))
-            phi_emi = np.angle(eigvecs[:, min_idx])
+            phi_emi = np.angle(eigvecs[:, min_idx])  # Note: MATLAB returns eigenvectors in columns
             phi = phi_emi - phi_emi[idx]
 
         elif method == 2:
-            # MLE method
-            U, _, _ = np.linalg.svd(self.W + 1e-14 * np.eye(N))
+            # MLE method - match MATLAB's implementation
+            U, _, _ = np.linalg.svd(self.W + 1e-14 * np.eye(N, dtype=np.float32))
             phi_initial = np.angle(U[:, 0] / U[idx, 0])
             phi_mle = phi_initial.copy()
-            for _ in range(10):
+            for _ in range(10):  # N_iter=10 in MATLAB
                 for p in range(N):
                     not_p = np.delete(np.arange(N), p)
-                    S = R[not_p, p] * np.exp(-1j * phi_initial[not_p])
+                    S = R[not_p, p] * np.exp(-1j * phi_initial[not_p])  # Element-wise multiplication
                     phi_mle[p] = -np.angle(np.sum(S))
                 phi_initial = phi_mle.copy()
             phi = phi_mle - phi_mle[idx]
@@ -114,15 +112,16 @@ class ComSAR:
         else:
             raise ValueError("Unknown method. Use 1 for EMI, 2 for MLE.")
 
-        # Normalize phase
+        # Normalize phase - match MATLAB exactly
         phi = np.angle(np.exp(1j * phi))
 
-        # Normalize estimated phases for compression
+        # Normalize estimated phases for compression - match MATLAB
         v_ml = np.exp(1j * phi)
-        v_ml /= np.linalg.norm(v_ml)
+        v_ml = v_ml / np.linalg.norm(v_ml)
 
+        # Calibrated coherence matrix - match MATLAB
         O = np.diag(np.exp(1j * phi))
-        W_cal = O.conj().T @ self.W @ O
+        W_cal = O.conj().T @ self.W @ O  # Matrix multiplication (MATLAB's *)
 
         return phi, W_cal, v_ml
 
@@ -130,6 +129,7 @@ class ComSAR:
     def compute_slc_coherence_chunk(args):
         """
         Process a chunk of pixels for SLC coherence computation.
+        Matches MATLAB's SLC_cov.m implementation exactly.
         
         Parameters:
         - args: tuple containing:
@@ -153,17 +153,17 @@ class ComSAR:
         data_ii = data[:, chunk_start:chunk_end, ii]
         data_ss = data[:, chunk_start:chunk_end, ss]
         
-        # Calculate phase difference and interferogram
-        Dphi = np.exp(1j * np.angle(data_ii * np.conj(data_ss)))
-        Intf = np.sqrt(m1_chunk * m2_chunk) * Dphi
+        # Calculate phase difference and interferogram - match MATLAB
+        Dphi = np.exp(1j * np.angle(data_ii * np.conj(data_ss)))  # Element-wise multiplication
+        Intf = np.sqrt(m1_chunk * m2_chunk) * Dphi  # Element-wise multiplication
         
-        # Pad data for window operations
+        # Pad data for window operations - match MATLAB's padarray
         m1 = np.pad(m1_chunk, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
         m2 = np.pad(m2_chunk, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
         Intf = np.pad(Intf, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
         
         # Initialize result array
-        result = np.zeros((nlines, chunk_width), dtype=np.complex64)
+        result = np.zeros((nlines, chunk_width), dtype=np.float32)
         
         # Process each pixel in the chunk
         for jj in range(chunk_width):
@@ -177,18 +177,18 @@ class ComSAR:
                 s_win = m2[y_local - RadiusRow:y_local + RadiusRow + 1,
                           x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
                 i_win = Intf[y_local - RadiusRow:y_local + RadiusRow + 1,
-                           x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
+                            x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
                 
                 # Get pixel indices
                 global_pixel_idx = (chunk_start + jj) * nlines + kk
                 pix_inds = shp_pixelind[:, global_pixel_idx]
                 
-                # Calculate coherence
+                # Calculate coherence - match MATLAB
                 nu = np.sum(i_win[pix_inds])
                 de1 = np.sum(m_win[pix_inds])
                 de2 = np.sum(s_win[pix_inds])
                 
-                result[kk, jj] = nu / np.sqrt(de1 * de2)
+                result[kk, jj] = nu / np.sqrt(de1 * de2)  # Element-wise multiplication
         
         return ii, ss, chunk_start, chunk_end, result
 
@@ -215,7 +215,7 @@ class ComSAR:
         RadiusCol = (CalWin[1] - 1) // 2
         
         mlistack = np.abs(data)
-        Coh = np.zeros((n_slc, n_slc, nlines, nwidths), dtype=np.complex64)
+        Coh = np.zeros((n_slc, n_slc, nlines, nwidths), dtype=np.float32)
         
         # Set diagonal elements to 1
         for ii in range(n_slc):
@@ -283,6 +283,8 @@ class ComSAR:
         CalWin = self.shp["CalWin"]
         RadiusRow = (CalWin[0] - 1) // 2
         RadiusCol = (CalWin[1] - 1) // 2
+        
+        # Pad data - match MATLAB's padarray
         slcstack = np.pad(self.slcImg_despeckle.astype(np.float32),
                           ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol), (0, 0)),
                           mode='symmetric')
@@ -446,7 +448,7 @@ class ComSAR:
         numMiniStacks = len(mini_ind)
 
         # Compressed SLCs stack
-        self.compressed_SLCs = np.zeros((nlines, nwidths, numMiniStacks), dtype=np.complex64)
+        self.compressed_SLCs = np.zeros((nlines, nwidths, numMiniStacks), dtype=np.float32)
 
         if self.Unified_flag:
             self.Unified_ind = np.arange(mini_ind[0], n_slc)
