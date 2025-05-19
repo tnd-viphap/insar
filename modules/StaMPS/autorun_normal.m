@@ -95,30 +95,6 @@ function process_patch_folders(current_result)
             fprintf('\n');
             % Export to csv
             fprintf("Exporting results...");
-            % Assume youre in any of PATCH folder
-            fprintf("Refine potential missing parameters");
-            rscname = ['../rsc.txt'];
-            fid = fopen(rscname);
-            rslcpar = textscan(fid, '%s');
-            rslcpar = rslcpar{1}{1};
-            rps=readparm(rslcpar,'range_pixel_spacing');
-            rgn=readparm(rslcpar,'near_range_slc');
-            se=readparm(rslcpar,'sar_to_earth_center');
-            re=readparm(rslcpar,'earth_radius_below_sensor');
-            rgc=readparm(rslcpar,'center_range_slc');
-            naz=readparm(rslcpar,'azimuth_lines');
-            prf=readparm(rslcpar,'prf');
-            data = load(strcat(current_result, '/parms.mat'));
-            data.('range_pixel_spacing') = rps;
-            data.('near_range_slc') = rgn;
-            data.('sar_to_earth_center') = se;
-            data.('earth_radius_below_sensor') = re;
-            data.('center_range_slc') = rgc;
-            data.('azimuth_lines') = naz;
-            data.('prf') = prf;
-            save(strcat(current_result, '/parms.mat'), '-struct', 'data')
-            ps_dem_err();
-            ps_lonlat_err(current_result);
             chdir(current_result);
         end
     end

@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 import time
 
@@ -13,6 +14,11 @@ import scipy.io as sio
 from shapely.geometry import Point
 from affine import Affine
 
+project_folder = os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")
+sys.path.append(project_folder)
+
+from modules.tomo.ps_parms import Parms
+
 
 class StaMPSEXE:
     def __init__(self, oobj="normal", display=' -nodisplay'):
@@ -22,6 +28,7 @@ class StaMPSEXE:
         self.oobj = oobj
         self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")+'/modules/snap2stamps/bin', "project.conf")
         self._load_config()
+        self._load_rslcpar()
         print(f"############## Running: Step 10: StaMPS ##############")
         
     def _load_config(self):
@@ -39,6 +46,38 @@ class StaMPSEXE:
                 data = gpd.read_file(csv_file[0])
                 data.geometry = [Point(x, y) for x, y in zip(data.LON, data.LAT)]
                 data.to_file(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{folder}.shp'))
+
+    def _load_rslcpar(self):
+        parms = Parms(self.inputfile)
+        parms.load()
+        master_date = self.CURRENT_RESULT.split('/')[-1].split('_')[1]
+        with open(os.path.join(self.CURRENT_RESULT, f'rslc/{master_date}.rslc.par'), 'r') as file:
+            for line in file.readlines():
+                line = line.strip().split('\t')
+                if line[0].startswith('range_pixel_spacing'):
+                    parms.set('range_pixel_spacing', float(line[1]))
+                elif line[0].startswith('near_range_slc'):
+                    parms.set('near_range_slc', float(line[1]))
+                elif line[0].startswith('sar_to_earth_center'):
+                    parms.set('sar_to_earth_center', float(line[1]))
+                elif line[0].startswith('earth_radius_below_sensor'):
+                    parms.set('earth_radius_below_sensor', float(line[1]))
+                elif line[0].startswith('center_range_slc'):
+                    parms.set('center_range_slc', float(line[1]))
+                elif line[0].startswith('azimuth_lines'):
+                    parms.set('azimuth_lines', float(line[1]))
+                elif line[0].startswith('prf'):
+                    parms.set('prf', float(line[1]))
+                elif line[0].startswith('heading'):
+                    parms.set('heading', float(line[1]))
+                elif line[0].startswith('radar_frequency'):
+                    parms.set('lambda', 299792458 / float(line[1]))
+                elif line[0].startswith('sensor'):
+                    if 'ASAR' in line[1]:
+                        parms.set('platform', 'ENVISAT')
+                    else:
+                        parms.set('platform', line[1])
+        parms.save()
 
     def rasterize_preserve_and_stack(self, points_gdf, 
                                     columns, 
@@ -132,6 +171,44 @@ class StaMPSEXE:
         gdf = gpd.GeoDataFrame(data, geometry=geometries, crs="EPSG:32648")  # Change to match original CRS
         
         return gdf
+    
+    def ps_dem_err(self):
+        parms = Parms(self.inputfile)
+        parms.load()
+        slant_range = parms.get('range_pixel_spacing')
+        near_range = parms.get('near_range_slc')
+        re = parms.get('earth_radius_below_sensor')
+        rs = parms.get('sar_to_earth_center')
+        lambda_val = parms.get('lambda')
+        
+        ij = sio.loadmat("ps2.mat")['ij']
+        K_ps_uw = sio.loadmat("scla2.mat")['K_ps_uw']
+        
+        
+        range_pixel = ij[:, 2].reshape(-1, 1)
+        del ij
+        rg = near_range + range_pixel * slant_range
+        alpha = np.pi - np.arccos((rg**2 + re**2 - rs**2) / (2 * rg * re))
+        dem_err = -K_ps_uw * lambda_val * rg * np.sin(alpha) / (4 * np.pi)
+        dem_err = dem_err.reshape(-1, 1)
+        
+        # Save result
+        sio.savemat("dem_err.mat", {"dem_err": dem_err})
+        return dem_err
+        
+    def ps_lonlat_err(self, dem_err):
+        parms = Parms(self.inputfile)
+        parms.load()
+        la = sio.loadmat("la2.mat")['la']
+        heading = parms.get('heading')
+        re = parms.get('earth_radius_below_sensor')
+        theta = (180 - heading) * np.pi / 180
+        Dx = dem_err * (1 / np.tan(la)) * np.cos(theta)
+        Dy = dem_err * (1 / np.tan(la)) * np.sin(theta)
+        Dlon = np.arccos(1 - (Dx**2) / (2 * re**2)) * 180 / np.pi
+        Dlat = np.arccos(1 - (Dy**2) / (2 * re**2)) * 180 / np.pi
+        self.lonlat_err = np.array([Dlon, Dlat])
+        sio.savemat("lonlat_err.mat", {"lonlat_err": self.lonlat_err})
 
     def ps_export_gis(self, csv_filename, shapefile_name, lon_rg=None, lat_rg=None, ortho=None):
         if not os.path.exists("ps_plot_ts_v-dao.mat"):
@@ -166,7 +243,7 @@ class StaMPSEXE:
         
         xy = xy[mask]
         lonlat = lonlat[mask]
-        lonlat_err = lonlat_err[mask]
+        lonlat_err = lonlat_err[:, mask, 0]
         hgt = hgt[mask]
         dem_err = dem_err[mask]
         coh_ps = coh_ps[mask]
@@ -175,6 +252,7 @@ class StaMPSEXE:
         
         # DEM ORTHO CORRECTION
         if ortho == 'ortho':
+            lonlat_err = lonlat_err.T
             lonlat -= lonlat_err
             hgt += dem_err
         
@@ -279,15 +357,18 @@ class StaMPSEXE:
     
     def run(self):
         self.csv_files = []
-        #os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
+        # os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
         patch_identifier = [f for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
-            os.chdir(path)
             csv_filename = os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}_cr.csv')
             self.csv_files.append(csv_filename)
+            shutil.copy(os.path.join(self.CURRENT_RESULT, 'parms.json'), path)
+            os.chdir(path)
+            dem_err = self.ps_dem_err()
+            self.ps_lonlat_err(dem_err)
             self.ps_export_gis(csv_filename, os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
             os.chdir(self.CURRENT_RESULT) 
         os.chdir(self.PROJECTFOLDER)
