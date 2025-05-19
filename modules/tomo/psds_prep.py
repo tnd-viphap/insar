@@ -153,6 +153,7 @@ class PSDS_Prep:
                 psds_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.psds"))
             else:
                 psds_files = list(self.data_dir.glob("diff0/*.psds"))
+            psds_files = list(sorted(psds_files, key = lambda x: int(x.stem.split('_')[-1])))
             for psds_file in psds_files:
                 psds_file = str(psds_file).replace('\\', '/')
                 if platform.system() == "Linux":

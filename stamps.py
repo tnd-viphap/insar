@@ -272,6 +272,7 @@ class StaMPSEXE:
         header = ['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + days
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
+        gis_data = gis_data[['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + list(sorted(days, key=lambda x: int(x[1:])))]
         gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
         coordinates = gpd.GeoSeries([Point(float(lon[i]), float(lat[i])) for i in range(len(lon))])
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")

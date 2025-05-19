@@ -150,15 +150,16 @@ class ComSAR_Prep:
         with open(self.work_dir / "pscphase.in", 'w') as f:
             f.write(f"{self.width}\n")
             if self.sb_flag:
-                psds_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.comp"))
+                comsar_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.comp"))
             else:
-                psds_files = list(self.data_dir.glob("diff0/*.comp"))
-            for psds_file in psds_files:
-                psds_file = str(psds_file).replace('\\', '/')
+                comsar_files = list(self.data_dir.glob("diff0/*.comp"))
+            comsar_files = list(sorted(comsar_files, key = lambda x: int(x.stem.split('_')[-1])))
+            for comsar_file in comsar_files:
+                comsar_file = str(comsar_file).replace('\\', '/')
                 if platform.system() == "Linux":
-                    f.write(f"{psds_file}\n")
+                    f.write(f"{comsar_file}\n")
                 else:
-                    f.write("    "+psds_file+"\n")
+                    f.write("    "+comsar_file+"\n")
                 
         # Write width to pscdem.in
         with open(self.work_dir / "pscdem.in", 'w') as f:
