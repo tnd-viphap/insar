@@ -20,6 +20,7 @@ class Parms:
             'small_baseline_flag': 'n'  # PS ifgs with single masters
         }
         self.logger = self._setup_logger()
+        self.load()
         
     def _setup_logger(self):
         """Setup logging configuration"""
