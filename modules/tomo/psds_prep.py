@@ -114,24 +114,35 @@ class PSDS_Prep:
         with open(self.work_dir / "patch.list", 'w') as f:
             pass
             
-        patch_num = 0
-        for irg in range(self.rg_patches):
-            for iaz in range(self.az_patches):
-                patch_num += 1
-                
+        irg = 0
+        iaz = 0
+        ip = 0
+        while irg < self.rg_patches:
+            irg += 1
+            while iaz < self.az_patches:
+                iaz += 1
+                ip += 1
                 # Calculate patch boundaries
-                start_rg1 = width_p * irg + 1
-                start_rg = max(1, start_rg1 - self.rg_overlap)
-                end_rg1 = width_p * (irg + 1)
-                end_rg = min(self.width, end_rg1 + self.rg_overlap)
-                
-                start_az1 = length_p * iaz + 1
-                start_az = max(1, start_az1 - self.az_overlap)
-                end_az1 = length_p * (iaz + 1)
-                end_az = min(self.length, end_az1 + self.az_overlap)
+                start_rg1 = width_p * (irg - 1) + 1
+                start_rg = start_rg1 - self.rg_overlap
+                if start_rg < 1:
+                    start_rg = 1
+                end_rg1 = width_p * irg
+                end_rg = end_rg1 + self.rg_overlap
+                if end_rg > self.width:
+                    end_rg = self.width
+
+                start_az1 = length_p * (iaz - 1) + 1
+                start_az = start_az1 - self.az_overlap
+                if start_az < 1:
+                    start_az = 1
+                end_az1 = length_p * iaz
+                end_az = end_az1 + self.az_overlap
+                if end_az > self.length:
+                    end_az = self.length
                 
                 # Create patch directory
-                patch_dir = self.work_dir / f"PATCH_{patch_num}"
+                patch_dir = self.work_dir / f"PATCH_{ip}"
                 patch_dir.mkdir(exist_ok=True)
                 
                 # Write patch configuration files
@@ -142,7 +153,8 @@ class PSDS_Prep:
                     f.write(f"{start_rg1}\n{end_rg1}\n{start_az1}\n{end_az1}\n")
                     
                 with open(self.work_dir / "patch.list", 'a') as f:
-                    f.write(f"PATCH_{patch_num}\n")
+                    f.write(f"PATCH_{ip}\n")
+            iaz = 0
                     
     def prepare_psds_files(self):
         """Prepare PSDs files for processing"""
