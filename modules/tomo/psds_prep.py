@@ -1,267 +1,304 @@
+import glob
 import os
+import platform
+import subprocess
+import sys
 import time
-import numpy as np
-from tqdm import tqdm
+from datetime import datetime
+from pathlib import Path
 
-class PSDS:
-    def __init__(self, coh_matrix, slcstack, interfstack, shp, reference_idx,
-                 InSAR_path, bronumthre, cohthre, cohthre_slc_filt, InSAR_processor):
-        
-        self.coh_matrix = coh_matrix
-        self.slcstack = slcstack
-        self.interfstack = interfstack
-        self.shp = shp
-        self.reference_idx = reference_idx
-        if self.reference_idx is None:
-            self.reference_idx = 0
-        self.InSAR_path = InSAR_path
-        self.BroNumthre = bronumthre
-        if self.BroNumthre is None:
-            self.BroNumthre = 5
-        self.Cohthre = cohthre
-        if self.Cohthre is None:
-            self.Cohthre = 0.65
-        self.Cohthre_slc_filt = cohthre_slc_filt
-        self.InSAR_processor = InSAR_processor
-      
-    def interf_linking(self):
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+
+from modules.tomo.extract_pixels import MTExtractCands
+from modules.tomo.ps_parms import Parms
+
+
+class PSDS_Prep:
+    def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
+                 rg_overlap=50, az_overlap=50, maskfile=None):
         """
-        Python version of the MATLAB Intf_PL function.
-        Perform phase linking across coherence matrices.
-
-        Parameters:
-        - Coh: np.ndarray, shape (n_slc, n_slc, nlines, nwidths)
-        - N_iter: int, number of iterations for phase linking
-        - reference: int, index of reference SLC (0-based indexing)
-
-        Returns:
-        - phi_PL: np.ndarray, estimated phase, shape (nlines, nwidths, n_slc)
-        - Coh_cal: np.ndarray, coherence metric, shape (nlines, nwidths)
-        - v_PL: np.ndarray, amplitude estimates, shape (nlines, nwidths, n_slc)
-        """
-        print("-> Performing phase linking...")
-        n_slc, _, nlines, nwidths = self.coh_matrix.shape
-
-        self.phi_PL = np.zeros((nlines, nwidths, n_slc), dtype=np.float32)
-        self.v_PL = np.zeros((nlines, nwidths, n_slc), dtype=np.float32)
-        self.Coh_cal = np.zeros((nlines, nwidths), dtype=np.float32)
-
-        for jj in range(nwidths):
-            for kk in range(nlines):
-                self.W = np.squeeze(self.coh_matrix[:, :, kk, jj])
-                if not np.all(np.isfinite(self.W)):
-                    continue
-
-                phi, temp_coh, v = self._linking()
-                self.phi_PL[kk, jj, :] = phi
-                self.v_PL[kk, jj, :] = v
-                self.Coh_cal[kk, jj] = (np.sum(np.abs(temp_coh)) - n_slc) / (n_slc**2 - n_slc)
-
-    def _linking(self, method=1):
-        """
-        Python version of MATLAB phase_linking function.
+        Initialize PSDS preparation class
         
-        Parameters:
-        - W: np.ndarray, complex coherence matrix (N x N)
-        - N_iter: int, number of iterations for MLE method
-        - reference: int, reference index (0-based)
-        - method: int, 1 for EMI, 2 for MLE
-        
-        Returns:
-        - phi: np.ndarray, phase vector (N,)
-        - W_cal: np.ndarray, calibrated coherence matrix
-        - v_ml: np.ndarray, normalized complex amplitude vector
+        Args:
+            master_date (str): Master date in YYYYMMDD format
+            data_dir (str): Data directory path
+            da_thresh (float): Amplitude dispersion threshold (default: 0.4 for PS, 0.6 for SB)
+            rg_patches (int): Number of patches in range (default: 1)
+            az_patches (int): Number of patches in azimuth (default: 1)
+            rg_overlap (int): Overlapping pixels between patches in range (default: 50)
+            az_overlap (int): Overlapping pixels between patches in azimuth (default: 50)
+            maskfile (str): Optional mask file path
         """
-
-        N = self.W.shape[0]
-
-        # Spectral regularization
-        beta = 0.5
-        self.W = (1 - beta) * self.W + beta * np.eye(N)
-        
-        try:
-            W_inv = np.linalg.inv(self.W + 1e-14 * np.eye(N))
-        except np.linalg.LinAlgError:
-            W_inv = np.linalg.pinv(self.W + 1e-14 * np.eye(N))
-
-        R = self.W * np.abs(W_inv)
-
-        # Avoid NaN or Inf
-        R[~np.isfinite(R)] = 1e-14
-
-        if method == 1:
-            # EMI method
-            eigvals, eigvecs = np.linalg.eig(R)
-            min_idx = np.argmin(np.real(eigvals))
-            phi_emi = np.angle(eigvecs[:, min_idx])
-            phi = phi_emi - phi_emi[self.reference_idx]
-
-        elif method == 2:
-            # MLE method
-            U, _, _ = np.linalg.svd(self.W + 1e-14)
-            phi_initial = np.angle(U[:, 0] / U[self.reference_idx, 0])
-            phi_mle = phi_initial.copy()
-            for _ in range(10):
-                for p in range(N):
-                    not_p = np.delete(np.arange(N), p)
-                    S = R[not_p, p] * np.exp(-1j * phi_initial[not_p])
-                    phi_mle[p] = -np.angle(np.sum(S))
-                phi_initial = phi_mle.copy()
-            phi = phi_mle - phi_mle[self.reference_idx]
-
+        self.conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
+        self._load_config()
+        if platform.system() == "Linux":
+            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/bin/calamp"))
         else:
-            raise ValueError("Unknown method. Use 1 for EMI, 2 for MLE.")
+            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/src/calamp.exe"))
 
-        # Normalize phase
-        phi = np.angle(np.exp(1j * phi))
-
-        # Normalize estimated phases for compression
-        v_ml = np.exp(1j * phi)
-        v_ml /= np.linalg.norm(v_ml)
-
-        O = np.diag(np.exp(1j * phi))
-        W_cal = O.T @ self.W @ O
-
-        return phi, W_cal, v_ml
-    
-    def interf_filtering(self):
-        print("-> Applying filter strategies on interferogram...")
-        self.phi_PL = np.delete(self.phi_PL, self.reference_idx, axis=2)
-        mask_coh = self.Coh_cal > self.Cohthre
-        mask_PS = self.shp["BroNum"] > self.BroNumthre
-        # Combine masks
-        mask = np.logical_and(mask_PS, mask_coh)
-
-        # Repeat mask along the 3rd axis
-        mask = np.repeat(mask[:, :, np.newaxis], len(self.interfstack["filename"]), axis=2)
-
-        # Apply the phase update to infstack
-        self.interfstack["datastack"][mask] = np.abs(self.interfstack["datastack"][mask]) * np.exp(1j * self.phi_PL[mask])
+        self.master_date = master_date
+        self.data_dir = Path(data_dir.replace('\\', '/'))
+        self.rg_patches = int(rg_patches)
+        self.az_patches = int(az_patches)
+        self.rg_overlap = int(rg_overlap)
+        self.az_overlap = int(az_overlap)
+        self.maskfile = maskfile
+        self.work_dir = self.data_dir
         
-    def slc_despeckle(self):
-        print("-> Reducing speckle noise on SLC stack...")
-        start_time = time.time()
-        nlines, nwidths, npages = self.slcstack["datastack"].shape
-        self.slcImg_despeckle = np.abs(self.slcstack["datastack"])
+        # Set up log file
+        log_dir = self.work_dir / "logs"
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = log_dir / f"psds_prep_{timestamp}.log"
         
-        CalWin = self.shp["CalWin"]
-        RadiusRow = (CalWin[0] - 1) // 2
-        RadiusCol = (CalWin[1] - 1) // 2
-        slcstack = np.pad(self.slcImg_despeckle.astype(np.float32),
-                          ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol), (0, 0)),
-                          mode='symmetric')
+        # Check if small baseline processing
+        self.sb_flag = (self.data_dir / "SMALL_BASELINES").exists()
         
-        for ii in tqdm(range(npages), total=npages, desc="-> ADP. DESPECKLING: ", unit="pair"):
-            temp = slcstack[:, :, ii]
-            num = 0
-            for jj in range(nwidths):
-                for kk in range(nlines):
-                    x_global = jj + RadiusCol
-                    y_global = kk + RadiusRow
-                    MliWindow = temp[y_global - RadiusRow: y_global + RadiusRow + 1,
-                                    x_global - RadiusCol: x_global + RadiusCol + 1]
-                    MliValues = MliWindow.flatten()[self.shp["PixelInd"][:, num]]
-                    self.slcImg_despeckle[kk, jj, ii] = np.mean(MliValues)
-                    num += 1
+        # Set default da_thresh based on processing type
+        if da_thresh is None:
+            self.da_thresh = 0.6 if self.sb_flag else 0.4
+        else:
+            self.da_thresh = da_thresh
+            
+        # Initialize other attributes
+        self.width = None
+        self.length = None
+        self.rsc_file = None
 
-        elapsed = time.time() - start_time
-        print(f"-> DeSpeckling operation completed in {elapsed / 60:.2f} minute(s).")
+    def _load_config(self):
+        with open(self.conf_path, 'r') as file:
+            for line in file.readlines():
+                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
+                if key:
+                    setattr(self, key, value)  # Dynamically set variables
         
-    def slc_filtering(self):
-        print("-> Applying filter strategies on SLC stack...")
-        _, _, npages = self.slcstack["datastack"].shape
-        mask_coh = self.Coh_cal > self.Cohthre_slc_filt
-        mask_PS = self.shp["BroNum"] > self.BroNumthre
-        mask = np.logical_and(mask_coh, mask_PS)
-        mask = np.repeat(mask[:, :, np.newaxis], npages, axis=2)
+    def find_rsc_file(self):
+        """Find the RSC file based on processing type"""
+        if self.sb_flag:
+            rsc_files = list(self.data_dir.glob(f"SMALL_BASELINES/*/{self.master_date}.*slc.par"))
+            if rsc_files:
+                self.rsc_file = str(rsc_files[-1]).replace('\\', '/')
+        else:
+            rsc_files = list(self.data_dir.glob(f"*slc/{self.master_date}.*slc.par"))
+            if rsc_files:
+                self.rsc_file = str(rsc_files[0]).replace('\\', '/')
+                
+        if not self.rsc_file:
+            raise FileNotFoundError("Could not find RSC file")
+            
+    def get_dimensions(self):
+        """Get width and length from RSC file"""
+        with open(self.rsc_file, 'r') as f:
+            for line in f:
+                if 'range_samples' in line:
+                    self.width = int(line.split()[1])
+                elif 'azimuth_lines' in line:
+                    self.length = int(line.split()[1])
+                    
+        if not self.width or not self.length:
+            raise ValueError("Could not determine image dimensions from RSC file")
+            
+    def create_patches(self):
+        """Create patch directories and configuration files"""
+        width_p = self.width // self.rg_patches
+        length_p = self.length // self.az_patches
         
-        self.slcstack["datastack"][mask] = np.abs(self.slcImg_despeckle[mask]) * np.exp(1j * np.angle(self.slcstack["datastack"][mask]))
-        
-    def interf_export(self, path, extension):
-        """
-        Export interferogram stack to binary files compatible with SAR processors.
-
-        Parameters:
-        - infstack: np.ndarray, shape (nlines, nwidths, n_interf), complex64
-        - inflist: np.ndarray, shape (n_interf, 2), each row contains [master_id, slave_id]
-        - path: str, output directory
-        - extension: str, file extension (e.g., '.bin', '.int')
-        - InSAR_processor: str, either 'snap' or 'isce'
-        """
-        print("-> Exporting interferogram...")
-        nlines, nwidths, n_interf = self.interfstack["datastack"].shape
-
-        real_index = np.arange(0, nwidths * 2, 2)
-        imag_index = np.arange(1, nwidths * 2, 2)
-        line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
-
-        master_id = self.slcstack["filename"][self.reference_idx]
-        for i in range(n_interf):
-            slave_id = self.interfstack["filename"][i]
-            if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{master_id}_{slave_id}{extension}")
-                fid = open(filename, 'wb')
-            elif self.InSAR_processor == 'isce':
-                isce_dir = os.path.join(path, str(slave_id))
-                os.makedirs(isce_dir, exist_ok=True)
-                filename = os.path.join(isce_dir, f"isce_minrefdem.int{extension}")
-                fid = open(filename, 'wb')
+        # Remove existing patch directories
+        for patch_dir in self.work_dir.glob("PATCH_*"):
+            if patch_dir.is_dir():
+                import shutil
+                shutil.rmtree(patch_dir)
+                
+        # Create patch list file
+        with open(self.work_dir / "patch.list", 'w') as f:
+            pass
+            
+        patch_num = 0
+        for irg in range(self.rg_patches):
+            for iaz in range(self.az_patches):
+                patch_num += 1
+                
+                # Calculate patch boundaries
+                start_rg1 = width_p * irg + 1
+                start_rg = max(1, start_rg1 - self.rg_overlap)
+                end_rg1 = width_p * (irg + 1)
+                end_rg = min(self.width, end_rg1 + self.rg_overlap)
+                
+                start_az1 = length_p * iaz + 1
+                start_az = max(1, start_az1 - self.az_overlap)
+                end_az1 = length_p * (iaz + 1)
+                end_az = min(self.length, end_az1 + self.az_overlap)
+                
+                # Create patch directory
+                patch_dir = self.work_dir / f"PATCH_{patch_num}"
+                patch_dir.mkdir(exist_ok=True)
+                
+                # Write patch configuration files
+                with open(patch_dir / "patch.in", 'w') as f:
+                    f.write(f"{start_rg}\n{end_rg}\n{start_az}\n{end_az}\n")
+                    
+                with open(patch_dir / "patch_noover.in", 'w') as f:
+                    f.write(f"{start_rg1}\n{end_rg1}\n{start_az1}\n{end_az1}\n")
+                    
+                with open(self.work_dir / "patch.list", 'a') as f:
+                    f.write(f"PATCH_{patch_num}\n")
+                    
+    def prepare_psds_files(self):
+        """Prepare PSDs files for processing"""
+        # Write width to pscphase.in
+        with open(self.work_dir / "pscphase.in", 'w') as f:
+            f.write(f"{self.width}\n")
+            if self.sb_flag:
+                psds_files = list(self.data_dir.glob("SMALL_BASELINES/*/*.psds"))
             else:
-                raise ValueError("InSAR_processor not supported. Use 'snap' or 'isce'.")
-
-            data = np.squeeze(self.interfstack["datastack"][:, :, i])
-            for k in range(nlines):
-                line_cpx[real_index] = np.real(data[k, :])
-                line_cpx[imag_index] = np.imag(data[k, :])
-                fid.write(line_cpx.tobytes())
-            fid.close()
-        
-    def slc_export(self, path, extension):
-        print("-> Exporting SLC stack...")
-        """
-        Export SLC stack to binary files compatible with SAR processors.
-
-        Parameters:
-        - slcstack: np.ndarray, shape (nlines, nwidths, n_slc), dtype=complex64
-        - slclist: list or np.ndarray of SLC identifiers (length = n_slc)
-        - path: str, output directory
-        - extension: str, file extension (e.g., '.slc', '.bin')
-        - InSAR_processor: str, either 'snap' or 'isce'
-        - reference_index: int, index of reference SLC (0-based)
-        """
-        nlines, nwidths, n_slc = self.slcstack["datastack"].shape
-        real_index = np.arange(0, nwidths * 2, 2)
-        imag_index = np.arange(1, nwidths * 2, 2)
-        line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
-
-        for i in range(n_slc):
-            if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{self.slcstack['filename'][i]}{extension}")
-                fid = open(filename, 'wb')
-            elif self.InSAR_processor == 'isce':
-                if i == self.reference_idx:
-                    out_dir = os.path.join(path, "reference")
-                    os.makedirs(out_dir, exist_ok=True)
-                    filename = os.path.join(out_dir, f"reference.slc{extension}")
+                psds_files = list(self.data_dir.glob("diff0/*.psds"))
+            psds_files = list(sorted(psds_files, key = lambda x: int(x.stem.split('_')[-1])))
+            for psds_file in psds_files:
+                psds_file = str(psds_file).replace('\\', '/')
+                if platform.system() == "Linux":
+                    f.write(f"{psds_file}\n")
                 else:
-                    out_dir = os.path.join(path, str(self.slcstack["filename"][i]))
-                    os.makedirs(out_dir, exist_ok=True)
-                    filename = os.path.join(out_dir, f"secondary.slc{extension}")
-                fid = open(filename, 'wb')
-            else:
-                raise ValueError("Unsupported InSAR_processor. Use 'snap' or 'isce'.")
+                    f.write("    "+psds_file+"\n")
+                
+        # Write width to pscdem.in
+        with open(self.work_dir / "pscdem.in", 'w') as f:
+            f.write(f"{self.width}\n")
+            dem_files = list(self.data_dir.glob("geo/*dem.rdc"))
+            for dem_file in dem_files:
+                dem_file = str(dem_file).replace('\\', '/')
+                f.write(f"{dem_file}\n")
 
-            data = np.squeeze(self.slcstack["datastack"][:, :, i])
-            for k in range(nlines):
-                line_cpx[real_index] = np.real(data[k, :])
-                line_cpx[imag_index] = np.imag(data[k, :])
-                fid.write(line_cpx.tobytes())
-            fid.close()
-
+        # Write width to psclonlat.in
+        with open(self.work_dir / "psclonlat.in", 'w') as f:
+            f.write(f"{self.width}\n")
+            lon_files = list(self.data_dir.glob("geo/*.lon"))
+            lat_files = list(self.data_dir.glob("geo/*.lat"))
+            for lon_file in lon_files:
+                lon_file = str(lon_file).replace('\\', '/')
+                f.write(f"{lon_file}\n")
+            for lat_file in lat_files:
+                lat_file = str(lat_file).replace('\\', '/')
+                f.write(f"{lat_file}\n")
+        
+                
     def run(self):
-        self.interf_linking()
-        self.interf_filtering()
-        self.slc_despeckle()
-        self.slc_filtering()
-        self.interf_export(self.InSAR_path + '/diff0', '.psds')
-        self.slc_export(self.InSAR_path +'/rslc', '.psar')
+        """Main execution method"""
+        # try:
+        start_time = time.time()
+        self.find_rsc_file()
+        self.get_dimensions()
+        
+        # Write processor type
+        with open(self.work_dir / "processor.txt", 'w') as f:
+            f.write("snap\n")
+
+        # Write initial parameters
+        parms = Parms(self.conf_path)
+        parms.initialize()
+
+        # Calibrate amplitudes
+        selfile = self.work_dir / "selsbc.in" if self.sb_flag else self.work_dir / "selpsc.in"
+        if os.path.exists(selfile):
+            os.remove(selfile)
+        with open(self.work_dir / "calamp.in", 'w') as f:
+            for file in glob.glob(f"{self.data_dir}/*slc/*.psar"):
+                file = file.replace('\\', '/')
+                f.write(f"{file}\n")
+        command = f"{self.calamp_path} {self.work_dir}/calamp.in {self.width} {self.work_dir}/calamp.out f 1 {self.maskfile}"
+        
+        # Run calamp and log its output
+        with open(self.log_file, 'w') as log:
+            log.write(f"=== Running calamp command ===\n")
+            log.write(f"Command: {command}\n\n")
+            log.write("Output:\n")
+            try:
+                # Use subprocess.run instead of Popen for better control
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    check=False,  # Don't raise exception on non-zero return code
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                )
+                
+                if process.stdout:
+                    log.write(process.stdout)
+                if process.stderr:
+                    log.write(f"\nErrors/Warnings:\n{process.stderr}")
+                log.write(f"\nReturn code: {process.returncode}\n")
+                
+                if process.returncode != 0:
+                    print(f"Error: calamp failed with return code {process.returncode}")
+                    print(f"Check log file for details: {self.log_file}")
+                    sys.exit(1)
+                    
+            except Exception as e:
+                error_msg = f"Error executing calamp command: {str(e)}"
+                print(error_msg)
+                log.write(f"\n{error_msg}\n")
+                sys.exit(1)
+            
+        # Write dimensions to files
+        with open(self.work_dir / "width.txt", 'w') as f:
+            f.write(f"{self.width}\n")
+        with open(self.work_dir / "len.txt", 'w') as f:
+            f.write(f"{self.length}\n")
+        with open(self.work_dir / "rsc.txt", 'w') as f:
+            f.write(f"{self.rsc_file}\n")
+        with open(self.work_dir / selfile, 'w') as f:
+            f.write(f"{self.da_thresh}\n")
+            f.write(f"{self.width}\n")
+            with open(self.work_dir / "calamp.out", 'r') as f2:
+                for line in f2.readlines():
+                    if platform.system() == "Linux":
+                        f.write(line)
+                    else:
+                        f.write("     "+line)
+            
+        self.create_patches()
+        self.prepare_psds_files()
+        
+        print(f"-> Processing {self.rg_patches} patch(es) in range and {self.az_patches} in azimuth")
+        print(f"-> Amplitude Dispersion Threshold: {self.da_thresh}")
+
+        # Run mt_extract_cands
+        print("-> Extracting candidate PS pixels...")
+        mt_extract_cands = MTExtractCands()
+        mt_extract_cands.run()
+
+        end_time = time.time()
+        print(f"-> Total preparation time: {(end_time - start_time)/60:.2f} minutes")
+            
+        # except Exception as e:
+        #     print(f"Error: {str(e)}")
+        #     sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("usage: psds_prep.py yyyymmdd datadir da_thresh [rg_patches az_patches rg_overlap az_overlap maskfile]")
+        print("    yyyymmdd                 = master date")
+        print("    datadir                  = data directory (with expected structure)")
+        print("    da_thresh                = (delta) amplitude dispersion threshold")
+        print("                                typical values: 0.4 for PS, 0.6 for SB")
+        print("    rg_patches (default 1)   = number of patches in range")
+        print("    az_patches (default 1)   = number of patches in azimuth")
+        print("    rg_overlap (default 50)  = overlapping pixels between patches in range")
+        print("    az_overlap (default 50) = overlapping pixels between patches in azimuth")
+        print("    maskfile (optional) char file, same dimensions as slcs, 0 to include, 1 otherwise")
+        sys.exit(4)
+        
+    master_date = sys.argv[1]
+    data_dir = sys.argv[2]
+    da_thresh = float(sys.argv[3]) if len(sys.argv) > 3 else None
+    rg_patches = int(sys.argv[4]) if len(sys.argv) > 4 else 1
+    az_patches = int(sys.argv[5]) if len(sys.argv) > 5 else 1
+    rg_overlap = int(sys.argv[6]) if len(sys.argv) > 6 else 50
+    az_overlap = int(sys.argv[7]) if len(sys.argv) > 7 else 50
+    maskfile = sys.argv[8] if len(sys.argv) > 8 else None
+    
+    prep = PSDS_Prep(master_date, data_dir, da_thresh, rg_patches, az_patches, 
+                     rg_overlap, az_overlap, maskfile)
+    prep.run()
