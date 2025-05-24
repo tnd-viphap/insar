@@ -23,7 +23,7 @@ class SHP:
             dict: Contains PixelInd (bool array), BroNum (SHP count), CalWin (tuple)
         """
 
-        self.slcstack = np.abs(slcstack)
+        self.slcstack = np.array(np.abs(slcstack), dtype=np.float32)
         self.CalWin = calwin
         self.Alpha = alpha
 
@@ -99,7 +99,7 @@ class SHP:
                     idx += 1
                 pbar.update(len(result_batch))
 
-        _BroNum = np.sum(_PixelInd, axis=0).reshape((nlines, nwidths)).astype(np.float32) - 1
+        _BroNum = np.sum(_PixelInd, axis=0).reshape((nlines, nwidths)).astype(np.float32) - 1.0
         
         end_time = time.time()
         print(f"-> SHP Progress finished in {(end_time - start_time)/60.0} minutes")

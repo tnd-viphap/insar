@@ -120,12 +120,11 @@ class TomoSARControl:
         inf_full = np.zeros((nlines, nwidths, npages + 1), dtype=np.complex64)
         if reference_ind > 0:
             inf_full[:, :, :reference_ind] = interfstack[:, :, :reference_ind]
-            inf_full[:, :, reference_ind] = np.abs(slcstack[:, :, reference_ind - 1])
-            inf_full[:, :, reference_ind + 1:] = interfstack[:, :, reference_ind:]
+            inf_full[:, :, reference_ind+1:] = interfstack[:, :, reference_ind:]
+            inf_full[:, :, reference_ind] = np.abs(slcstack[:, :, reference_ind])
         else:
             inf_full[:, :, 0] = np.abs(slcstack[:, :, 0])
             inf_full[:, :, 1:npages+1] = interfstack
-
         # Coherence estimation
         RadiusRow = (self.CalWin[0] - 1) // 2
         RadiusCol = (self.CalWin[1] - 1) // 2
@@ -138,7 +137,7 @@ class TomoSARControl:
         
         # Calculate number of chunks based on the width and chunk_width
         num_chunks = (nwidths + chunk_width - 1) // chunk_width
-        print(f"-> {npages * (npages+1)} epochs detected. Progressing...")
+        print(f"   -> {npages * (npages+1)} epochs detected. Progressing...")
         
         # Set diagonal elements to 1 (coherence of an image with itself is 1)
         for ii in range(npages + 1):
@@ -174,14 +173,13 @@ class TomoSARControl:
                         args_list, 
                         desc="   ", 
                         ncols=120,
-                        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} chunks [{elapsed}<{remaining}]'
+                        bar_format='   {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} chunks [{elapsed}<{remaining}]'
                     ):
                         ii_res, ss_res, start, end, result = TomoSARControl.compute_coherence_chunk(args)
-                        Coh[ii_res, ss_res, :, start:end] = np.abs(result)
-                        Coh[ss_res, ii_res, :, start:end] = np.abs(result.conjugate())
+                        Coh[ii_res, ss_res, :, start:end] = result
                 else:
                     # For many chunks, use parallel processing with progress tracking
-                    print(f"-> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
+                    print(f"   -> Parallel processing for pair ({ii}, {ss}) with {num_chunks} chunks...")
                     
                     with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
                         futures = [executor.submit(TomoSARControl.compute_coherence_chunk, args) for args in args_list]
@@ -194,9 +192,15 @@ class TomoSARControl:
                             bar_format='   {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} chunks [{elapsed}<{remaining}]'
                         ):
                             ii_res, ss_res, start, end, result = future.result()
-                            Coh[ii_res, ss_res, :, start:end] = np.abs(result)
-                            Coh[ss_res, ii_res, :, start:end] = np.abs(result.conjugate())
-        
+                            Coh[ii_res, ss_res, :, start:end] = result
+        # Make mirror operator
+        print("-> Applying Hermitian conjugation...")
+        temp = np.ones(npages + 1)
+        for jj in range(nwidths):
+            for kk in range(nlines):
+                W = Coh[:, :, kk, jj]
+                Coh[:, :, kk, jj] = W + (W - np.diag(temp)).T
+
         end_time = time.time()
         print(f"-> Coherence estimation operation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
         return Coh, reference_ind
