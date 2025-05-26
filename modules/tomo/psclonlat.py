@@ -32,7 +32,6 @@ class PSLonLat:
         if self.log_file:
             with open(self.log_file, 'a') as f:
                 f.write(f"{message}\n")
-        print(message)  # Also print to console
             
     def read_parm_file(self):
         """Read parameter file to get width and lon/lat file paths"""

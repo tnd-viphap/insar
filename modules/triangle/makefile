@@ -18,7 +18,7 @@ BIN = ./
 
 # CC should be set to the name of your favorite C compiler.
 
-CC = cc
+CC = gcc
 
 # CSWITCHES is a list of all switches passed to the C compiler.  I strongly
 #   recommend using the best level of optimization.  I also strongly
@@ -73,8 +73,7 @@ CC = cc
 #
 #   CSWITCHES = -O -DNO_TIMER -DLINUX -I/usr/X11R6/include -L/usr/X11R6/lib
 
-CSWITCHES = -O -DLINUX -I/usr/X11R6/include -L/usr/X11R6/lib
-
+CSWITCHES = -O -DNO_TIMER -I/usr/X11R6/include -L/usr/X11R6/lib
 # TRILIBDEFS is a list of definitions used to compile an object code version
 #   of Triangle (triangle.o) to be called by another program.  The file
 #   "triangle.h" contains detailed information on how to call triangle.o.
@@ -87,10 +86,9 @@ CSWITCHES = -O -DLINUX -I/usr/X11R6/include -L/usr/X11R6/lib
 #   TRILIBDEFS = -DTRILIBRARY -DREDUCED -DCDT_ONLY
 
 TRILIBDEFS = -DTRILIBRARY
-
 # RM should be set to the name of your favorite rm (file deletion program).
 
-RM = /bin/rm
+RM = ./uninstall.exe
 
 # The action starts here.
 
