@@ -14,6 +14,8 @@ from typing import List, Optional
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 
+from modules.tomo.psclonlat import PSLonLat
+
 class MTExtractCands:
     """
     Extract candidate pixels data from patches
@@ -23,7 +25,8 @@ class MTExtractCands:
         """Initialize MTExtractCands class"""
         self.logger = self._setup_logger()
         self.project_conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
-        self.work_dir = self._read_project_conf("CURRENT_RESULT")
+        self._load_config()
+        self.work_dir = self.CURRENT_RESULT
 
         self.dophase = 1
         self.dolonlat = 1
@@ -55,16 +58,12 @@ class MTExtractCands:
             self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/src/pscdem.exe"))
             self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/src/pscphase.exe"))
 
-    def _read_project_conf(self, key):
-        """Read value from project configuration file"""
-        try:
-            with open(self.project_conf_path, 'r') as f:
-                for line in f:
-                    if key in line:
-                        return line.split('=')[1].strip()
-        except FileNotFoundError:
-            self.logger.error(f"Could not open {self.project_conf_path}")
-        return ''
+    def _load_config(self):
+        with open(self.project_conf_path, 'r') as file:
+            for line in file.readlines():
+                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
+                if key:
+                    setattr(self, key, value)  # Dynamically set variables
         
     def _setup_logger(self):
         """Setup logging configuration"""
@@ -185,15 +184,8 @@ class MTExtractCands:
                     
             # Process lon/lat
             if dolonlat:
-                cmd = [
-                    str(self.psclonlat).replace('\\', '/'),
-                    f"{self.work_dir}/psclonlat.in",
-                    "pscands.1.ij",
-                    "pscands.1.ll"
-                ]
-                with open(self.log_file, 'a') as log:
-                    log.write(f"\n=== Processing {patch} with psclonlat ===\n")
-                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                pslonlat = PSLonLat(f"{self.work_dir}/psclonlat.in", "pscands.1.ij", "pscands.1.ll", self.log_file)
+                pslonlat.run()
                     
             # Process DEM
             if dodem:
