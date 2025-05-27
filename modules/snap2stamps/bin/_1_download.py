@@ -11,16 +11,17 @@ import shutil
 from datetime import datetime, timedelta
 from shapely.geometry import Point, Polygon
 from shapely import from_wkt
+import asf_search as asf
+from asf_search.exceptions import ASFSearch5xxError
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from modules.snap2stamps.bin._2_master_sel import MasterSelect
 from modules.snap2stamps.bin._3_find_bursts import Burst
 from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
 from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 
-import asf_search as asf
-
 class Download:
-    def __init__(self, search_result, download_on=None):
+    def __init__(self, search_result, download_on: list = [None, None]):
         super().__init__()
         
         self.logger = logging.getLogger()
@@ -28,7 +29,7 @@ class Download:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
         self.download_on = download_on
-        if self.download_on:
+        if not None in self.download_on:
             start_date = self.download_on[0]
             end_date = self.download_on[1]
             start_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])>=int(start_date)]
@@ -295,6 +296,18 @@ class SLC_Search:
         self.logger.info(f"-> Found {len(best)} useable products")
         return best
 
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=60))
+    def _safe_search(self, **kwargs):
+        """Wrapper for asf.search with retry logic"""
+        try:
+            return asf.search(**kwargs)
+        except ASFSearch5xxError as e:
+            self.logger.warning(f"ASF Search API error: {str(e)}. Retrying...")
+            raise  # This will trigger the retry
+        except Exception as e:
+            self.logger.error(f"Unexpected error during ASF search: {str(e)}")
+            raise
+
     def search(self):
         """Perform a full search for Sentinel-1 data."""
         # Load existing lake data or initialize an empty list
@@ -308,7 +321,7 @@ class SLC_Search:
         print("-> Finding incomplete products that are not in the searching date range...")
         incomplete_files = []
         for file in os.listdir(self.RAWDATAFOLDER):
-            # Identify potentially incomplete files (you might need to adjust this logic)
+            # Identify potentially incomplete files
             file_date = datetime.strptime(file[17:25], "%Y%m%d")
             
             # Check if file is not in processed folders
@@ -324,19 +337,24 @@ class SLC_Search:
             start = file_date - timedelta(days=1)
             end = file_date + timedelta(days=1)
 
-            results = asf.search(
-                platform=["Sentinel-1A"],
-                processingLevel="SLC",
-                intersectsWith=self.AOI,
-                flightDirection=self.DIRECTION,
-                frame=int(self.FRAME),
-                start=start,
-                end=end
-            )
-            for result in results:
-                if not result in lake_data:
-                    lake_data.append(result.geojson())
-            incomplete_results.extend(results)
+            try:
+                results = self._safe_search(
+                    platform=["Sentinel-1A"],
+                    processingLevel="SLC",
+                    intersectsWith=self.AOI,
+                    flightDirection=self.DIRECTION,
+                    frame=int(self.FRAME),
+                    start=start,
+                    end=end
+                )
+                for result in results:
+                    if not result in lake_data:
+                        lake_data.append(result.geojson())
+                incomplete_results.extend(results)
+            except Exception as e:
+                self.logger.error(f"Error searching for incomplete file {incomplete_file}: {str(e)}")
+                continue
+
         print(f"-> Found {len(incomplete_results)} incomplete products")
 
         # Proceed with regular search from latest date
@@ -350,109 +368,113 @@ class SLC_Search:
 
             self.logger.info(f"Searching data from {start.strftime('%d/%m/%Y')} to {end.strftime('%d/%m/%Y')}")
 
-            results = asf.search(
-                platform=["Sentinel-1A"],
-                processingLevel="SLC",
-                intersectsWith=self.AOI,
-                flightDirection=self.DIRECTION,
-                frame=int(self.FRAME),
-                start=start,
-                end=end
-            )
-            # Find the best overlapping footprint on AOI
-            results = self._determine_best_overlap(results)
-            
-            for result in results:
-                if not result in lake_data:
-                    lake_data.append(result.geojson())
-                    
-            if results:
-                selected_result = random.choice(results)
-                self.final_results.append(selected_result)
-                if self.max_date:
-                    # Deduplicate results by acquisition date (fileID[17:25])
-                    unique_results = {}
-                    for r in results:
-                        if r == selected_result:
-                            continue
-                        date_key = r.properties['fileID'][17:25]
-                        if date_key not in unique_results:
-                            unique_results[date_key] = r
-
-                    # Filter out already selected dates in final_results
-                    existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
-                    new_results = [r for date, r in unique_results.items() if date not in existing_dates]
-
-                    # Select up to max_date new unique results
-                    self.selected_entries = new_results[:self.max_date]
-                    self.final_results.extend(self.selected_entries)
+            try:
+                results = self._safe_search(
+                    platform=["Sentinel-1A", "Sentinel-1C"],
+                    processingLevel="SLC",
+                    intersectsWith=self.AOI,
+                    flightDirection=self.DIRECTION,
+                    frame=int(self.FRAME),
+                    start=start,
+                    end=end
+                )
+                # Find the best overlapping footprint on AOI
+                results = self._determine_best_overlap(results)
                 
-                # Combine selected entries
-                all_entries = self.selected_entries + [selected_result]
+                for result in results:
+                    if not result in lake_data:
+                        lake_data.append(result.geojson())
+                
+                self.selected_entries = []
+                if results:
+                    self.selected_result = random.choice(results)
+                    self.final_results.append(self.selected_result)
+                    if self.max_date:
+                        # Deduplicate results by acquisition date (fileID[17:25])
+                        unique_results = {}
+                        for r in results:
+                            if r == self.selected_result:
+                                continue
+                            date_key = r.properties['fileID'][17:25]
+                            if date_key not in unique_results:
+                                unique_results[date_key] = r
 
-                if os.listdir(self.RAWDATAFOLDER):
-                    if not self.max_date:
-                        # --- Case: max_date is NOT set ---
-                        for file in os.listdir(self.RAWDATAFOLDER):
-                            raw_month = file[17:23]
-                            selected_month = selected_result.properties['fileName'][17:23]
-                            if raw_month == selected_month:
-                                print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
-                                result = asf.search(
-                                    platform=["Sentinel-1A"],
+                        # Filter out already selected dates in final_results
+                        existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
+                        new_results = [r for date, r in unique_results.items() if date not in existing_dates]
+
+                        # Select up to max_date new unique results
+                        self.selected_entries = new_results[:self.max_date]
+                    
+                    # Combine selected entries
+                    if len(self.selected_entries) > 0:
+                        self.final_results.extend(self.selected_entries)
+
+                    # Get current state of directories once
+                    raw_files = os.listdir(self.RAWDATAFOLDER)
+                    master_files = os.listdir(self.MASTERFOLDER) if os.path.exists(self.MASTERFOLDER) else []
+                    slave_files = os.listdir(self.SLAVESFOLDER) if os.path.exists(self.SLAVESFOLDER) else []
+
+                    if raw_files:
+                        target_month = self.selected_result.properties['fileName'][17:23]
+                        
+                        # Check if we have any raw files from the same month
+                        matching_raw_files = [f for f in raw_files if f[17:23] == target_month]
+                        
+                        if matching_raw_files:
+                            print(f"-> Raw file(s) from {target_month[4:6]}/{target_month[0:4]} detected. Checking for resuming or reloading...")
+                            
+                            # Get the earliest raw file date for the search window
+                            earliest_date = min(datetime.strptime(f[17:25], "%Y%m%d") for f in matching_raw_files)
+                            
+                            try:
+                                result = self._safe_search(
+                                    platform=["Sentinel-1A", "Sentinel-1C"],
                                     processingLevel="SLC",
                                     intersectsWith=self.AOI,
                                     flightDirection=self.DIRECTION,
                                     frame=int(self.FRAME),
-                                    start=datetime.strptime(file[17:25], "%Y%m%d") - timedelta(1),
-                                    end=datetime.strptime(file[17:25], "%Y%m%d") + timedelta(1)
+                                    start=earliest_date - timedelta(1),
+                                    end=earliest_date + timedelta(1)
                                 )
+                                
                                 if result:
-                                    self.final_results.remove(selected_result)
+                                    if self.max_date is None:
+                                        # Remove just the selected result
+                                        self.final_results.remove(self.selected_result)
+                                    else:
+                                        # Remove all entries from the same month
+                                        self.final_results = [r for r in self.final_results 
+                                                            if r.properties['fileID'][17:23] != target_month]
+                                    
                                     self.final_results.append(result[0])
                                     self.resume = True
-                                break  # We only care about the first match in the month
+                            except Exception as e:
+                                self.logger.error(f"Error searching for raw file matches: {str(e)}")
+                                continue
 
-                    else:
-                        # --- Case: max_date IS set ---
-                        # Group all entries by their month
-                        target_month = selected_result.properties['fileName'][17:23]
-                        month_entries = [r for r in all_entries if r.properties['fileID'][17:23] == target_month]
+                    elif master_files and slave_files:
+                        # Get all processed months
+                        processed_months = set()
+                        for f in master_files + slave_files:
+                            processed_months.add(f[0:6])
+                        
+                        target_month = self.selected_result.properties['fileName'][17:23]
+                        
+                        if target_month in processed_months:
+                            if self.max_date is None:
+                                if self.selected_result in self.final_results:
+                                    self.final_results.remove(self.selected_result)
+                            else:
+                                # Remove all entries from the processed month
+                                self.final_results = [r for r in self.final_results 
+                                                    if r.properties['fileID'][17:23] != target_month]
 
-                        for file in os.listdir(self.RAWDATAFOLDER):
-                            raw_month = file[17:23]
-                            if raw_month == target_month:
-                                print(f"-> Raw file on {file[21:23]}/{file[17:21]} detected. Checking for resuming or reloading...")
-                                result = asf.search(
-                                    platform=["Sentinel-1A"],
-                                    processingLevel="SLC",
-                                    intersectsWith=self.AOI,
-                                    flightDirection=self.DIRECTION,
-                                    frame=int(self.FRAME),
-                                    start=datetime.strptime(file[17:25], "%Y%m%d") - timedelta(1),
-                                    end=datetime.strptime(file[17:25], "%Y%m%d") + timedelta(1)
-                                )
-                                if result:
-                                    for r in month_entries:
-                                        self.final_results.remove(r)
-                                    self.final_results.append(result[0])
-                                    self.resume = True
-                                break  # Stop after first match for that month
-
-                elif os.listdir(self.MASTERFOLDER) and os.listdir(self.SLAVESFOLDER):
-                    master_month = str(os.listdir(self.MASTERFOLDER)[0])[0:6]
-                    slaves_month = [str(f)[0:6] for f in os.listdir(self.SLAVESFOLDER)]
-                    months = list(sorted(slaves_month + [master_month]))
-
-                    target_month = selected_result.properties['fileName'][17:23]
-                    if not self.max_date:
-                        if selected_result and target_month in months:
-                            self.final_results.remove(selected_result)
-                    else:
-                        month_entries = [r for r in all_entries if r.properties['fileID'][17:23] == target_month]
-                        if target_month in months:
-                            for r in month_entries:
-                                self.final_results.remove(r)
+            except Exception as e:
+                self.logger.error(f"Error during monthly search: {str(e)}")
+                # Continue to next month even if current month fails
+                self.current_date += timedelta(days=30)
+                continue
 
             # Move to the next month
             self.current_date += timedelta(days=30)
