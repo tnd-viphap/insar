@@ -209,7 +209,7 @@ class Download:
                         
                         # Run cleaning sequence
                         time.sleep(2)
-                        MasterSelect(self.REEST_FLAG, True).select_master()
+                        MasterSelect(self.REEST_FLAG, None, True).select_master()
                         
                         # Move incomplete files back to RAWDATAFOLDER
                         for file in incomplete_download:
