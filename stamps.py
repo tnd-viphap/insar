@@ -358,7 +358,7 @@ class StaMPSEXE:
     
     def run(self):
         self.csv_files = []
-        # os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
+        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
