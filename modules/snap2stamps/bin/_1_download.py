@@ -339,7 +339,7 @@ class SLC_Search:
 
             try:
                 results = self._safe_search(
-                    platform=["Sentinel-1A"],
+                    platform=["Sentinel-1A", "Sentinel-1C"],
                     processingLevel="SLC",
                     intersectsWith=self.AOI,
                     flightDirection=self.DIRECTION,
