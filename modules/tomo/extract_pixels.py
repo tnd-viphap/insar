@@ -184,6 +184,15 @@ class MTExtractCands:
                     
             # Process lon/lat
             if dolonlat:
+                # cmd = [
+                #     str(self.psclonlat).replace('\\', '/'),
+                #     f"{self.work_dir}/psclonlat.in",
+                #     "pscands.1.ij",
+                #     "pscands.1.ll"
+                # ]
+                # with open(self.log_file, 'a') as log:
+                #     log.write(f"\n=== Processing {patch} with psclonlat ===\n")
+                #     subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
                 pslonlat = PSLonLat(f"{self.work_dir}/psclonlat.in", "pscands.1.ij", "pscands.1.ll", self.log_file)
                 pslonlat.run()
                     
