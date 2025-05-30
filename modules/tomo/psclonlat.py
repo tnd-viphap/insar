@@ -85,8 +85,10 @@ class PSLonLat:
             has_header_lat = self.check_sun_raster_header(self.lat_file)
             
             # Read lon/lat files as binary
-            lon_data = np.fromfile(self.lon_file, dtype=np.float32)
-            lat_data = np.fromfile(self.lat_file, dtype=np.float32)
+            lon_data = np.fromfile(self.lon_file, dtype=">f4")
+            lon_data = lon_data[~np.isnan(lon_data)]
+            lat_data = np.fromfile(self.lat_file, dtype=">f4")
+            lat_data = lat_data[~np.isnan(lat_data)]
             
             # Skip header if present
             if has_header_lon:
@@ -139,11 +141,11 @@ class PSLonLat:
     def write_output(self, lonlat_values):
         """Write lon/lat values to output file"""
         try:
-            # Write only lon/lat values in binary format
-            with open(self.ll_file, 'wb') as f:
-                # Write each lon/lat pair as two float32 values
+            # Write lon/lat values directly
+            with open(self.ll_file, 'w') as f:
+                # Write each lon/lat pair on a new line
                 for lon, lat in lonlat_values:
-                    f.write(struct.pack('ff', lon, lat))
+                    f.write(f"{lon} {lat}\n")
             self._log(f"Successfully wrote lon/lat values to {self.ll_file}")
         except Exception as e:
             self._log(f"Error writing output file: {str(e)}", "ERROR")
