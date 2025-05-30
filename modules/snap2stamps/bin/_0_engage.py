@@ -53,9 +53,9 @@ class Initialize:
         n_cores = round(os.cpu_count() * 0.8)
         total_ram = round(psutil.virtual_memory().total / (1024 ** 3) * 0.8)
         if plf == "Windows":
-            gpt = "C:/Program Files/snap9/bin/gpt.exe"
+            gpt = "C:/Program Files/snap/bin/gpt.exe"
         elif plf == "Linux":
-            gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap9/bin/gpt'
+            gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap/bin/gpt'
         
         self.update_config(config_file, [project_folder, graphs_folder, log_folder,
                                     master_folder, slaves_folder, rawdata_folder,
