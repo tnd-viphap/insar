@@ -1,3 +1,4 @@
+# type: ignore
 import glob
 import os
 import sys
@@ -10,7 +11,7 @@ sys.path.append(project_path)
 warnings.filterwarnings("ignore")
 
 class Input:
-    def __init__(self, output=True):
+    def __init__(self, calwin, output=True):
 
         self.project_conf = os.path.join(project_path, "modules/snap2stamps/bin/project.conf").replace("\\", "/")
 
@@ -30,6 +31,7 @@ class Input:
         self.slcstack = {}
         self.interfstack = {}
 
+        self.CalWin = calwin
         self.print_flag = output
 
     def read_conf_value(self, key):
@@ -59,7 +61,7 @@ class Input:
             verbose (bool): If True, print file loading info.
 
         Returns:
-            np.ndarray: 3D numpy array (nlines, ncols, num_images)
+            list: List of 3D numpy arrays (chunk_lines, chunk_cols, num_images)
         """
         # Data type mapping
         dtype_map = {
@@ -102,9 +104,35 @@ class Input:
             files = [os.path.split(f.replace("\\", "/"))[-1].split(".")[0].split("_")[-1] for f in sorted(glob.glob(file_pattern))]
             self.interfstack["filename"] = files
 
-        return np.stack(stack, axis=-1)
+        # Calculate chunk dimensions
+        chunk_lines = self.CalWin[0] * 3
+        chunk_cols = self.CalWin[1] * 3
+        
+        # Calculate number of chunks in each dimension
+        n_chunks_lines = (nlines + chunk_lines - 1) // chunk_lines
+        n_chunks_cols = (ncols + chunk_cols - 1) // chunk_cols
+        
+        # Create chunks
+        chunked_stack = []
+        for i in range(n_chunks_lines):
+            for j in range(n_chunks_cols):
+                start_line = i * chunk_lines
+                end_line = min((i + 1) * chunk_lines, nlines)
+                start_col = j * chunk_cols
+                end_col = min((j + 1) * chunk_cols, ncols)
+                
+                # Extract chunk from each image
+                chunk = np.stack([img[start_line:end_line, start_col:end_col] for img in stack], axis=-1)
+                chunked_stack.append({
+                    'datastack': chunk,
+                    'start_line': start_line,
+                    'end_line': end_line,
+                    'start_col': start_col,
+                    'end_col': end_col
+                })
+                
+        return chunked_stack, nlines, ncols
 
-    
     def run(self):
         if self.InSAR_processor == 'snap':
             reference_date = self.InSAR_path.strip().split('/')[-1].split('_')[1]
@@ -121,11 +149,16 @@ class Input:
                     nlines = int(line.strip().split()[-1])
                     break
 
-            # Load image stacks
-            _slcstack = self.imgread(f"{self.InSAR_path}/rslc", 'rslc', nlines, 'cpxfloat32', verbose=True)
-            self.slcstack["datastack"] = _slcstack
-            _interfstack = self.imgread(f"{self.InSAR_path}/diff0", 'diff', nlines, 'cpxfloat32', verbose=True)
-            self.interfstack["datastack"] = _interfstack
+            # Load image stacks in chunks
+            _slcstack_chunks, nlines, ncols = self.imgread(f"{self.InSAR_path}/rslc", 'rslc', nlines, 'cpxfloat32', verbose=True)
+            self.slcstack["datastack"] = _slcstack_chunks
+            self.slcstack["nlines"] = nlines
+            self.slcstack["ncols"] = ncols
+            
+            _interfstack_chunks, _, _ = self.imgread(f"{self.InSAR_path}/diff0", 'diff', nlines, 'cpxfloat32', verbose=True)
+            self.interfstack["datastack"] = _interfstack_chunks
+            self.interfstack["nlines"] = nlines
+            self.interfstack["ncols"] = ncols
 
         else:
             print("not yet supported")
@@ -138,5 +171,6 @@ class Input:
 if __name__ == "__main__":
     # test_ImgRead()
     # None
-    slcstack, interfstack = Input().run()
+    slcstack, interfstack = Input([7, 25]).run()
+    print(slcstack["datastack"][0]["data"].shape)
 

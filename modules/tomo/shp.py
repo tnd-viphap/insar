@@ -1,3 +1,4 @@
+# type: ignore
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -36,9 +37,20 @@ class SHP:
         self.log_dir = os.path.join(self.CURRENT_RESULT, 'logs')
         
     def _write_to_log(self, message):
+        """Write message to log file with timestamp."""
         os.makedirs(self.log_dir, exist_ok=True)
         log_file = os.path.join(self.log_dir, 'shp.log')
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Check if this is the first log entry for this run
+        if not hasattr(self, '_log_started'):
+            self._log_started = True
+            # Create new log file with header
+            with open(log_file, 'w') as f:
+                f.write("="*50 + "\n")
+                f.write(f"New SHP Processing Run Started at {timestamp}\n")
+                f.write("="*50 + "\n")
+        
         with open(log_file, 'a') as f:
             f.write(f"{timestamp} - {message}\n")
 
@@ -101,13 +113,12 @@ class SHP:
 
         self._write_to_log("SHP family parallel computation started...")
         idx = 0
-        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor, tqdm(total=total_pixels, desc="-> SHP Computation", unit="pixel") as pbar:
+        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
             for result_batch in executor.map(SHP.process_batch, task_batches):
                 for mask in result_batch:
                     _PixelInd[:, idx] = mask
                     idx += 1
                     self._write_to_log(f"SHP Computation Progress: {idx+1}/{total_pixels+1}")
-                pbar.update(len(result_batch))
 
         _BroNum = np.sum(_PixelInd, axis=0).reshape((nlines, nwidths)).astype(np.float32) - 1.0
         

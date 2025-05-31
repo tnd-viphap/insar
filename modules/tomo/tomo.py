@@ -1,3 +1,4 @@
+# type: ignore
 import os
 import sys
 import time
@@ -31,11 +32,87 @@ class TomoSARControl:
             self.patch_info = ["1", "1", "50", "50"]
 
         print("Step 1: Preparing inputs and SHP analysis...\n")
-        self.input = Input(False)
+        self.input = Input(self.CalWin, False)
         self.slcstack, self.interfstack = self.input.run()
-        _shp = SHP(self.slcstack["datastack"], self.CalWin, self.Alpha)
-        self.shp = _shp.run()
+        
+        # Process SHP in chunks
+        self.shp = self._process_shp_chunks()
         print("\n")
+
+    @staticmethod
+    def process_chunk(chunk_info, calwin, alpha):
+        """Process a single chunk of data for SHP analysis."""
+        _shp = SHP(chunk_info['datastack'], calwin, alpha)
+        chunk_result = _shp.run()
+        return {
+            'result': chunk_result,
+            'start_line': chunk_info['start_line'],
+            'end_line': chunk_info['end_line'],
+            'start_col': chunk_info['start_col'],
+            'end_col': chunk_info['end_col']
+        }
+
+    def _process_shp_chunks(self):
+        """Process SHP for each chunk and combine results."""
+        n_chunks = len(self.slcstack["datastack"])
+        nlines = self.slcstack["nlines"]
+        ncols = self.slcstack["ncols"]
+        
+        # Initialize combined results
+        combined_pixelind = np.zeros(
+            (self.CalWin[0] * self.CalWin[1], nlines, ncols),
+            dtype=bool
+        )
+        combined_bronum = np.zeros((nlines, ncols), dtype=np.float32)
+        
+        # Process chunks in parallel with batch size of 50
+        batch_size = 50
+        n_batches = (n_chunks + batch_size - 1) // batch_size
+        
+        print(f"-> Processing {n_chunks} chunks for SHP in {n_batches} batches of {batch_size}")
+        
+        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
+            for batch_idx in tqdm(range(n_batches), desc="   -> SHP Computation", unit="batch"):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, n_chunks)
+                batch_chunks = self.slcstack["datastack"][start_idx:end_idx]
+                
+                # Process batch in parallel
+                futures = [
+                    executor.submit(
+                        self.process_chunk,
+                        chunk_info,
+                        self.CalWin,
+                        self.Alpha
+                    ) for chunk_info in batch_chunks
+                ]
+                
+                for future in as_completed(futures):
+                    chunk_data = future.result()
+                    chunk_result = chunk_data['result']
+                    
+                    # Get chunk boundaries
+                    start_line = chunk_data['start_line']
+                    end_line = chunk_data['end_line']
+                    start_col = chunk_data['start_col']
+                    end_col = chunk_data['end_col']
+                    
+                    # Reshape PixelInd to match chunk dimensions
+                    chunk_pixelind = chunk_result['PixelInd'].reshape(
+                        (self.CalWin[0] * self.CalWin[1], end_line - start_line, end_col - start_col)
+                    )
+                    
+                    # Combine PixelInd
+                    combined_pixelind[:, start_line:end_line, start_col:end_col] = chunk_pixelind
+                    
+                    # Combine BroNum
+                    combined_bronum[start_line:end_line, start_col:end_col] = chunk_result['BroNum']
+        
+        return {
+            'PixelInd': combined_pixelind,
+            'BroNum': combined_bronum,
+            'CalWin': self.CalWin
+        }
 
     def _load_config(self):
         with open(self.inputfile, 'r') as file:
@@ -231,4 +308,4 @@ class TomoSARControl:
                  self.input.InSAR_processor).run()
 
 if __name__ == "__main__":
-    TomoSARControl().run()
+    TomoSARControl()
