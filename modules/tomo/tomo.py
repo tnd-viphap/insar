@@ -152,19 +152,19 @@ class TomoSARControl:
                 
                 # Extract windows around the current pixel
                 master_window = m1[y_local - RadiusRow:y_local + RadiusRow + 1,
-                               x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
+                                x_local - RadiusCol:x_local + RadiusCol + 1]
                 slave_window = m2[y_local - RadiusRow:y_local + RadiusRow + 1,
-                              x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
+                               x_local - RadiusCol:x_local + RadiusCol + 1]
                 interf_window = Interf[y_local - RadiusRow:y_local + RadiusRow + 1,
-                                   x_local - RadiusCol:x_local + RadiusCol + 1].flatten()
+                                   x_local - RadiusCol:x_local + RadiusCol + 1]
                 
-                # Calculate global pixel index for mask lookup
-                global_pixel_idx = (chunk_start + jj) * nlines + kk
-                mask = shp_pixelind[:, global_pixel_idx]
+                # Get the mask for this pixel from the 3D PixelInd array
+                mask = shp_pixelind[:, kk, chunk_start + jj]
                 
-                MasterValue = master_window[mask]
-                SlaveValue = slave_window[mask]
-                InterfValue = interf_window[mask]
+                # Apply mask to windows
+                MasterValue = master_window.flatten()[mask]
+                SlaveValue = slave_window.flatten()[mask]
+                InterfValue = interf_window.flatten()[mask]
                 
                 nu = np.sum(InterfValue)
                 de1 = np.sum(MasterValue)
@@ -174,34 +174,84 @@ class TomoSARControl:
         
         return ii, ss, chunk_start, chunk_end, result
 
-    def intf_cov(self):
+    def _combine_patches_to_full_stack(self):
+        """Combine patched data back into full stacks."""
+        print("-> Combining patches into full stacks...")
+        
+        # Get dimensions from the stack info
+        nlines = self.slcstack["nlines"]
+        ncols = self.slcstack["ncols"]
+        
+        # Get number of pages from the first chunk
+        first_chunk = self.slcstack["datastack"][0]
+        npages = first_chunk["datastack"].shape[2]
+        
+        # Initialize full stacks
+        full_slc = np.zeros((nlines, ncols, npages), dtype=np.complex64)
+        full_interf = np.zeros((nlines, ncols, npages-1), dtype=np.complex64)
+        
+        # Combine SLC patches
+        for chunk in self.slcstack["datastack"]:
+            start_line = chunk["start_line"]
+            end_line = chunk["end_line"]
+            start_col = chunk["start_col"]
+            end_col = chunk["end_col"]
+            full_slc[start_line:end_line, start_col:end_col, :] = chunk["datastack"]
+        
+        # Combine interferogram patches
+        for chunk in self.interfstack["datastack"]:
+            start_line = chunk["start_line"]
+            end_line = chunk["end_line"]
+            start_col = chunk["start_col"]
+            end_col = chunk["end_col"]
+            full_interf[start_line:end_line, start_col:end_col, :] = chunk["datastack"]
+        
+        # Create new stack dictionaries
+        full_slcstack = {
+            "datastack": full_slc,
+            "nlines": nlines,
+            "ncols": ncols,
+            "filename": self.slcstack["filename"]
+        }
+        
+        full_interfstack = {
+            "datastack": full_interf,
+            "nlines": nlines,
+            "ncols": ncols,
+            "filename": self.interfstack["filename"]
+        }
+        
+        return full_slcstack, full_interfstack
+
+    def intf_cov(self, slcstack=None, interfstack=None):
         """
         Estimate coherence matrix for a stack of interferograms and SLC images.
         """
         start_time = time.time()
-        nlines, nwidths, npages = self.interfstack["datastack"].shape
+        
+        nlines, nwidths, npages = interfstack["datastack"].shape
         
         # Get SLC amplitude
-        slcstack = np.abs(self.slcstack["datastack"])
+        slcstack_data = np.abs(slcstack["datastack"])
 
         # Normalize interferograms
-        nonzero_mask = self.interfstack["datastack"] != 0
-        interfstack = self.interfstack["datastack"].copy()
-        interfstack[nonzero_mask] = self.interfstack["datastack"][nonzero_mask]/np.abs(self.interfstack["datastack"][nonzero_mask])
+        nonzero_mask = interfstack["datastack"] != 0
+        interfstack_data = interfstack["datastack"].copy()
+        interfstack_data[nonzero_mask] = interfstack["datastack"][nonzero_mask]/np.abs(interfstack["datastack"][nonzero_mask])
 
         # Determine reference index
-        reference_ind = list(set(self.slcstack["filename"]) - set(self.interfstack["filename"]))[0]
-        reference_ind = self.slcstack["filename"].index(reference_ind)
+        reference_ind = list(set(slcstack["filename"]) - set(interfstack["filename"]))[0]
+        reference_ind = slcstack["filename"].index(reference_ind)
 
         # Build full interferogram stack including reference image
         inf_full = np.zeros((nlines, nwidths, npages + 1), dtype=np.complex64)
         if reference_ind > 0:
-            inf_full[:, :, :reference_ind] = interfstack[:, :, :reference_ind]
-            inf_full[:, :, reference_ind+1:] = interfstack[:, :, reference_ind:]
-            inf_full[:, :, reference_ind] = np.abs(slcstack[:, :, reference_ind])
+            inf_full[:, :, :reference_ind] = interfstack_data[:, :, :reference_ind]
+            inf_full[:, :, reference_ind+1:] = interfstack_data[:, :, reference_ind:]
+            inf_full[:, :, reference_ind] = np.abs(slcstack_data[:, :, reference_ind])
         else:
-            inf_full[:, :, 0] = np.abs(slcstack[:, :, 0])
-            inf_full[:, :, 1:npages+1] = interfstack
+            inf_full[:, :, 0] = np.abs(slcstack_data[:, :, 0])
+            inf_full[:, :, 1:npages+1] = interfstack_data
         # Coherence estimation
         RadiusRow = (self.CalWin[0] - 1) // 2
         RadiusCol = (self.CalWin[1] - 1) // 2
@@ -224,11 +274,11 @@ class TomoSARControl:
         pair_counter = 0
         
         for ii in range(npages + 1):
-            slc_ii = slcstack[:, :, ii]
+            slc_ii = slcstack_data[:, :, ii]
             
             for ss in range(ii + 1, npages + 1):
                 pair_counter += 1
-                slc_ss = slcstack[:, :, ss]
+                slc_ss = slcstack_data[:, :, ss]
                 inf_ii = inf_full[:, :, ii]
                 inf_ss = inf_full[:, :, ss]
                 
@@ -281,12 +331,14 @@ class TomoSARControl:
         end_time = time.time()
         print(f"-> Coherence estimation operation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
         return Coh, reference_ind
-
+    
     def run(self):
         if self.input.ComSAR_flag:
             print("Step 2: COMSAR estimation\n")
-            ComSAR(self.slcstack,
-                   self.interfstack,
+            # Combine patches before processing
+            full_slcstack, full_interfstack = self._combine_patches_to_full_stack()
+            ComSAR(full_slcstack,
+                   full_interfstack,
                    self.shp,
                    self.input.InSAR_path,
                    self.BroNumthre,
@@ -297,15 +349,19 @@ class TomoSARControl:
                    self.input.InSAR_processor).run()
         else:
             print("Step 2: PSDS estimation\n")
+            # Combine patches before processing
+            full_slcstack, full_interfstack = self._combine_patches_to_full_stack()
+            del self.slcstack
+            del self.interfstack
             print("-> Computing SHP-based coherence started...")
-            Coh_matrix, reference_idx = self.intf_cov()
+            Coh_matrix, reference_idx = self.intf_cov(full_slcstack, full_interfstack)
             print("-> Refining pixels...")
-            PSDS(Coh_matrix, self.slcstack,
-                 self.interfstack, self.shp, reference_idx,
+            PSDS(Coh_matrix, full_slcstack,
+                 full_interfstack, self.shp, reference_idx,
                  self.input.InSAR_path,
                  self.BroNumthre, self.Cohthre,
                  self.Cohthre_slc_filt,
                  self.input.InSAR_processor).run()
 
 if __name__ == "__main__":
-    TomoSARControl()
+    TomoSARControl().run()
