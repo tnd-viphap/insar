@@ -5,6 +5,7 @@ import platform
 import sys
 from datetime import datetime, timedelta
 from functools import partial
+import time
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,8 @@ import scipy.io as sio
 from matplotlib import pyplot as plt
 from numpy.linalg import lstsq
 from scipy.spatial import Delaunay
+from scipy.signal import lfilter
+from scipy.interpolate import interp1d
 from sklearn.utils import resample
 from tqdm import tqdm
 
@@ -192,57 +195,60 @@ class StaMPSStep:
 
     def _llh2local(self, llh, origin):
         """
-        Convert longitude and latitude to local coordinates given an origin.
-        
-        Args:
-            llh: Array of [longitude, latitude, height] in decimal degrees
-            origin: Origin point [longitude, latitude] in decimal degrees
-            
+        Converts from longitude and latitude to local coordinates given an origin.
+        Ignores height. Both `llh` and `origin` are in degrees.
+        Output `xy` is in kilometers.
+
+        Parameters:
+        - llh: np.ndarray with shape (3, N) — rows: lon, lat, height
+        - origin: np.ndarray or list of shape (3,) — lon, lat, height
+
         Returns:
-            xy: Local coordinates in kilometers
+        - xy: np.ndarray with shape (2, N) — local east-north coordinates in km
         """
+
         # WGS84 ellipsoid constants
-        a = 6378137.0  # semi-major axis in meters
+        a = 6378137.0  # semi-major axis (meters)
         e = 0.08209443794970  # eccentricity
 
-        # Convert to radians and handle NaN values
-        llh = np.array(llh, dtype=np.float64) * np.pi / 180
-        origin = np.array(origin, dtype=np.float64) * np.pi / 180
-        # Initialize output array
-        xy = np.zeros((2, llh.shape[1]))
+        # Convert to radians
+        llh = llh.astype(np.float64) * np.pi / 180
+        origin = origin.astype(np.float64) * np.pi / 180
 
-        # Handle non-zero latitude points
         z = llh[1, :] != 0
-        
+
         dlambda = llh[0, z] - origin[0]
 
-        # Calculate M for points
-        M = a * ((1 - e**2/4 - 3*e**4/64 - 5*e**6/256) * llh[1, z] -
-                (3*e**2/8 + 3*e**4/32 + 45*e**6/1024) * np.sin(2*llh[1, z]) +
-                (15*e**4/256 + 45*e**6/1024) * np.sin(4*llh[1, z]) -
-                (35*e**6/3072) * np.sin(6*llh[1, z]))
+        phi = llh[1, z]
 
-        # Calculate M0 for origin
-        M0 = a * ((1 - e**2/4 - 3*e**4/64 - 5*e**6/256) * origin[1] -
-                    (3*e**2/8 + 3*e**4/32 + 45*e**6/1024) * np.sin(2*origin[1]) +
-                    (15*e**4/256 + 45*e**6/1024) * np.sin(4*origin[1]) -
-                    (35*e**6/3072) * np.sin(6*origin[1]))
+        # Meridian arc length (M)
+        M = a * ((1 - e**2/4 - 3*e**4/64 - 5*e**6/256) * phi
+                - (3*e**2/8 + 3*e**4/32 + 45*e**6/1024) * np.sin(2*phi)
+                + (15*e**4/256 + 45*e**6/1024) * np.sin(4*phi)
+                - (35*e**6/3072) * np.sin(6*phi))
 
-        # Calculate N and E
-        N = a / np.sqrt(1 - e**2 * np.sin(llh[1, z])**2)
-        E = dlambda * np.sin(llh[1, z])
+        # Meridian arc at origin
+        phi0 = origin[1]
+        M0 = a * ((1 - e**2/4 - 3*e**4/64 - 5*e**6/256) * phi0
+                - (3*e**2/8 + 3*e**4/32 + 45*e**6/1024) * np.sin(2*phi0)
+                + (15*e**4/256 + 45*e**6/1024) * np.sin(4*phi0)
+                - (35*e**6/3072) * np.sin(6*phi0))
 
-        # Calculate local coordinates
-        xy[0, z] = N * np.cos(llh[1, z]) * np.sin(E)
-        xy[1, z] = M - M0 + N * np.cos(llh[1, z]) * (1 - np.cos(E))
+        N = a / np.sqrt(1 - e**2 * np.sin(phi)**2)
+        E = dlambda * np.sin(phi)
 
-        # Handle zero latitude points
+        xy = np.zeros(llh.shape)
+
+        xy[0, z] = N * 1/np.tan(phi) * np.sin(E)
+        xy[1, z] = M - M0 + N * 1/np.tan(phi) * (1 - np.cos(E))
+
+        # Special case: latitude == 0
         dlambda = llh[0, ~z] - origin[0]
         xy[0, ~z] = a * dlambda
         xy[1, ~z] = -M0
 
         # Convert to kilometers
-        xy = xy / 1000
+        xy = xy / 1000.0
 
         return xy
 
@@ -302,10 +308,10 @@ class StaMPSStep:
         # Find master index
         master_ix = np.sum(day < master_day)
         if day[master_ix-1] != master_day:
-            master_master_flag = 0  # no null master-master ifg provided
+            master_master_flag = False  # no null master-master ifg provided
             day = np.concatenate([day[:master_ix], [master_day], day[master_ix:]])
         else:
-            master_master_flag = 1  # yes, null master-master ifg provided
+            master_master_flag = True  # yes, null master-master ifg provided
 
         ij = np.loadtxt(ijname)
         n_ps = ij.shape[0]
@@ -322,17 +328,17 @@ class StaMPSStep:
         rg = rgn+ij[:, 2]*rps
         look = np.arccos((se**2+rg**2-re**2)/(2*se*rg))
 
-        bperp_mat = np.zeros((n_ps, n_image))
+        bperp_mat = np.zeros((n_ps, n_image), dtype=np.float32)
         for i in range(n_ifg):
             basename = ifgs[i][:nb-5]+'.base'
             B_TCN = [float(x) for x in self._fetch_baseline(basename)[0]]
             BR_TCN = [float(x) for x in self._fetch_baseline(basename)[1]]
             bc = B_TCN[1]+BR_TCN[1]*(ij[:, 2]-mean_az)/prf
             bn = B_TCN[2]+BR_TCN[2]*(ij[:, 2]-mean_az)/prf
-            bperp_mat[:, i] = bc*np.sin(look)-bn*np.cos(look)
+            bperp_mat[:, i] = bc*np.cos(look)-bn*np.sin(look)
 
-        bperp = np.mean(bperp_mat, axis=0)
-        if master_master_flag == 1:
+        bperp = np.mean(bperp_mat, axis=0).T
+        if master_master_flag:
             bperp_mat = bperp_mat[:, :master_ix, master_ix:]
         else:
             bperp = np.concatenate([bperp[:master_ix], [0], bperp[master_ix:]])
@@ -342,58 +348,45 @@ class StaMPSStep:
         mean_range = rgc
 
         # Read phase data
-        try:
-            with open(phname, 'rb') as f:
-                # Initialize phase array
-                ph = np.zeros((n_ps, n_ifg), dtype=np.complex64)
-                byte_count = n_ps * 2
-                
-                # Read phase data for each IFG
-                for i in range(n_ifg):
-                    # Read float32 values
-                    ph_bit = np.fromfile(f, dtype=np.float32, count=byte_count)
-                    # Convert to complex numbers (real, imag pairs)
-                    real_part = ph_bit[::2]
-                    imag_part = ph_bit[1::2]
-                    # Handle NaN values
-                    real_part = np.nan_to_num(real_part, nan=0.0)
-                    imag_part = np.nan_to_num(imag_part, nan=0.0)
-                    ph[:, i] = real_part + 1j * imag_part
-        except FileNotFoundError:
-            raise FileNotFoundError(f"{phname} does not exist")
-        except Exception as e:
-            raise Exception(f"Error reading phase data: {str(e)}")
-
-        # Handle zero phases
-        # zero_ph = np.sum(ph == 0, axis=1)
-        # nonzero_ix = zero_ph <= 1  # if more than 1 phase is zero, drop node
+        with open(phname, 'rb') as f:
+            # Initialize phase array
+            ph = np.fromfile(f, dtype=np.complex64, count=n_ps * n_ifg).reshape(n_ps, n_ifg)
 
         # Handle master-master IFG
-        if master_master_flag == 1:
+        if master_master_flag:
             ph[:, master_ix] = 1
         else:
-            ph = np.column_stack([ph[:, :master_ix], np.ones((n_ps, 1)), ph[:, master_ix:]])
+            ph = np.concatenate([ph[:, :master_ix], np.ones((n_ps, 1), dtype=ph.dtype), ph[:, master_ix:]], axis=1)
             n_ifg += 1
             n_image += 1
 
+        # # Plot phase data for all interferograms
+        # n_rows = int(np.ceil(np.sqrt(n_ifg)))
+        # n_cols = int(np.ceil(n_ifg / n_rows))
+        # plt.figure(figsize=(4*n_cols, 4*n_rows))
+        
+        # for i in range(n_ifg):
+        #     plt.subplot(n_rows, n_cols, i+1)
+        #     plt.imshow(np.angle(ph[:, i]).reshape(-1, 1), aspect='auto', cmap='hsv')
+        #     plt.colorbar(label='Phase (rad)')
+        #     plt.title(f'Interferogram {i+1}')
+        #     plt.xlabel('PS Point')
+        
+        # plt.tight_layout()
+        # plt.savefig(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'phase_all_ifgs.png'))
+        # plt.clf()
+        # plt.close()
+        
+
         # Read lonlat data
-        with open(llname, 'rb') as f:
-            lonlat = np.fromfile(f, dtype='>f4').astype(np.float32).reshape(-1, 2)
+        with open(llname, 'r') as f:
+            lonlat = np.loadtxt(f, dtype=np.float32).reshape(-1, 2)
         # Calculate local coordinates
         ll0 = (np.max(lonlat, axis=0) + np.min(lonlat, axis=0)) / 2
         xy = self._llh2local(lonlat.T, ll0).T * 1000
-        
-        # Calculate scene corners
-        # sort_x = xy[np.argsort(xy[:, 0])]
-        # sort_y = xy[np.argsort(xy[:, 1])]
-        # n_pc = int(round(n_ps * 0.001))
-        # bl = np.mean(sort_x[:n_pc], axis=0)  # bottom left corner
-        # tr = np.mean(sort_x[-n_pc:], axis=0)  # top right corner
-        # br = np.mean(sort_y[:n_pc], axis=0)  # bottom right corner
-        # tl = np.mean(sort_y[-n_pc:], axis=0)  # top left corner
 
         # Rotate coordinates
-        heading = self.parms.get('heading')
+        heading = float(self.parms.get('heading'))
         theta = (180 - heading) * np.pi / 180
         if theta > np.pi:
             theta -= 2 * np.pi
@@ -402,6 +395,7 @@ class StaMPSStep:
                         [-np.sin(theta), np.cos(theta)]])
         xy = xy.T
         xynew = rotm @ xy
+        xynew = xynew.T
 
         # Check if rotation improves alignment
         if (np.max(xynew[0, :]) - np.min(xynew[0, :]) < np.max(xy[0, :]) - np.min(xy[0, :]) and
@@ -411,41 +405,46 @@ class StaMPSStep:
 
         # Convert to single precision and transpose
         xy = np.array(xy.T, dtype=np.float32)
-        
         # Sort by y then x (MATLAB: sortrows(xy,[2,1]))
-        sort_ix = np.lexsort((xy[:, 0], xy[:, 1]))
-        xy = xy[sort_ix, :]
-        
+        sort_ix = np.lexsort((xy[0, :], xy[1, :]))
+        xy = xy[:, sort_ix]
         # Add PS numbers (1-based indexing like MATLAB)
-        xy = np.column_stack([np.arange(0, n_ps).T, xy])
-        
+        xy = np.column_stack([np.arange(n_ps).T, xy.T])
         # Round to mm (MATLAB: round(xy(:,2:3)*1000)/1000)
         xy[:, 1:3] = np.round(xy[:, 1:] * 1000) / 1000
 
         # Update arrays with sorted indices
         ph = ph[sort_ix, :]
         ij = ij[sort_ix, :]
-        ij[:, 0] = np.arange(0, n_ps)
+        ij[:, 0] = np.arange(n_ps)
         lonlat = lonlat[sort_ix, :]
         bperp_mat = bperp_mat[sort_ix, :]
 
-        # Remove NaN values
-        ix_nan = np.any(np.isnan(lonlat), axis=1) | np.any(np.isnan(ph), axis=1)
-        lonlat = lonlat[~ix_nan]
-        ij = ij[~ix_nan]
-        xy = xy[~ix_nan]
-        n_ps = lonlat.shape[0]
-        ij[:, 0] = np.arange(0, n_ps).T
-        xy[:, 0] = np.arange(0, n_ps).T
+        # Remove rows where lonlat or ph has any NaNs
+        ix_nan = (np.isnan(lonlat).sum(axis=1) >= 1) | (np.isnan(ph).sum(axis=1) >= 1)
 
-        # Remove zero values
-        ix_0 = lonlat[:, 0] == 0
-        lonlat = lonlat[~ix_0]
-        ij = ij[~ix_0]
-        xy = xy[~ix_0]
+        lonlat = lonlat[~ix_nan, :]
+        ij = ij[~ix_nan, :]
+        xy = xy[~ix_nan, :]
+
         n_ps = lonlat.shape[0]
-        ij[:, 0] = np.arange(0, n_ps).T
-        xy[:, 0] = np.arange(0, n_ps).T
+
+        # Update the first column of ij and xy
+        ij[:, 0] = np.arange(n_ps)
+        xy[:, 0] = np.arange(n_ps)
+
+        # Remove rows where lonlat has a 0 in the first column (i.e., lon = 0)
+        ix_0 = np.where(lonlat[:, 0] == 0)[0]
+
+        lonlat = np.delete(lonlat, ix_0, axis=0)
+        ij = np.delete(ij, ix_0, axis=0)
+        xy = np.delete(xy, ix_0, axis=0)
+
+        n_ps = lonlat.shape[0]
+
+        # Update the first column again
+        ij[:, 0] = np.arange(n_ps)
+        xy[:, 0] = np.arange(n_ps)
 
         # Save results
         sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'ps{self.psver}.mat'), {
@@ -469,27 +468,27 @@ class StaMPSStep:
         sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, 'psver.mat'), {'psver': self.psver})
 
         # Save phase data
-        ph = ph[~ix_nan]
-        ph = ph[~ix_0]
+        ph = np.delete(ph, ix_nan, axis=0)
+        ph = np.delete(ph, ix_0, axis=0)
         sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'ph{self.psver}.mat'), {'ph': ph})
 
         # Save baseline data
-        bperp_mat = bperp_mat[~ix_nan]
-        bperp_mat = bperp_mat[~ix_0]
+        bperp_mat = np.delete(bperp_mat, ix_nan, axis=0)
+        bperp_mat = np.delete(bperp_mat, ix_0, axis=0)
         sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'bp{self.psver}.mat'), {'bperp_mat': bperp_mat})
 
         # Save look angle data
         la = inci[sort_ix]
-        la = la[~ix_nan]
-        la = la[~ix_0]
+        la = np.delete(la, ix_nan, axis=0)
+        la = np.delete(la, ix_0, axis=0)
         sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'la{self.psver}.mat'), {'la': la})
 
         # Handle DA file if it exists
         if os.path.exists(daname):
             D_A = np.loadtxt(daname)
             D_A = D_A[sort_ix]
-            D_A = D_A[~ix_nan]
-            D_A = D_A[~ix_0]
+            D_A = np.delete(D_A, ix_nan, axis=0)
+            D_A = np.delete(D_A, ix_0, axis=0)
             sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'da{self.psver}.mat'), {'D_A': D_A})
 
         # Handle height file if it exists
@@ -497,8 +496,8 @@ class StaMPSStep:
             with open(hgtname, 'rb') as f:
                 hgt = np.fromfile(f, dtype='>f4').reshape(-1, 1)
                 hgt = hgt[sort_ix]
-                hgt = hgt[~ix_nan]
-                hgt = hgt[~ix_0]
+                hgt = np.delete(hgt, ix_nan, axis=0)
+                hgt = np.delete(hgt, ix_0, axis=0)
                 sio.savemat(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'hgt{self.psver}.mat'), {'hgt': hgt})
 
     ########## Estimate PS coherence, phase, and range error ##########
@@ -783,7 +782,7 @@ class StaMPSStep:
             
             coh_rand = np.zeros((n_rand, 1))
             for i in tqdm(list(reversed(range(0, n_rand, 1))), desc='   -> Computing progress', unit=' pixels'):
-                _, _, coh_r, _ = self._ps_topofit(np.exp(1j * rand_ifg[i, :]), bperp.reshape(-1, 1), n_trial_wraps, False)
+                _, _, coh_r, _ = self._ps_topofit(np.exp(1j * rand_ifg[i, :]), bperp.T, n_trial_wraps, False)
                 coh_rand[i] = coh_r
             del rand_ifg
 
@@ -802,63 +801,67 @@ class StaMPSStep:
             Nr_max_nz_ix = i
 
             step_number = 1
+
             K_ps = np.zeros((n_ps, 1))
             C_ps = np.zeros((n_ps, 1))
             coh_ps = np.zeros((n_ps, 1))
             coh_ps_save = np.zeros((n_ps, 1))
             N_opt = np.zeros((n_ps, 1))
-            ph_res = np.zeros((n_ps, n_ifg), dtype=np.float32)
-            ph_patch = np.zeros(ph.shape, dtype=np.complex64)
-            N_patch = np.zeros((n_ps, 1))
+            self.ph_res = np.zeros((n_ps, n_ifg), dtype=np.float32)
+            self.ph_patch = np.zeros(ph.shape, dtype=np.complex64)
+
             grid_ij = np.zeros((n_ps, 2))
             grid_ij[:, 0] = np.ceil((xy[:, 2] - np.min(xy[:, 2]) + 1e-6) / self.grid_size)
             grid_ij[grid_ij[:, 0] == np.max(grid_ij[:, 0]), 0] = np.max(grid_ij[:, 0]) - 1
             grid_ij[:, 1] = np.ceil((xy[:, 1] - np.min(xy[:, 1]) + 1e-6) / self.grid_size)
             grid_ij[grid_ij[:, 1] == np.max(grid_ij[:, 1]), 1] = np.max(grid_ij[:, 1]) - 1
-            i_loop = 1
+            
             weighting = 1.0 / D_A
-            weighting_save = weighting
+            
             gamma_change_save = 0
 
         n_i = int(max(grid_ij[:, 0]))
         n_j = int(max(grid_ij[:, 1]))
 
         # print(f"   -> {n_ps} PS candidates to process")
-        xy[:, 0] = np.arange(0, n_ps).T
-        loop_end_sw = 0
-
-        while loop_end_sw == 0:
+        self.loop_end_sw = 0
+        i_loop = 1
+        
+        def gausswin(M, std=1.2):
+            n = np.arange(M) - (M-1)/2
+            return np.exp(-0.5*(n/std)**2)
+        
+        while self.loop_end_sw == 0:
             print(f"      -> Iteration #{i_loop}")
             print("      -> Calculating patch phases...")
-
-            ph_grid = np.zeros((int(n_i), int(n_j), int(n_ifg)), dtype=np.complex64)
-            ph_filt = ph_grid.copy()
+            self.ph_grid = np.zeros((int(n_i), int(n_j), int(n_ifg)), dtype=np.complex64)
+            ph_filt = self.ph_grid.copy()
             ph_weight = ph * np.exp(-1j * bp['bperp_mat'] * np.tile(K_ps.reshape(-1, 1), (1, n_ifg))) * np.tile(weighting.reshape(-1, 1), (1, n_ifg))
             
             for i in range(n_ps):
-                ph_grid[int(grid_ij[i, 0])-1, int(grid_ij[i, 1])-1, :] += ph_weight[i, :]
+                self.ph_grid[int(grid_ij[i, 0])-1, int(grid_ij[i, 1])-1, :] += ph_weight[i, :]
 
             for i in range(n_ifg):
-                ph_filt[:, :, i] = self._clap_filt(ph_grid[:, :, i], self.clap_alpha, self.clap_beta, self.n_win*0.75, self.n_win*0.25, self.low_pass)
+                ph_filt[:, :, i] = self._clap_filt(self.ph_grid[:, :, i], self.clap_alpha, self.clap_beta, self.n_win*0.75, self.n_win*0.25, self.low_pass)
 
             for i in range(n_ps):
-                ph_patch[i, 0:n_ifg] = np.squeeze(ph_filt[int(grid_ij[i, 0])-1, int(grid_ij[i, 1])-1, :])
+                self.ph_patch[i, :n_ifg] = np.squeeze(ph_filt[int(grid_ij[i, 0])-1, int(grid_ij[i, 1])-1, :])
 
             del ph_filt
-            ix = ph_patch != 0
-            ph_patch[ix] = ph_patch[ix] / np.abs(ph_patch[ix])
+            ix = self.ph_patch != 0
+            self.ph_patch[ix] = self.ph_patch[ix] / np.abs(self.ph_patch[ix])
 
             if est_gamma_parm < 2:
                 step_number = 2
                 for i in tqdm(range(n_ps), desc='      -> Estimating topo error', unit=' pixels'):
-                    psdph = ph[i, :] * np.conj(ph_patch[i, :])
+                    psdph = ph[i, :] * np.conj(self.ph_patch[i, :])
                     if np.sum(psdph == 0) == 0:
                         Kopt, Copt, cohopt, ph_residual = self._ps_topofit(psdph, bp['bperp_mat'][i, :].reshape(-1, 1), n_trial_wraps, False)
                         K_ps[i] = Kopt
                         C_ps[i] = Copt
                         coh_ps[i] = cohopt
                         N_opt[i] = 1
-                        ph_res[i, :] = np.angle(ph_residual)
+                        self.ph_res[i, :] = np.angle(ph_residual)
                     else:
                         K_ps[i] = np.nan
                         coh_ps[i] = 0
@@ -872,45 +875,67 @@ class StaMPSStep:
                 coh_ps_save = coh_ps.copy()
 
                 if abs(gamma_change_change) < self.gamma_change_convergence or i_loop >= self.gamma_max_iterations:
-                    loop_end_sw = 1
+                    self.loop_end_sw = 1
                 else:
                     i_loop += 1
                     if self.filter_weighting == 'P-square':
-                        # Use same bin edges for both histograms
-                        Na = np.histogram(coh_ps, bins=edges)[0]
-                        Nr = Nr * np.sum(Na[:low_coh_thresh]) / np.sum(Nr[:low_coh_thresh])
+                        # Compute histogram
+                        Na, _ = np.histogram(coh_ps, bins=edges)
+
+                        # Scale Nr using low coherence values
+                        scale_factor = np.sum(Na[:low_coh_thresh]) / np.sum(Nr[:low_coh_thresh])
+                        Nr = Nr * scale_factor
+
+                        # Avoid divide by zero
                         Na[Na == 0] = 1
+
+                        # Probability of being random
                         Prand = Nr / Na
+
+                        # Apply fixed probability for low coherence
                         Prand[:low_coh_thresh] = 1
                         Prand[Nr_max_nz_ix+1:] = 0
                         Prand[Prand > 1] = 1
-                        # Apply Gaussian window filter
-                        Prand = np.convolve(np.concatenate([np.ones(7), Prand]), np.hanning(7), mode='valid') / np.sum(np.hanning(7))
-                        Prand = Prand[7:]
-                        # Interpolate to 100 samples
-                        Prand = np.interp(np.linspace(0, 1, 100), np.linspace(0, 1, len(Prand)), Prand)
-                        Prand = Prand[:-9]
-                        # Get probability for each PS
-                        Prand_ps = Prand[np.clip(np.round(coh_ps * 1000).astype(int), 0, len(Prand)-1)]
+
+                        # Smooth with Gaussian filter
+                        gw = gausswin(7)  # or adjust std as needed
+                        Prand = lfilter(gw, 1, np.concatenate([np.ones(7), Prand]))
+                        Prand = Prand / np.sum(gw)
+                        Prand = Prand[7:]  # Remove padding
+
+                        # Interpolate to 1000 samples
+                        x = np.linspace(0, len(Prand) - 1, num=len(Prand))
+                        f_interp = interp1d(x, Prand, kind='linear')
+                        x_interp = np.linspace(0, len(Prand) - 1, num=100)
+                        Prand_interp = f_interp(x_interp)
+
+                        # Trim to match MATLAB's behavior
+                        Prand_interp = Prand_interp[:91]  # MATLAB: 1:end-9
+
+                        # Assign probabilities to each PS
+                        coh_indices = np.clip(np.round(coh_ps * 1000).astype(int), 0, len(Prand_interp)-1)
+                        Prand_ps = Prand_interp[coh_indices]
+
+                        # Compute weighting
                         weighting = (1 - Prand_ps)**2
                     else:
-                        g = np.mean(A * np.cos(ph_res), axis=1)
+                        g = np.mean(A * np.cos(self.ph_res), axis=1)
                         sigma_n = np.sqrt(0.5 * (np.mean(A**2, axis=1) - g**2))
                         weighting[sigma_n == 0] = 0
-                        weighting[sigma_n != 0] = g[sigma_n != 0] / sigma_n[sigma_n != 0]
+                        weighting[sigma_n != 0] = g[sigma_n != 0] / sigma_n[sigma_n != 0] # snr
             else:
-                loop_end_sw = 1
+                self.loop_end_sw = 1
 
             # Save results
             sio.savemat(pmname, {
-                'ph_patch': ph_patch,
+                'ph_patch': self.ph_patch,
                 'K_ps': K_ps,
                 'C_ps': C_ps,
                 'coh_ps': coh_ps,
                 'N_opt': N_opt,
-                'ph_res': ph_res,
+                'ph_res': self.ph_res,
                 'step_number': step_number,
-                'ph_grid': ph_grid,
+                'ph_grid': self.ph_grid,
                 'n_trial_wraps': n_trial_wraps,
                 'grid_ij': grid_ij,
                 'grid_size': self.grid_size,
@@ -923,6 +948,23 @@ class StaMPSStep:
                 'coh_ps_save': coh_ps_save,
                 'gamma_change_save': gamma_change_save
             })
+
+            # # Plot ph_patch for all interferograms
+            # n_rows = int(np.ceil(np.sqrt(n_ifg)))
+            # n_cols = int(np.ceil(n_ifg / n_rows))
+            # plt.figure(figsize=(4*n_cols, 4*n_rows))
+            
+            # for i in range(n_ifg):
+            #     plt.subplot(n_rows, n_cols, i+1)
+            #     plt.imshow(np.angle(ph_patch[:, i]).reshape(-1, 1), aspect='auto', cmap='hsv')
+            #     plt.colorbar(label='Phase (rad)')
+            #     plt.title(f'Interferogram {i+1}')
+            #     plt.xlabel('PS Point')
+            
+            # plt.tight_layout()
+            # plt.savefig(os.path.join(self.CURRENT_RESULT, self.patch_dir, f'ph_patch_all_ifgs{i_loop}.png'))
+            # plt.clf()
+            # plt.close()
 
     ############ PS Select ############
     
@@ -1462,7 +1504,6 @@ class StaMPSStep:
 
         day = ps['day'][0]
         bperp = ps['bperp'][0]
-        master_day = ps['master_day'][0][0]
 
         keep_ix = sl['keep_ix'].astype(bool)
         if 'keep_ix' in sl:
@@ -1541,7 +1582,6 @@ class StaMPSStep:
         ix_weed = np.ones((n_ps, 1), dtype=bool)
         print(f'   -> {n_ps_low_D_A} low D_A PS, {n_ps_other} high D_A PS')
         
-        no_weed_adjacent = False
         if no_weed_adjacent == False:
             print('   -> Removing adjacent PS')
             ij_shift = ij2[:, 1:3] + (np.array([2, 2]) - np.min(ij2[:, 1:3], axis=0))
@@ -1774,12 +1814,18 @@ class StaMPSStep:
             xy2 = xy2[ix_weed.flatten(), :]
             ij2 = ij2[ix_weed.flatten(), :]
             lonlat2 = lonlat2[ix_weed.flatten(), :]
-            ps['xy'] = xy2
-            ps['ij'] = ij2
-            ps['lonlat'] = lonlat2
-            ps['n_ps'] = ph2.shape[0]
             psname = f'{self.CURRENT_RESULT}/{self.patch_dir}/ps{self.psver+1}.mat'
-            sio.savemat(psname, {'ps': ps})
+            save_dict = {
+                'xy': xy2,
+                'ij': ij2,
+                'lonlat': lonlat2,
+                'n_ps': ph2.shape[0]
+            }
+            # Add remaining keys from ps
+            for key in ps.keys():
+                if key not in ['xy', 'ij', 'lonlat', 'n_ps']:
+                    save_dict[key] = ps[key]
+            sio.savemat(psname, save_dict)
             del ps
             del xy2
             del ij2
@@ -1803,17 +1849,17 @@ class StaMPSStep:
                 sio.savemat(f'{self.CURRENT_RESULT}/{self.patch_dir}/la{self.psver+1}.mat', {'la': la})
                 del la
 
-            if os.path.exists(incname):
-                inc = sio.loadmat(incname)
-                inc = inc['inc'][ix2]
-                if all_da_flag:
-                    incothername = f'{self.CURRENT_RESULT}/{self.patch_dir}/inc_other{self.psver+1}.mat'
-                    inco = sio.loadmat(incothername)
-                    inc = np.concatenate([inc, inco['inc_other'][ix_other]])
-                    del inco
-                inc = inc[ix_weed]
-                sio.savemat(f'{self.CURRENT_RESULT}/{self.patch_dir}/inc{self.psver+1}.mat', {'inc': inc})
-                del inc
+        if os.path.exists(incname):
+            inc = sio.loadmat(incname)
+            inc = inc['inc'][ix2]
+            if all_da_flag:
+                incothername = f'{self.CURRENT_RESULT}/{self.patch_dir}/inc_other{self.psver+1}.mat'
+                inco = sio.loadmat(incothername)
+                inc = np.concatenate([inc, inco['inc_other'][ix_other]])
+                del inco
+            inc = inc[ix_weed]
+            sio.savemat(f'{self.CURRENT_RESULT}/{self.patch_dir}/inc{self.psver+1}.mat', {'inc': inc})
+            del inc
 
             if os.path.exists(bpname):
                 bp = sio.loadmat(bpname)
@@ -1845,24 +1891,686 @@ class StaMPSStep:
     ########## Correct PS phase ##########
     
     def _ps_correct_phase(self):
-        None
+        print("   -> Correcting PS phase for look angle error...")
+        small_baseline_flag = self.parms.get('small_baseline_flag')
+
+        self.psver = 2
+        psname = f'{self.CURRENT_RESULT}/{self.patch_dir}/ps{self.psver}.mat'
+        phname = f'{self.CURRENT_RESULT}/{self.patch_dir}/ph{self.psver}.mat'
+        pmname = f'{self.CURRENT_RESULT}/{self.patch_dir}/pm{self.psver}.mat'
+        rcname = f'{self.CURRENT_RESULT}/{self.patch_dir}/rc{self.psver}.mat'
+        bpname = f'{self.CURRENT_RESULT}/{self.patch_dir}/bp{self.psver}.mat'
+
+        ps = sio.loadmat(psname)
+        pm = sio.loadmat(pmname)
+        bp = sio.loadmat(bpname)
+
+        if os.path.exists(phname):
+            ph = sio.loadmat(phname)['ph']
+        else:
+            ph = ps['ph']
+
+
+        K_ps = pm['K_ps']
+        C_ps = pm['C_ps']
+        master_ix = ps['master_ix'][0][0]
+
+        if small_baseline_flag == 'y':
+            ph_rc = ph * np.exp(-1j * (np.tile(K_ps, (1, ps['n_ifg'][0][0])) * bp['bperp_mat']))
+            sio.savemat(rcname, {'ph_rc': ph_rc})
+        else:
+            # Insert a column of zeros at the master index in bperp_mat
+            bperp_mat = np.hstack([
+                bp['bperp_mat'][:, :master_ix],
+                np.zeros((ps['n_ps'][0][0], 1), dtype=np.float32),
+                bp['bperp_mat'][:, master_ix:]
+            ])
+
+            # Compute ph_rc (range-corrected phase)
+            K_ps_tiled = np.tile(K_ps, (ps['n_ifg'][0][0], 1))
+            C_ps_tiled = np.tile(C_ps, (ps['n_ifg'][0][0], 1))
+            ph_rc = ph * np.exp(-1j * (K_ps_tiled.T * bperp_mat + C_ps_tiled.T))
+
+            # Prepare ph_reref with 1s at master index
+            ph_reref = np.hstack([
+                pm['ph_patch'][:, :master_ix].astype(np.complex64),
+                np.ones((ps['n_ps'][0][0], 1), dtype=np.complex64), 
+                pm['ph_patch'][:, master_ix:].astype(np.complex64)
+            ])
+
+            # Save to .mat file
+            sio.savemat(rcname, {'ph_rc': ph_rc, 'ph_reref': ph_reref})
 
     ########## Merge patches ##########
     
     def _ps_merge_patches(self):
-        None
+        print("   -> Merging patches...")
+        self.psver = 2
+        small_baseline_flag = self.parms.get('small_baseline_flag')
+        grid_size = self.parms.get('merge_resample_size')
+        merge_stdev = self.parms.get('merge_standard_dev')
+        phase_accuracy = 10 * np.pi / 180 # minimum possible accuracy for a pixel
+        min_weight = 1 / merge_stdev ** 2
+        max_coh = np.abs(np.sum(np.exp(1j * np.random.randn(1000, 1) * phase_accuracy))) / 1000
+
+        psname = f'ps{self.psver}.mat'
+        phname = f'ph{self.psver}.mat'
+        rcname = f'rc{self.psver}.mat'
+        pmname = f'pm{self.psver}.mat'
+        phuwname = f'phuw{self.psver}.mat'
+        sclaname = f'scla{self.psver}.mat'
+        sclasbname = f'scla_sb{self.psver}.mat'
+        scnname = f'scn{self.psver}.mat'
+        bpname = f'bp{self.psver}.mat'
+        laname = f'la{self.psver}.mat'
+        incname = f'inc{self.psver}.mat'
+        hgtname = f'hgt{self.psver}.mat'
+        
+        if os.path.exists(f"{self.CURRENT_RESULT}/patch.list"):
+            with open(f"{self.CURRENT_RESULT}/patch.list", 'r') as f:
+                dirname = [line.strip() for line in f.readlines()]
+
+        n_patch = len(dirname)
+        remove_ix = np.array([], dtype=np.bool_)
+
+        for i in tqdm(range(n_patch), desc="      -> Processing patches"):    
+            if not os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}"):
+                continue
+            self.ps = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{psname}")
+            n_ifg = self.ps['n_ifg'][0][0]
+            if 'n_image' in self.ps:
+                n_image = self.ps['n_image'][0][0]
+            else:
+                n_image = self.ps['n_ifg'][0][0]
+                
+            patch_ij = open(f"{self.CURRENT_RESULT}/{dirname[i]}/patch_noover.in", 'r').read().splitlines()
+            patch_ij = [int(x) for x in patch_ij]
+            ix = (
+                (self.ps['ij'][:, 1] >= patch_ij[2] - 1) &
+                (self.ps['ij'][:, 1] <= patch_ij[3] - 1) &
+                (self.ps['ij'][:, 2] >= patch_ij[0] - 1) &
+                (self.ps['ij'][:, 2] <= patch_ij[1] - 1)
+            )
+            if np.sum(ix) == 0:
+                ix_no_ps = True
+            else:
+                ix_no_ps = False
+            
+            if grid_size == 0:
+                ij = np.zeros_like(self.ps['ij'])[:, 1:]
+                C, IA, IB = np.intersect1d(self.ps['ij'][ix, 1:], ij, return_indices=True)
+                remove_ix = np.concatenate([remove_ix, IB])
+                C, IA, IB = np.intersect1d(self.ps['ij'][:, 1:], ij, return_indices=True)
+                ix_ex = np.ones(self.ps['n_ps'][0][0], dtype=np.bool_)
+                ix_ex[IA] = False
+                ix[ix_ex] = True
+                
+                # Update pixels coordinates
+                ij = self.ps['ij'][ix, 1:3]
+                lonlat = self.ps['lonlat'][ix]
+
+                # Update phase
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{phname}"):
+                    phin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{phname}")
+                    ph_w = phin['ph']
+                    del phin
+                else:
+                    ph_w = self.ps['ph']
+                ph = ph_w[ix, :]
+                rc = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{rcname}")
+                ph_rc = rc['ph_rc'][ix,:]
+                if small_baseline_flag != 'y':
+                    ph_reref = rc['ph_reref'][ix,:]
+                pm = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{pmname}")
+                ph_patch = pm['ph_patch'][ix,:]
+                if 'ph_res' in pm:
+                    ph_res = pm['ph_res'][ix,:]
+                if 'K_ps' in pm:
+                    K_ps = pm['K_ps'].T[ix,:]
+                if 'C_ps' in pm:
+                    C_ps = pm['C_ps'].T[ix,:]
+                if 'coh_ps' in pm:
+                    coh_ps = pm['coh_ps'].T[ix,:]
+                bp = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{bpname}")
+                bperp_mat = bp['bperp_mat'][ix,:]
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{laname}"):
+                    lain = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{laname}")
+                    la = lain['la'].T[ix,:]
+                
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{incname}"):
+                    incin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{incname}")
+                    inc = incin['inc'].T[ix,:]
+            
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{hgtname}"):
+                    hgtin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{hgtname}")
+                    hgt = hgtin['hgt'].T[ix,:]
+
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{phuwname}"):
+                    phuw = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{phuwname}")
+                    if not len(C) == 0:
+                        ph_uw_diff = np.mean(phuw['ph_uw'][IA,:] - ph_uw[IB,:], axis=1)
+                        if small_baseline_flag != 'y':
+                            ph_uw_diff = np.round(ph_uw_diff / 2 / np.pi) * 2 * np.pi
+                    else:
+                        ph_uw_diff = np.zeros((1, phuw['ph_uw'].shape[1]))
+                    ph_uw = phuw['ph_uw'][ix,:] - np.tile(ph_uw_diff, (sum(ix), 1))
+                    del phuw
+                else:
+                    ph_uw = np.zeros((sum(ix), n_image), dtype=np.float32)
+                    
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{sclaname}"):
+                    scla = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{sclaname}")
+                    if not len(C) == 0:
+                        ph_scla_diff = np.mean(scla['ph_scla'][IA,:] - ph_scla[IB,:])
+                        K_ps_diff = np.mean(scla['K_ps_uw'][IA,:] - K_ps_uw[IB,:])
+                        C_ps_diff = np.mean(scla['C_ps_uw'][IA,:] - C_ps_uw[IB,:])
+                    else:
+                        ph_scla_diff = np.zeros((1, phuw['ph_uw'].shape[1]))
+                        K_ps_diff = 0
+                        C_ps_diff = 0
+                    ph_scla = scla['ph_scla'][ix,:] - np.tile(ph_scla_diff, (sum(ix), 1))
+                    K_ps_uw = scla['K_ps_uw'][ix,:] - np.tile(K_ps_diff, (sum(ix), 1))
+                    C_ps_uw = scla['C_ps_uw'][ix,:] - np.tile(C_ps_diff, (sum(ix), 1))
+                    del scla
+        
+                if small_baseline_flag == 'y':
+                    if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{sclasbname}"):
+                        sclasb = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{sclasbname}")
+                        ph_scla_diff = np.mean(sclasb['ph_scla'][IA,:] - ph_scla_sb[IB,:])
+                        K_ps_diff = np.mean(sclasb['K_ps_uw'][IA,:] - K_ps_uw_sb[IB,:])
+                        C_ps_diff = np.mean(sclasb['C_ps_uw'][IA,:] - C_ps_uw_sb[IB,:])
+                        ph_scla_sb = sclasb['ph_scla'][ix,:] - np.tile(ph_scla_diff, (sum(ix), 1))
+                        K_ps_uw_sb = sclasb['K_ps_uw'][ix,:] - np.tile(K_ps_diff, (sum(ix), 1))
+                        C_ps_uw_sb = sclasb['C_ps_uw'][ix,:] - np.tile(C_ps_diff, (sum(ix), 1))
+                        del sclasb
+                
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{scnname}"):
+                    scn = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{scnname}")
+                    if not len(C) == 0:
+                        ph_scn_diff = np.mean(scn['ph_scn_slave'][IA,:] - ph_scn_slave[IB,:])
+                    else:
+                        ph_scn_diff = np.zeros((1, scn['ph_scn_slave'].shape[1]))
+                    ph_scn_slave = scn['ph_scn_slave'][ix,:] - np.tile(ph_scn_diff, (sum(ix), 1))
+                    del scn
+            elif grid_size != 0 and ix_no_ps == False:
+                # Initialize and compute grid indices
+                g_ij = np.zeros((np.sum(ix), 2), dtype=int)
+                xy_min = np.min(self.ps['xy'][ix, :], axis=0)
+                g_ij[:, 0] = np.ceil((self.ps['xy'][ix, 2] - xy_min[2] + 1e-9) / grid_size).astype(int)
+                g_ij[:, 1] = np.ceil((self.ps['xy'][ix, 1] - xy_min[1] + 1e-9) / grid_size).astype(int)
+
+                # Unique grid positions
+                g_ij_unique, indices, g_ix = np.unique(g_ij, axis=0, return_index=True, return_inverse=True)
+                sort_ix = np.argsort(g_ix)
+                g_ix = g_ix[sort_ix]
+                ix = np.where(ix)[0][sort_ix]
+
+                # Load patch residuals
+                pm = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{pmname}")
+                pm['ph_res'] = np.angle(np.exp(1j * (pm['ph_res'] - np.tile(pm['C_ps'], (pm['ph_res'].shape[1], 1)).T)))
+                if small_baseline_flag != 'y':
+                    pm['ph_res'] = np.hstack((pm['ph_res'], pm['C_ps'].T))
+
+                sigsq_noise = np.var(pm['ph_res'], axis=1)
+                coh_ps_all = np.abs(np.sum(np.exp(1j * pm['ph_res']), axis=1)) / n_ifg
+                coh_ps_all[coh_ps_all > max_coh] = max_coh
+                sigsq_noise[sigsq_noise < phase_accuracy**2] = phase_accuracy**2
+
+                ps_weight = 1.0 / sigsq_noise[ix]
+                ps_snr = 1.0 / (1.0 / coh_ps_all[ix]**2 - 1.0)
+
+                # Grid filtering
+                l_ix = np.append(np.where(np.diff(g_ix))[0], len(g_ix))
+                f_ix = np.append([0], l_ix[:-1] + 1)
+                n_ps_g = len(f_ix)
+
+                weightsave = np.zeros((n_ps_g, 1), dtype=np.float32)
+                for k in range(n_ps_g):
+                    weights = ps_weight[f_ix[k]:l_ix[k] + 1]
+                    weightsum = np.sum(weights)
+                    weightsave[k] = weightsum
+                    if weightsum < min_weight:
+                        ix[f_ix[k]:l_ix[k] + 1] = 0
+
+                # Final filtering
+                g_ix = g_ix[ix > 0]
+                if len(g_ix) == 0:
+                    ix_no_ps = True  # All PS rejected due to low weight
+
+                l_ix = np.append(np.where(np.diff(g_ix))[0], len(g_ix) - 1)
+                f_ix = np.append([0], l_ix[:-1] + 1)
+                ps_weight = ps_weight[ix > 0]
+                ps_snr = ps_snr[ix > 0]
+                ix = ix[ix > 0]
+                n_ps_g = len(f_ix)
+                n_ps = len(ix)
+
+                # Update coordinates
+                ij_g = np.zeros((n_ps_g, 2))
+                lonlat_g = np.zeros((n_ps_g, 2))
+                self.ps['ij'] = self.ps['ij'][ix]
+                self.ps['lonlat'] = self.ps['lonlat'][ix]
+                for k in range(n_ps_g):
+                    weights = np.tile(ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis], (1, 2))
+                    ij_g[k, :] = np.round(np.sum(self.ps['ij'][f_ix[k]:l_ix[k] + 1, 1:3] * weights, axis=0) / np.sum(weights[:, 0]))
+                    lonlat_g[k, :] = np.sum(self.ps['lonlat'][f_ix[k]:l_ix[k] + 1] * weights, axis=0) / np.sum(weights[:, 0])
+
+                ij = ij_g
+                lonlat = lonlat_g
+                
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{phname}"):
+                    phin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{phname}")
+                    ph_w = phin['ph']
+                    del phin
+                elif 'ph' in self.ps:
+                    ph_w = self.ps['ph']
+
+                ph_w = ph_w[ix, :]
+                ph_g = np.zeros((n_ps_g, n_ifg), dtype=np.complex64)
+                for k in range(n_ps_g):
+                    weights = np.tile(ps_snr[f_ix[k]:l_ix[k] + 1][:, np.newaxis], (1, n_ifg))
+                    ph_g[k, :] = np.sum(ph_w[f_ix[k]:l_ix[k] + 1, :] * weights, axis=0) / np.sum(weights[:, 0])
+                ph = ph_g
+                del ph_g
+                
+                rc = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{rcname}")
+                if ix_no_ps == False:
+                    rc['ph_rc'] = rc['ph_rc'][ix, :]
+                    ph_g = np.zeros((n_ps_g, n_ifg), dtype=np.complex64)
+                    if small_baseline_flag != 'y':
+                        rc['ph_reref'] = rc['ph_reref'][ix, :]
+                        ph_reref_g = np.zeros((n_ps_g, n_ifg), dtype=np.complex64)
+                    for k in range(n_ps_g):
+                        weights = np.tile(ps_snr[f_ix[k]:l_ix[k] + 1][:, np.newaxis], (1, n_ifg))
+                        ph_g[k, :] = np.sum(rc['ph_rc'][f_ix[k]:l_ix[k] + 1, :] * weights, axis=0) / np.sum(weights[:, 0])
+                        if small_baseline_flag != 'y':
+                            ph_reref_g[k, :] = np.sum(rc['ph_reref'][f_ix[k]:l_ix[k] + 1, :] * weights, axis=0) / np.sum(weights[:, 0])
+                    ph_rc = np.complex128(ph_g)
+                    del ph_g
+                    if small_baseline_flag != 'y':
+                        ph_reref = ph_reref_g
+                        del ph_reref_g
+                del rc
+
+                pm = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{pmname}")
+                pm['ph_patch'] = pm['ph_patch'][ix, :]
+                ph_g = np.zeros((n_ps_g, pm['ph_patch'].shape[1]), dtype=np.complex64)
+                if 'ph_res' in pm:
+                    pm['ph_res'] = pm['ph_res'][ix, :]
+                    ph_res_g = ph_g
+                if 'K_ps' in pm:
+                    pm['K_ps'] = pm['K_ps'].T[ix, :]
+                    K_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
+                if 'C_ps' in pm:
+                    pm['C_ps'] = pm['C_ps'].T[ix, :]
+                    C_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
+                if 'coh_ps' in pm:
+                    pm['coh_ps'] = pm['coh_ps'].T[ix, :]
+                    coh_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
+                for k in tqdm(range(n_ps_g), desc="         -> Collocating phase over groups", unit=" group"):
+                    weights = np.tile(ps_snr[f_ix[k]:l_ix[k]+1][:, np.newaxis], (1, ph_g.shape[1]))
+                    ph_g[k, :] = np.sum(pm['ph_patch'][f_ix[k]:l_ix[k]+1, :] * weights, axis=0) / np.sum(weights, axis=0)
+                    if 'ph_res' in pm:
+                        ph_res_g[k, :] = np.sum(pm['ph_res'][f_ix[k]:l_ix[k]+1, :] * weights, axis=0) / np.sum(weights, axis=0)
+                    if 'coh_ps' in pm:
+                        snr = np.sqrt(np.sum(weights[:, 0]**2, axis=0))
+                        coh_ps_g[k] = np.sqrt(1./(1+1./snr))
+                    weights = ps_weight[f_ix[k]:l_ix[k]+1][:, np.newaxis]
+                    if 'K_ps' in pm:
+                        K_ps_g[k] = np.sum(pm['K_ps'][f_ix[k]:l_ix[k]+1, :] * weights, axis=0) / np.sum(weights)
+                    if 'C_ps' in pm:
+                        C_ps_g[k] = np.sum(pm['C_ps'][f_ix[k]:l_ix[k]+1, :] * weights, axis=0) / np.sum(weights)
+
+                    if np.sum(np.sum(np.isnan(C_ps_g)))>0 or np.sum(np.sum(np.isnan(weights)))>0 or np.sum(np.sum(np.isnan(np.abs(ph_g))))>0 or  np.sum(np.sum(np.isnan(K_ps_g)))>0 or  np.sum(np.sum(np.isnan(coh_ps_g)))>0 or  np.sum(np.sum(np.isnan(snr)))>0:
+                        import pdb
+                        pdb.set_trace()
+
+                ph_patch = ph_g
+                del ph_g
+                if 'ph_res' in pm:
+                    ph_res = ph_res_g
+                    del ph_res_g
+                if 'K_ps' in pm:
+                    K_ps = K_ps_g
+                    del K_ps_g
+                if 'C_ps' in pm:
+                    C_ps = C_ps_g
+                    del C_ps_g
+                if 'coh_ps' in pm:
+                    coh_ps = coh_ps_g
+                    del coh_ps_g
+                del pm
+
+                bp = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{bpname}")
+                bperp_g = np.zeros((n_ps_g, bp['bperp_mat'].shape[1]), dtype=np.float32)
+                bp['bperp_mat'] = bp['bperp_mat'][ix,:]
+                for k in tqdm(range(n_ps_g), desc="         -> Collocating bperp over groups", unit=" group"):
+                    weights = np.tile(ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis], (1, bperp_g.shape[1]))
+                    weights[weights == 0] = 1e-9
+                    bperp_g[k,:] = np.sum(bp['bperp_mat'][f_ix[k]:l_ix[k] + 1, :] * weights, axis=0) / np.sum(weights)
+                bperp_mat = bperp_g
+                del bperp_g
+                del bp
+
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{laname}"):
+                    lain = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{laname}")
+                    la_g = np.zeros((n_ps_g, 1), dtype=np.float32)
+                    lain['la'] = lain['la'].T[ix,:]
+                    for k in tqdm(range(n_ps_g), desc="         -> Collocating line of sight over groups", unit=" group"):
+                        weights = ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis]
+                        la_g[k] = np.sum(lain['la'][f_ix[k]:l_ix[k] + 1] * weights, axis=0) / np.sum(weights)
+                    la = la_g
+                    del la_g
+                    del lain
+
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{incname}"):
+                    incin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{incname}")
+                    inc_g = np.zeros((n_ps_g, 1), dtype=np.float32)
+                    incin['inc'] = incin['inc'][ix,:]
+                    for k in tqdm(range(n_ps_g), desc="         -> Collocating incidence over groups", unit=" group"):
+                        weights = ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis]
+                        inc_g[k] = np.sum(incin['inc'][f_ix[k]:l_ix[k] + 1] * weights, axis=0) / np.sum(weights)
+                    inc = inc_g
+                    del inc_g
+                    del incin
+
+                if os.path.exists(f"{self.CURRENT_RESULT}/{dirname[i]}/{hgtname}"):
+                    hgtin = sio.loadmat(f"{self.CURRENT_RESULT}/{dirname[i]}/{hgtname}")
+                    hgt_g = np.zeros((n_ps_g, 1), dtype=np.float64)
+                    hgtin['hgt'] = hgtin['hgt'].T[ix,:]
+                    for k in tqdm(range(n_ps_g), desc="         -> Collocating height over groups", unit=" group"):
+                        weights = ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis]
+                        with np.errstate(divide='ignore', invalid='ignore'):
+                            hgt_g[k] = np.sum(hgtin['hgt'][f_ix[k]:l_ix[k] + 1] * weights, axis=0) / np.sum(weights)
+                    hgt = hgt_g
+                    del hgt_g
+                    del hgtin
+                        
+        ps_new = self.ps
+        n_ps_orig = ij.shape[0]
+        keep_ix = np.ones(n_ps_orig, dtype=np.bool_)
+        keep_ix[remove_ix] = False
+        lonlat_save = lonlat
+        coh_ps_weed = coh_ps[keep_ix]
+        lonlat = lonlat[keep_ix]
+
+        I = np.unique(lonlat, axis=0)
+        dups = np.setxor1d(I, np.arange(len(lonlat)).reshape(-1, 1)).astype(int)
+        keep_ix_num = np.where(keep_ix)[0]
+
+        for i in tqdm(range(len(dups)), desc="   -> Removing duplicate PS on merging", unit=" pixel"):
+            dups_ix_weed = np.where((lonlat[:, 0] == lonlat[int(dups[i]), 0]) & (lonlat[:, 1] == lonlat[int(dups[i]), 1]))[0]
+            dups_ix = keep_ix_num[dups_ix_weed]
+            I = np.argmax(coh_ps_weed[dups_ix_weed])
+            keep_ix[dups_ix[np.arange(len(dups_ix)) != I]] = False
+
+        if len(dups) > 0:
+            lonlat = lonlat_save[keep_ix, :]
+            if np.sum(keep_ix==False) > 0:
+                print(f"      -> {np.sum(keep_ix==False)} pixel with duplicate lon/lat dropped")
+
+        del lonlat_save
+        ll0 = (np.max(lonlat, axis=0) + np.min(lonlat, axis=0)) / 2
+        xy = self._llh2local(lonlat.T, ll0).T * 1000
+
+        heading = self.parms.get('heading')
+        if heading is None:
+            heading = 0
+        theta = (180 - heading) * np.pi / 180
+        if theta > np.pi:
+            theta = theta - 2 * np.pi
+
+        rotm = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        xy = xy.T
+        xynew = rotm @ xy
+        if max(xynew[0, :]) - min(xynew[0, :]) < max(xy[0, :]) - min(xy[0, :]) and max(xynew[1, :]) - min(xynew[1, :]) < max(xy[1, :]) - min(xy[1, :]):
+            xy = xynew
+            print(f"   -> Rotating xy by {theta * 180 / np.pi} degrees")
+        del xynew
+
+        xy = np.array(xy, dtype=np.float32).T
+        sort_ix = np.lexsort((xy[:, 0], xy[:, 1]))
+        xy = xy[sort_ix, :]
+        xy = np.column_stack([np.arange(len(xy)).reshape(-1, 1), xy])
+        xy[:, 1:] = np.round(xy[:, 1:] * 1000) / 1000
+        lonlat = lonlat[sort_ix, :]
+
+        all_ix = np.arange(len(ij)).T
+        keep_ix = all_ix[keep_ix]
+        sort_ix = keep_ix[sort_ix]
+
+        n_ps = len(sort_ix)
+        print(f"   -> Writing merged dataset (contains {n_ps} pixels)")
+
+        ij = ij[sort_ix,:]
+        ph_rc = ph_rc[sort_ix,:]
+        with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
+            ph_rc[ph_rc!=0] = ph_rc[ph_rc!=0]/np.abs(ph_rc[ph_rc!=0])
+        if small_baseline_flag != 'y':
+            ph_reref = ph_reref[sort_ix,:]
+        
+        sio.savemat(f"{self.CURRENT_RESULT}/{rcname}", {'ph_rc': ph_rc, 'ph_reref': ph_reref})
+        del ph_rc
+        del ph_reref
+
+        if grid_size == 0:
+            if ph_uw.shape[0] == n_ps_orig:
+                ph_uw = ph_uw[sort_ix,:]
+        else:
+            ph_uw = []
+        sio.savemat(f"{self.CURRENT_RESULT}/{phuwname}", {'ph_uw': ph_uw})
+        del ph_uw
+
+        ph_patch = ph_patch[sort_ix,:]
+        if ph_res.shape[0] == n_ps_orig:
+            ph_res = ph_res[sort_ix,:]
+        else:
+            ph_res = []
+        if K_ps.shape[0] == n_ps_orig:
+            K_ps = K_ps[sort_ix,:]
+        else:
+            K_ps = []
+        if C_ps.shape[0] == n_ps_orig:
+            C_ps = C_ps[sort_ix,:]
+        else:
+            C_ps = []
+        if coh_ps.shape[0] == n_ps_orig:
+            coh_ps = coh_ps[sort_ix,:]
+        else:
+            coh_ps = []
+        sio.savemat(f"{self.CURRENT_RESULT}/{pmname}", {'ph_patch': ph_patch, 'ph_res': ph_res, 'K_ps': K_ps, 'C_ps': C_ps, 'coh_ps': coh_ps})
+        del ph_patch
+        del ph_res
+        del K_ps
+        del C_ps
+        del coh_ps
+
+        if grid_size == 0:
+            if hasattr(self, 'ph_scla'):
+                if ph_scla.shape[0] == n_ps:
+                    ph_scla = ph_scla[sort_ix,:]
+                    K_ps_uw = K_ps_uw[sort_ix,:]
+                    C_ps_uw = C_ps_uw[sort_ix,:]
+                    sio.savemat(f"{self.CURRENT_RESULT}/{sclaname}", {'ph_scla': ph_scla, 'K_ps_uw': K_ps_uw, 'C_ps_uw': C_ps_uw})
+                    del ph_scla
+                    del K_ps_uw
+                    del C_ps_uw
+
+            if hasattr(self, 'ph_scla_sb'):
+                if ph_scla_sb.shape[0] == n_ps:
+                    ph_scla = ph_scla_sb[sort_ix,:]
+                    K_ps_uw = K_ps_uw_sb[sort_ix,:]
+                    C_ps_uw = C_ps_uw_sb[sort_ix,:]
+                    sio.savemat(f"{self.CURRENT_RESULT}/{sclasbname}", {'ph_scla': ph_scla, 'K_ps_uw': K_ps_uw, 'C_ps_uw': C_ps_uw})
+                    del ph_scla
+                    del K_ps_uw
+                    del C_ps_uw
+
+            if hasattr(self, 'ph_scn_slave'):
+                if ph_scn_slave.shape[0] == n_ps:
+                    ph_scn_slave = ph_scn_slave[sort_ix,:]
+                    sio.savemat(f"{self.CURRENT_RESULT}/{scnname}", {'ph_scn_slave': ph_scn_slave})
+                    del ph_scn_slave
+
+        if ph.shape[0] == n_ps_orig:
+            ph = ph[sort_ix,:]
+        else:
+            ph = []
+        sio.savemat(f"{self.CURRENT_RESULT}/{phname}", {'ph': ph})
+        del ph
+
+        if la.shape[0] == n_ps_orig:
+            la = la[sort_ix,:]
+        else:
+            la = []
+        sio.savemat(f"{self.CURRENT_RESULT}/{laname}", {'la': la})
+        del la
+
+        if os.path.exists(f"{self.CURRENT_RESULT}/{incname}"):
+            if inc.shape[0] == n_ps_orig:
+                inc = inc[sort_ix,:]
+            else:
+                inc = []
+            sio.savemat(f"{self.CURRENT_RESULT}/{incname}", {'inc': inc})
+            del inc
+
+        if hgt.shape[0] == n_ps_orig:
+            hgt = hgt[sort_ix,:]
+        else:
+            hgt = []
+        sio.savemat(f"{self.CURRENT_RESULT}/{hgtname}", {'hgt': hgt})
+        del hgt
+
+        bperp_mat = bperp_mat[sort_ix,:]
+        sio.savemat(f"{self.CURRENT_RESULT}/{bpname}", {'bperp_mat': bperp_mat})
+        del bperp_mat
+
+        ps_new['n_ps'] = n_ps
+        ps_new['ij'] = np.hstack([np.arange(1, n_ps + 1).reshape(-1, 1), ij])
+        ps_new['xy'] = xy
+        ps_new['lonlat'] = lonlat
+        ps_dict = {}
+        for key, value in ps_new.items():
+            ps_dict[key] = value
+        sio.savemat(f"{self.CURRENT_RESULT}/{psname}", ps_dict)
+        del ps_new
+        del ps_dict
+
+        self._setpsver(2)
+        
+        if os.path.exists(f"{self.CURRENT_RESULT}/mean_amp.flt"):
+            os.remove(f"{self.CURRENT_RESULT}/mean_amp.flt")
+        if os.path.exists(f"{self.CURRENT_RESULT}/amp_mean.mat"):
+            os.remove(f"{self.CURRENT_RESULT}/amp_mean.mat")
 
     def _ps_calc_ifg_std(self):
-        None
+        print("-> Estimating noise standard deviation (degrees)...")
+        small_baseline_flag = self.parms.get('small_baseline_flag')
+        psver = self.psver
+        psname = f'ps{psver}.mat'
+        phname = f'ph{psver}.mat'
+        pmname = f'pm{psver}.mat'
+        bpname = f'bp{psver}.mat'
+        ifgstdname = f'ifgstd{psver}.mat'
+
+        ps = sio.loadmat(os.path.join(self.CURRENT_RESULT, psname))
+        pm = sio.loadmat(os.path.join(self.CURRENT_RESULT, pmname))
+        bp = sio.loadmat(os.path.join(self.CURRENT_RESULT, bpname))
+        
+        if os.path.exists(os.path.join(self.CURRENT_RESULT, phname)):
+            ph = np.complex128(sio.loadmat(os.path.join(self.CURRENT_RESULT, phname))['ph'])
+        else:
+            ph = np.complex128(ps['ph'])
+
+        # Read MAX_PERP from config
+        max_bperp = float(self.MAX_PERP)
+        if max_bperp is None:
+            print("WARNING: MAX_PERP not found in the file.")
+            max_bperp = 150.0  # fallback
+
+        bperp_values = ps['bperp'].flatten()
+        toremove_bperp_indices = np.where(np.abs(bperp_values) >= max_bperp)[0]
+        print(f"-> Removing {len(toremove_bperp_indices)} interferograms with |bperp| ≥ {max_bperp}")
+
+        n_ps = ps['xy'].shape[0]
+        master_ix = np.sum(ps['master_day'] > ps['day']) + 1
+
+        # Handle overflow by computing in chunks
+        chunk_size = 1000
+        n_chunks = (n_ps + chunk_size - 1) // chunk_size
+        ph_diff = np.zeros((n_ps, ps['n_ifg'][0][0]), dtype=np.float64)
+
+        for i in range(n_chunks):
+            start_idx = i * chunk_size
+            end_idx = min((i + 1) * chunk_size, n_ps)
+            
+            if small_baseline_flag == 'y':
+                # Process chunk
+                ph_chunk = ph[start_idx:end_idx]
+                ph_patch_chunk = pm['ph_patch'][start_idx:end_idx]
+                K_ps_chunk = pm['K_ps'][start_idx:end_idx]
+                
+                # Split complex multiplication into real and imaginary parts
+                ph_conj = ph_chunk * np.conj(ph_patch_chunk)
+                exp_term = np.exp(-1j * (np.tile(K_ps_chunk, (1, ps['n_ifg'][0][0])) * bp['bperp_mat'][start_idx:end_idx]))
+                ph_diff[start_idx:end_idx] = np.angle(ph_conj * exp_term)
+                
+        else:
+                bperp_mat = np.hstack([
+                    bp['bperp_mat'][start_idx:end_idx, :ps['master_ix'][0][0]],
+                    np.zeros((end_idx-start_idx, 1), dtype=np.float32),
+                    bp['bperp_mat'][start_idx:end_idx, ps['master_ix'][0][0]:]
+                ])
+                ph_patch = np.hstack([
+                    pm['ph_patch'][start_idx:end_idx, :master_ix],
+                    np.ones((end_idx-start_idx, 1), dtype=np.complex128),
+                    pm['ph_patch'][start_idx:end_idx, master_ix:]
+                ])
+                
+                # Split complex multiplication into real and imaginary parts
+                ph_conj = ph[start_idx:end_idx] * np.conj(ph_patch)
+                exp_term = np.exp(-1j * (
+                    np.tile(pm['K_ps'][start_idx:end_idx], (1, ps['n_ifg'][0][0])) * bperp_mat + 
+                    np.tile(pm['C_ps'][start_idx:end_idx], (1, ps['n_ifg'][0][0]))
+                ))
+                ph_diff[start_idx:end_idx] = np.angle(ph_conj * exp_term)
+
+        ifg_std = np.sqrt(np.sum(ph_diff ** 2, axis=0) / n_ps) * 180 / np.pi
+
+        # Print results
+        if small_baseline_flag == 'y':
+            for i in range(ps['n_ifg'][0][0]):
+                print(f"{i+1:3d} IFG {i+1:3d} {ifg_std[i]:3.2f}")
+        else:
+            for i in range(ps['n_ifg'][0][0]):
+                date = datetime(1,1,1) + timedelta(days=int(ps['day'][0][i])-1)
+                print(f"{i+1:3d} {date.strftime('%Y-%b-%d')} {ifg_std[i]:3.2f}")
+
+        # mean_std = np.mean(ifg_std)
+        # high_std_indices = np.where(ifg_std > mean_std)[0]
+        # print(f"-> Mean standard deviation: {mean_std:3.2f} degrees")
+        # print("-> Interferograms with standard deviation > mean:")
+        # for i in high_std_indices:
+        #     print(f"   -> {i+1:3d} {ps['day'][0][i]} {ifg_std[i]:3.2f}")
+
+        # # Append high bperp indices to drop_ifg_index
+        # drop_ifg_index = np.unique(np.concatenate([high_std_indices, toremove_bperp_indices]))
+        # print("drop_ifg_index values:")
+        # print(' '.join(str(idx+1) for idx in drop_ifg_index))
+
+        # # Set the updated drop_ifg_index parameter
+        # self.parms.set('drop_ifg_index', ' '.join(str(idx+1) for idx in drop_ifg_index))
+        # print(f"-> Set drop_ifg_index parameter with {len(drop_ifg_index)} interferograms (including those with |bperp| ≥ {max_bperp})")
+
+        sio.savemat(os.path.join(self.CURRENT_RESULT, ifgstdname), {'ifg_std': ifg_std})
+
+    ########## Unwraping phase ##########
     
     def _ps_unwrap(self):
-        None
-
-    def _sb_invert_uw(self):
-        None
+        print("   -> Unwrapping phase...")
 
     def _ps_calc_scla(self, value1, value2):
-        None
+        print("   -> Calculating scla...")
 
     def _ps_smooth_scla(self, value):
         None
@@ -1888,7 +2596,6 @@ class StaMPSStep:
         elif self.start_step <= 4:
             self._setpsver(1)
         
-
     def _stamps_2(self, est_gamma_flag=None):
         print("-> Estimating coherence of PS candidates...")
         self.parms.load()
@@ -1931,14 +2638,15 @@ class StaMPSStep:
                 if self.small_baseline_flag == 'y':
                     self._ps_weed(True, False)
                 else:
-                    self._ps_weed()
+                        self._ps_weed()
             else:
                 self.stamps_step_no_ps[3] = 1
                 print("-> No PS left in step 3, so will skip step 4")
         self._save_ps_info()
 
-    def _stamps_5(self, patches_flag=False):
-        if self.stamps_PART1_flag:
+    def _stamps_5(self):
+        if self.stamps_PART1_flag == True and self.stamps_PART2_flag == False:
+            self.parms.load()
             if self.start_step <= 5 and self.end_step >= 5:
                 self.stamps_step_no_ps[4:] = 0
                 self._save_ps_info()
@@ -1948,18 +2656,15 @@ class StaMPSStep:
                     self.stamps_step_no_ps[4] = 1
                     print("-> No PS left in step 4, so will skip step 5")
             self._save_ps_info()
-            self.stamps_PART1_flag = False
-            self.stamps_PART2_flag = True
-        elif self.stamps_PART2_flag:
-            abord_flag = 0
-            if patches_flag:
-                self._ps_merge_patches()
-            else:
-                if os.path.exists(os.path.join(self.CURRENT_RESULT, self.patch_dir, 'no_ps_info.mat')):
+        elif self.stamps_PART1_flag == False and self.stamps_PART2_flag == True:
+            self.parms.load()
+            abord_flag = False
+            self._ps_merge_patches()
+            if os.path.exists(os.path.join(self.CURRENT_RESULT, self.patch_dir, 'no_ps_info.mat')):
                     self.stamps_step_no_ps = sio.loadmat(os.path.join(self.CURRENT_RESULT, self.patch_dir, 'no_ps_info.mat'))['stamps_step_no_ps']
                     if np.sum(self.stamps_step_no_ps) >= 1:
-                        abord_flag = 1
-            if abord_flag == 0:
+                        abord_flag = True
+            if abord_flag == False:
                 self._ps_calc_ifg_std()
             else:
                 print("No PS left in step 4, so will skip step 5")
@@ -1967,8 +2672,6 @@ class StaMPSStep:
     def _stamps_6(self):
         if self.start_step <= 6 and self.end_step >= 6:
             self._ps_unwrap()
-            if self.small_baseline_flag == 'y':
-                self._sb_invert_uw()
 
     def _stamps_7(self):
         if self.start_step <= 7 and self.end_step >= 7:
@@ -1996,16 +2699,10 @@ class StaMPSStep:
             end_step = self.end_step
         else:
             self.end_step = end_step
-        if patches_flag is None:
-            if start_step < 6:
-                patches_flag = False
-            else:
-                patches_flag = True
-
-        if self.start_step < 5 and self.end_step >= 5:
+        if patches_flag == False:
             self.stamps_PART1_flag = True
             self.stamps_PART2_flag = False
-        elif self.start_step >= 5:
+        else:
             self.stamps_PART1_flag = False
             self.stamps_PART2_flag = True
 
@@ -2053,10 +2750,11 @@ class StaMPSStep:
                 if patch_dir != '.':
                     os.chdir('..')
 
+
         if self.stamps_PART2_flag:
             if patches_flag:
                 # Create new patch list file
-                with open('patch.list_new', 'w') as f:
+                with open(f'{self.CURRENT_RESULT}/patch.list_new', 'w') as f:
                     # Process patches in reverse order
                     for patch_dir in reversed(patch_dirs):
                         # Check PS information file
@@ -2075,12 +2773,15 @@ class StaMPSStep:
                 
                 # Update patch list files
                 if os.path.exists(os.path.join(self.CURRENT_RESULT, 'patch.list')):
+                    if os.path.exists(os.path.join(self.CURRENT_RESULT, 'patch.list_old')):
+                        os.remove(os.path.join(self.CURRENT_RESULT, 'patch.list_old'))
+                    time.sleep(1)
                     os.rename(os.path.join(self.CURRENT_RESULT, 'patch.list'), os.path.join(self.CURRENT_RESULT, 'patch.list_old'))
+                time.sleep(1)
                 os.rename(os.path.join(self.CURRENT_RESULT, 'patch.list_new'), os.path.join(self.CURRENT_RESULT, 'patch.list'))
 
             for step in range(5, self.end_step + 1):
                 self.control_flow[step]()
-
 
 if __name__ == "__main__":
     project_path = os.path.join(os.path.dirname(__file__), '../..', "modules/snap2stamps/bin/project.conf")
@@ -2093,6 +2794,7 @@ if __name__ == "__main__":
     parms.load()
     parms.set('select_method', 'PERCENT')
     parms.set('percent_rand', 80)
+    parms.set('merge_resample_size', 0)
     parms.save()
     parms.load()
     stamps_step = StaMPSStep(parms)
@@ -2100,4 +2802,6 @@ if __name__ == "__main__":
     # stamps_step.run(1, 1)
     # stamps_step.run(2, 2)
     # stamps_step.run(3, 3, plot_flag=True)
-    stamps_step.run(4, 4)
+    # stamps_step.run(4, 4)
+    stamps_step.run(5, 5, False)
+    stamps_step.run(5, 5, True)
