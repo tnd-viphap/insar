@@ -153,16 +153,16 @@ class PSDS:
         
         for ii in tqdm(range(npages), total=npages, desc="-> ADP. DESPECKLING: ", unit="pair"):
             temp = slcstack[:, :, ii]
-            num = 0
             for jj in range(nwidths):
                 for kk in range(nlines):
                     x_global = jj + RadiusCol
                     y_global = kk + RadiusRow
                     MliWindow = temp[y_global - RadiusRow: y_global + RadiusRow + 1,
                                     x_global - RadiusCol: x_global + RadiusCol + 1]
-                    MliValues = MliWindow.flatten()[self.shp["PixelInd"][:, num]]
+                    # Get the correct mask for this pixel position
+                    mask = self.shp["PixelInd"][:, kk, jj]
+                    MliValues = MliWindow.flatten()[mask]
                     self.slcImg_despeckle[kk, jj, ii] = np.mean(MliValues)
-                    num += 1
 
         elapsed = time.time() - start_time
         print(f"-> DeSpeckling operation completed in {elapsed / 60:.2f} minute(s).")
