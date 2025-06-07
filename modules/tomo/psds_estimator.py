@@ -4,12 +4,14 @@ import numpy as np
 from tqdm import tqdm
 
 class PSDS:
-    def __init__(self, coh_matrix, slcstack, interfstack, shp, reference_idx,
+    def __init__(self, coh_matrix, slcstack, interfstack, slc_filename, interf_filename, shp, reference_idx,
                  InSAR_path, bronumthre, cohthre, cohthre_slc_filt, InSAR_processor):
         
         self.coh_matrix = coh_matrix
         self.slcstack = slcstack
         self.interfstack = interfstack
+        self.slc_filename = slc_filename
+        self.interf_filename = interf_filename
         self.shp = shp
         self.reference_idx = reference_idx
         if self.reference_idx is None:
@@ -39,7 +41,7 @@ class PSDS:
         - Coh_cal: np.ndarray, coherence metric, shape (nlines, nwidths)
         - v_PL: np.ndarray, amplitude estimates, shape (nlines, nwidths, n_slc)
         """
-        print("-> Performing phase linking...")
+        # print("-> Performing phase linking...")
         n_slc, _, nlines, nwidths = self.coh_matrix.shape
 
         self.phi_PL = np.zeros((nlines, nwidths, n_slc), dtype=np.float32)
@@ -125,22 +127,40 @@ class PSDS:
         return phi, W_cal, v_ml
     
     def interf_filtering(self):
-        print("-> Applying filter strategies on interferogram...")
+        # print("-> Applying filter strategies on interferogram...")
         self.phi_PL = np.delete(self.phi_PL, self.reference_idx, axis=2)
         mask_coh = self.Coh_cal > self.Cohthre
         mask_PS = self.shp["BroNum"] > self.BroNumthre
+
+        # Ensure masks have the same dimensions
+        if mask_PS.shape != mask_coh.shape:
+            # Reshape mask_PS to match mask_coh dimensions
+            # First handle rows
+            if mask_PS.shape[0] != mask_coh.shape[0]:
+                mask_PS = np.repeat(mask_PS, mask_coh.shape[0] // mask_PS.shape[0], axis=0)
+                if mask_PS.shape[0] < mask_coh.shape[0]:
+                    pad_width = ((0, mask_coh.shape[0] - mask_PS.shape[0]), (0, 0))
+                    mask_PS = np.pad(mask_PS, pad_width, mode='constant', constant_values=False)
+            
+            # Then handle columns
+            if mask_PS.shape[1] != mask_coh.shape[1]:
+                mask_PS = np.repeat(mask_PS, mask_coh.shape[1] // mask_PS.shape[1], axis=1)
+                if mask_PS.shape[1] < mask_coh.shape[1]:
+                    pad_width = ((0, 0), (0, mask_coh.shape[1] - mask_PS.shape[1]))
+                    mask_PS = np.pad(mask_PS, pad_width, mode='constant', constant_values=False)
+
         # Combine masks
         mask = np.logical_and(mask_PS, mask_coh)
 
         # Repeat mask along the 3rd axis
-        mask = np.repeat(mask[:, :, np.newaxis], len(self.interfstack["filename"]), axis=2)
+        mask = np.repeat(mask[:, :, np.newaxis], len(self.interf_filename), axis=2)
 
         # Apply the phase update to infstack
         self.interfstack["datastack"][mask] = np.abs(self.interfstack["datastack"][mask]) * np.exp(1j * self.phi_PL[mask])
         
     def slc_despeckle(self):
-        print("-> Reducing speckle noise on SLC stack...")
-        start_time = time.time()
+        # print("-> Reducing speckle noise on SLC stack...")
+        # start_time = time.time()
         nlines, nwidths, npages = self.slcstack["datastack"].shape
         self.slcImg_despeckle = np.abs(self.slcstack["datastack"])
         
@@ -151,7 +171,11 @@ class PSDS:
                           ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol), (0, 0)),
                           mode='symmetric')
         
-        for ii in tqdm(range(npages), total=npages, desc="-> ADP. DESPECKLING: ", unit="pair"):
+        # Get the actual dimensions of the SHP data
+        _, total_pixels = self.shp["PixelInd"].shape
+        shp_width = total_pixels // nlines
+        
+        for ii in range(npages):
             temp = slcstack[:, :, ii]
             for jj in range(nwidths):
                 for kk in range(nlines):
@@ -159,108 +183,53 @@ class PSDS:
                     y_global = kk + RadiusRow
                     MliWindow = temp[y_global - RadiusRow: y_global + RadiusRow + 1,
                                     x_global - RadiusCol: x_global + RadiusCol + 1]
-                    # Get the correct mask for this pixel position
-                    mask = self.shp["PixelInd"][:, kk, jj]
+                    
+                    # Calculate the pixel index in the SHP data
+                    pixel_idx = kk * shp_width + jj
+                    if pixel_idx >= total_pixels:
+                        continue
+                        
+                    # Get the mask for this pixel
+                    mask = self.shp["PixelInd"][:, pixel_idx]
                     MliValues = MliWindow.flatten()[mask]
                     self.slcImg_despeckle[kk, jj, ii] = np.mean(MliValues)
 
-        elapsed = time.time() - start_time
-        print(f"-> DeSpeckling operation completed in {elapsed / 60:.2f} minute(s).")
+        # elapsed = time.time() - start_time
+        # print(f"-> DeSpeckling operation completed in {elapsed / 60:.2f} minute(s).")
         
     def slc_filtering(self):
-        print("-> Applying filter strategies on SLC stack...")
-        _, _, npages = self.slcImg_despeckle.shape
+        # print("-> Applying filter strategies on SLC stack...")
+        _, _, npages = self.slcstack["datastack"].shape
         mask_coh = self.Coh_cal > self.Cohthre_slc_filt
         mask_PS = self.shp["BroNum"] > self.BroNumthre
+
+        # Ensure masks have the same dimensions
+        if mask_PS.shape != mask_coh.shape:
+            # Reshape mask_PS to match mask_coh dimensions
+            # First handle rows
+            if mask_PS.shape[0] != mask_coh.shape[0]:
+                mask_PS = np.repeat(mask_PS, mask_coh.shape[0] // mask_PS.shape[0], axis=0)
+                if mask_PS.shape[0] < mask_coh.shape[0]:
+                    pad_width = ((0, mask_coh.shape[0] - mask_PS.shape[0]), (0, 0))
+                    mask_PS = np.pad(mask_PS, pad_width, mode='constant', constant_values=False)
+            
+            # Then handle columns
+            if mask_PS.shape[1] != mask_coh.shape[1]:
+                mask_PS = np.repeat(mask_PS, mask_coh.shape[1] // mask_PS.shape[1], axis=1)
+                if mask_PS.shape[1] < mask_coh.shape[1]:
+                    pad_width = ((0, 0), (0, mask_coh.shape[1] - mask_PS.shape[1]))
+                    mask_PS = np.pad(mask_PS, pad_width, mode='constant', constant_values=False)
+
+        # Combine masks
         mask = np.logical_and(mask_coh, mask_PS)
         mask = np.repeat(mask[:, :, np.newaxis], npages, axis=2)
-        self.slcImg_despeckle[mask] = np.abs(self.slcstack["datastack"][mask]) * np.exp(1j * np.angle(self.slcstack["datastack"][mask]))
-        
-    def interf_export(self, path, extension):
-        """
-        Export interferogram stack to binary files compatible with SAR processors.
-
-        Parameters:
-        - infstack: np.ndarray, shape (nlines, nwidths, n_interf), complex64
-        - inflist: np.ndarray, shape (n_interf, 2), each row contains [master_id, slave_id]
-        - path: str, output directory
-        - extension: str, file extension (e.g., '.bin', '.int')
-        - InSAR_processor: str, either 'snap' or 'isce'
-        """
-        print("-> Exporting interferogram...")
-        nlines, nwidths, n_interf = self.interfstack["datastack"].shape
-
-        real_index = np.arange(0, nwidths * 2, 2)
-        imag_index = np.arange(1, nwidths * 2, 2)
-        line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
-
-        master_id = self.slcstack["filename"][self.reference_idx]
-        for i in range(n_interf):
-            slave_id = self.interfstack["filename"][i]
-            if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{master_id}_{slave_id}{extension}")
-                fid = open(filename, 'wb')
-            elif self.InSAR_processor == 'isce':
-                isce_dir = os.path.join(path, str(slave_id))
-                os.makedirs(isce_dir, exist_ok=True)
-                filename = os.path.join(isce_dir, f"isce_minrefdem.int{extension}")
-                fid = open(filename, 'wb')
-            else:
-                raise ValueError("InSAR_processor not supported. Use 'snap' or 'isce'.")
-
-            data = np.squeeze(self.interfstack["datastack"][:, :, i])
-            for k in range(nlines):
-                line_cpx[real_index] = np.real(data[k, :])
-                line_cpx[imag_index] = np.imag(data[k, :])
-                fid.write(line_cpx.tobytes())
-            fid.close()
-        
-    def slc_export(self, path, extension):
-        print("-> Exporting SLC stack...")
-        """
-        Export SLC stack to binary files compatible with SAR processors.
-
-        Parameters:
-        - slcstack: np.ndarray, shape (nlines, nwidths, n_slc), dtype=complex64
-        - slclist: list or np.ndarray of SLC identifiers (length = n_slc)
-        - path: str, output directory
-        - extension: str, file extension (e.g., '.slc', '.bin')
-        - InSAR_processor: str, either 'snap' or 'isce'
-        - reference_index: int, index of reference SLC (0-based)
-        """
-        nlines, nwidths, n_slc = self.slcstack["datastack"].shape
-        real_index = np.arange(0, nwidths * 2, 2)
-        imag_index = np.arange(1, nwidths * 2, 2)
-        line_cpx = np.zeros(nwidths * 2, dtype=np.float32)
-
-        for i in range(n_slc):
-            if self.InSAR_processor == 'snap':
-                filename = os.path.join(path, f"{self.slcstack['filename'][i]}{extension}")
-                fid = open(filename, 'wb')
-            elif self.InSAR_processor == 'isce':
-                if i == self.reference_idx:
-                    out_dir = os.path.join(path, "reference")
-                    os.makedirs(out_dir, exist_ok=True)
-                    filename = os.path.join(out_dir, f"reference.slc{extension}")
-                else:
-                    out_dir = os.path.join(path, str(self.slcstack["filename"][i]))
-                    os.makedirs(out_dir, exist_ok=True)
-                    filename = os.path.join(out_dir, f"secondary.slc{extension}")
-                fid = open(filename, 'wb')
-            else:
-                raise ValueError("Unsupported InSAR_processor. Use 'snap' or 'isce'.")
-
-            data = np.squeeze(self.slcstack["datastack"][:, :, i])
-            for k in range(nlines):
-                line_cpx[real_index] = np.real(data[k, :])
-                line_cpx[imag_index] = np.imag(data[k, :])
-                fid.write(line_cpx.tobytes())
-            fid.close()
+        self.slcstack["datastack"][mask] = np.abs(self.slcImg_despeckle[mask]) * np.exp(1j * np.angle(self.slcstack["datastack"][mask]))
 
     def run(self):
         self.interf_linking()
         self.interf_filtering()
         self.slc_despeckle()
         self.slc_filtering()
-        self.interf_export(self.InSAR_path + '/diff0', '.psds')
-        self.slc_export(self.InSAR_path +'/rslc', '.psar')
+        # self.interf_export(self.InSAR_path + '/diff0', '.psds')
+        # self.slc_export(self.InSAR_path +'/rslc', '.psar')
+        return self.slcstack["datastack"], self.interfstack["datastack"]
