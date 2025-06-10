@@ -12,6 +12,10 @@ import rasterio
 import rasterio.errors
 from shapely.io import from_wkt
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+from config.parser import ConfigParser
+
 warnings.simplefilter("ignore", rasterio.errors.NotGeoreferencedWarning)
 
 class CoregIFG:
@@ -19,23 +23,18 @@ class CoregIFG:
     ## TOPSAR Coregistration and Interferogram formation ##
     ######################################################################################
     
-    def __init__(self, max_perp, time_range: list = [None, None]):
+    def __init__(self, max_perp, time_range: list = [None, None], project_name="default"):
         super().__init__()
-        inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         self.bar_message = '\n#####################################################################\n'
 
-        # Getting configuration variables from inputfile
-        with open(inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
+        self.polygon = f"POLYGON (({self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_min"]},{self.config["aoi_bbox"]["lon_max"]} {self.config["aoi_bbox"]["lat_min"]},{self.config["aoi_bbox"]["lon_max"]} {self.config["aoi_bbox"]["lat_max"]},{self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_max"]},{self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_min"]}))"
 
-        self.polygon = f"POLYGON (({self.LONMIN} {self.LATMIN},{self.LONMAX} {self.LATMIN},{self.LONMAX} {self.LATMAX},{self.LONMIN} {self.LATMAX},{self.LONMIN} {self.LATMIN}))"
-
-        self.outlog = self.LOGFOLDER + 'coreg_ifg_proc_stdout.log'
-        self.graphxml = self.GRAPHSFOLDER + 'coreg_ifg_computation_subset.xml'
-        self.graph2run = self.GRAPHSFOLDER + 'coreg_ifg2run.xml'
+        self.outlog = self.config["project_definition"]["log_folder"] + 'coreg_ifg_proc_stdout.log'
+        self.graphxml = self.config["project_definition"]["graphs_folder"] + 'coreg_ifg_computation_subset.xml'
+        self.graph2run = self.config["project_definition"]["graphs_folder"] + 'coreg_ifg2run.xml'
 
         self.out_file = open(self.outlog, 'a')
         self.err_file = self.out_file
@@ -51,14 +50,14 @@ class CoregIFG:
         self.time_range = time_range
         
     def prepare_folder(self):
-        for folder in [self.COREGFOLDER, self.IFGFOLDER, self.LOGFOLDER]:
+        for folder in [self.config["project_definition"]["coreg_folder"], self.config["project_definition"]["ifg_folder"], self.config["project_definition"]["log_folder"]]:
             if not os.path.exists(folder):
                 os.makedirs(folder)
         
     def load_cache_files(self):
         """Loads cache files for broken and baseline checks."""
-        self.cache_broken_path = self.BROKEN_CACHE
-        self.baseline_cache_path = self.BASELINE_CACHE
+        self.cache_broken_path = self.config["cache_files"]["broken_cache"]
+        self.baseline_cache_path = self.config["cache_files"]["baseline_cache"]
         self.broken_entries = self.load_cache(self.cache_broken_path)
         self.bs_entries = self.load_cache(self.baseline_cache_path)
 
@@ -224,12 +223,12 @@ class CoregIFG:
     def process(self):
         k = 0
         sorted_slavesplittedfolder = []
-        for folder in os.listdir(self.SLAVESFOLDER):
-            for file in os.listdir(os.path.join(self.SLAVESFOLDER, folder)):
+        for folder in os.listdir(self.config["project_definition"]["slaves_folder"]):
+            for file in os.listdir(os.path.join(self.config["project_definition"]["slaves_folder"], folder)):
                 if file.endswith('.dim'):
-                    sorted_slavesplittedfolder.append(os.path.join(self.SLAVESFOLDER, folder, file))
+                    sorted_slavesplittedfolder.append(os.path.join(self.config["project_definition"]["slaves_folder"], folder, file))
         sorted_slavesplittedfolder = sorted(sorted_slavesplittedfolder)
-        tailm = self.MASTER.split('/')[-1].split('_')[0]
+        tailm = self.config["project_definition"]["master"].split('/')[-1].split('_')[0]
         if not None in self.time_range and len(self.time_range) > 1:
             start_time = int(self.time_range[0])
             end_time = int(self.time_range[1])
@@ -244,28 +243,28 @@ class CoregIFG:
         
         for dimfile in sorted_slavesplittedfolder:
             k += 1
-            _, tail = os.path.split(os.path.join(self.SLAVESFOLDER, dimfile))
+            _, tail = os.path.split(os.path.join(self.config["project_definition"]["slaves_folder"], dimfile))
             if tail[0:8] != tailm:
                 message = f"[{k}] Processing slave file : {tail}\n"
                 print(message)
                 self.out_file.write(message)
-                outputname = tailm + '_' + tail[0:8] + '_' + self.IW1
+                outputname = tailm + '_' + tail[0:8] + '_' + self.config["processing_parameters"]["iw1"]
                 if outputname + '.dim' in self.bs_entries:
                     print(f"Slave {outputname}: Poor Interferogram for PS processing. Skipping...")
                     continue
                 check_outputname = [outputname + '.dim', outputname + '.data']
 
-                if any(f in os.listdir(self.COREGFOLDER) for f in check_outputname) or any(f in os.listdir(self.IFGFOLDER) for f in check_outputname):
+                if any(f in os.listdir(self.config["project_definition"]["coreg_folder"]) for f in check_outputname) or any(f in os.listdir(self.config["project_definition"]["ifg_folder"]) for f in check_outputname):
                     print(f"Slave {tail[0:8]} is coregistered and does have interferogram. Validating spatial coverage...\n")
-                    self.check_overlapping(self.MASTER, os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                    self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
                     # Check baseline and remove weak interferogram in terms of baseline
-                    baseline = self.parse_baseline(os.path.join(self.IFGFOLDER, outputname+'.dim'))["perp_bs"]
+                    baseline = self.parse_baseline(os.path.join(self.config["project_definition"]["ifg_folder"], outputname+'.dim'))["perp_bs"]
                     if abs(baseline) >= self.max_perp:
                         if os.path.exists(self.baseline_cache_path):
                             with open(self.baseline_cache_path, "a") as cb_file:
                                 cb_file.write(f"{outputname+'.dim'}\n")
                                 cb_file.close()
-                        self.remove_poor_coreg(os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                        self.remove_poor_coreg(os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
                         print(f"Slave {outputname}: Poor Interferogram (Bperp = {baseline} m) for PS processing. Skipping...")
                     else:
                         print(f"-> {outputname}: Valid baseline = {baseline}\n")
@@ -281,10 +280,10 @@ class CoregIFG:
                     filedata = file.read()
 
                 # Replace the target string
-                filedata = filedata.replace('MASTER', self.MASTER)
+                filedata = filedata.replace('MASTER', self.config["project_definition"]["master"])
                 filedata = filedata.replace('SLAVE', dimfile)
-                filedata = filedata.replace('OUTPUTCOREGFOLDER', self.COREGFOLDER)
-                filedata = filedata.replace('OUTPUTIFGFOLDER', self.IFGFOLDER)
+                filedata = filedata.replace('OUTPUTCOREGFOLDER', self.config["project_definition"]["coreg_folder"])
+                filedata = filedata.replace('OUTPUTIFGFOLDER', self.config["project_definition"]["ifg_folder"])
                 filedata = filedata.replace('OUTPUTFILE', outputname)
                 filedata = filedata.replace('POLYGON', self.polygon)
 
@@ -292,7 +291,7 @@ class CoregIFG:
                 with open(self.graph2run, 'w') as file:
                     file.write(filedata)
 
-                args = [self.GPTBIN_PATH, self.graph2run, '-c', self.CACHE, '-q', self.CPU]
+                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
 
                 # **Launch the processing**
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -313,10 +312,10 @@ class CoregIFG:
                     self.out_file.write(message)
 
                 # Check overlapping then perform pixel check to ensure we have valid coreg data
-                self.check_overlapping(self.MASTER, os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
                 
                 # Check baseline and remove weak interferogram in terms of baseline
-                baseline = self.parse_baseline(os.path.join(self.IFGFOLDER, outputname+'.dim'))["perp_bs"]
+                baseline = self.parse_baseline(os.path.join(self.config["project_definition"]["ifg_folder"], outputname+'.dim'))["perp_bs"]
                 if abs(baseline) >= self.max_perp:
                     if os.path.exists(self.baseline_cache_path):
                         with open(self.baseline_cache_path, "r") as cb_file:
@@ -327,7 +326,7 @@ class CoregIFG:
                         with open(self.baseline_cache_path, "w") as cb:
                             cb.writelines(lines)
                             cb.close()
-                    self.remove_poor_coreg(os.path.join(self.COREGFOLDER, outputname+'.dim'))
+                    self.remove_poor_coreg(os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
                     print(f"Slave {outputname}: Poor Interferogram (Bperp = {baseline} m) for PS processing. Skipping...")
                 else:
                     print(f"-> {outputname}: Valid baseline = {baseline}\n")

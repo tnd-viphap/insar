@@ -10,23 +10,26 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import List, Optional
+import json
 
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 
 from modules.tomo.psclonlat import PSLonLat
+from config.parser import ConfigParser
 
 class MTExtractCands:
     """
     Extract candidate pixels data from patches
     """
     
-    def __init__(self):
+    def __init__(self, project_name: str = "default"):
         """Initialize MTExtractCands class"""
         self.logger = self._setup_logger()
-        self.project_conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(project_name)
         self._load_config()
-        self.work_dir = self.CURRENT_RESULT
+        self.work_dir = self.config['processing_parameters']['current_result']
 
         self.dophase = 1
         self.dolonlat = 1

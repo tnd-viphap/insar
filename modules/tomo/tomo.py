@@ -7,19 +7,22 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from tqdm import tqdm
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
 
 from modules.tomo.comsar_estimator import ComSAR
 from modules.tomo.input_parm import Input
 from modules.tomo.psds_estimator import PSDS
 from modules.tomo.shp import SHP
+from config.parser import ConfigParser
 
 
 class TomoSARControl:
-    def __init__(self, patch_info=None):
+    def __init__(self, patch_info=None, project_name="default"):
         print("###### TOMOSAR Processing ######")
-        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].split("modules")[0], "modules/snap2stamps/bin/project.conf")
-        self._load_config()
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(project_name)
         
         # For SHP analysis
         self.CalWin = [7, 25]  # [row, col]
@@ -36,12 +39,12 @@ class TomoSARControl:
         self.slcstack, self.interfstack = self.input.run()
         
         # Process SHP in chunks
-        if not os.path.exists(os.path.join(self.CURRENT_RESULT, "shp.npz")):
+        if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz")):
             self.shp = self._process_shp_chunks()['patches']
-            np.savez(os.path.join(self.CURRENT_RESULT, "shp.npz"), shp=self.shp)
+            np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), shp=self.shp)
             time.sleep(2)
         else:
-            self.shp = np.load(os.path.join(self.CURRENT_RESULT, "shp.npz"), allow_pickle=True)['shp'].item()['patches']
+            self.shp = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), allow_pickle=True)['shp'].item()['patches']
         print("\n")
 
     @staticmethod
@@ -72,7 +75,7 @@ class TomoSARControl:
         # Store results for each patch
         shp_patches = []
         
-        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
+        with ProcessPoolExecutor(max_workers=int(self.config["processing_parameters"]["cpu"])) as executor:
             for batch_idx in tqdm(range(n_batches), desc="   -> SHP Computation", unit="batch"):
                 start_idx = batch_idx * batch_size
                 end_idx = min((batch_idx + 1) * batch_size, n_chunks)
@@ -95,13 +98,6 @@ class TomoSARControl:
         return {
             'patches': shp_patches
         }
-
-    def _load_config(self):
-        with open(self.inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
         
     @staticmethod
     def compute_coherence_chunk(args):
@@ -294,7 +290,7 @@ class TomoSARControl:
                                 shp_pixelind))
             
             # Process batches in parallel
-            with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
+            with ProcessPoolExecutor(max_workers=int(self.config["processing_parameters"]["cpu"])) as executor:
                 futures = [executor.submit(self.compute_coherence_chunk, task) for task in tasks]
                 
                 # Process results as they complete
@@ -419,17 +415,17 @@ class TomoSARControl:
                        self.input.InSAR_processor).run()
         else:
             print("Step 2: PSDS estimation\n")
-            if not os.path.exists(os.path.join(self.CURRENT_RESULT, "coherence.npz")):
+            if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz")):
                 print("-> Computing SHP-based coherence started...")
                 all_coherence_matrices, all_reference_indices = self.intf_cov(self.slcstack, self.interfstack)
-                np.savez(os.path.join(self.CURRENT_RESULT, "coherence.npz"), coherence=all_coherence_matrices, reference_indices=all_reference_indices)
+                np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), coherence=all_coherence_matrices, reference_indices=all_reference_indices)
             else:
                 print("-> Loading existing coherence matrix...")
-                all_coherence_matrices = np.load(os.path.join(self.CURRENT_RESULT, "coherence.npz"), allow_pickle=True)['coherence']
-                all_reference_indices = np.load(os.path.join(self.CURRENT_RESULT, "coherence.npz"), allow_pickle=True)['reference_indices']
+                all_coherence_matrices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['coherence']
+                all_reference_indices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['reference_indices']
             
             # Check if PSDS results already exist
-            psds_result_file = os.path.join(self.CURRENT_RESULT, "psds.npz")
+            psds_result_file = os.path.join(self.config["processing_parameters"]["current_result"], "psds.npz")
             if os.path.exists(psds_result_file):
                 print("-> Loading existing PSDS results...")
                 psds_data = np.load(psds_result_file, allow_pickle=True)

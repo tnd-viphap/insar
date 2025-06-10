@@ -12,11 +12,12 @@ sys.path.append(project_path)
 
 from modules.tomo.extract_pixels import MTExtractCands
 from modules.tomo.ps_parms import Parms
+from config.parser import ConfigParser
 
 
 class PSDS_Prep:
     def __init__(self, master_date, data_dir, da_thresh=None, rg_patches=1, az_patches=1, 
-                 rg_overlap=50, az_overlap=50, maskfile=None):
+                 rg_overlap=50, az_overlap=50, maskfile=None, project_name="default"):
         """
         Initialize PSDS preparation class
         
@@ -30,8 +31,9 @@ class PSDS_Prep:
             az_overlap (int): Overlapping pixels between patches in azimuth (default: 50)
             maskfile (str): Optional mask file path
         """
-        self.conf_path = Path(os.path.join(project_path, "modules/snap2stamps/bin/project.conf"))
-        self._load_config()
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         if platform.system() == "Linux":
             self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/bin/calamp"))
         else:
@@ -65,13 +67,6 @@ class PSDS_Prep:
         self.width = None
         self.length = None
         self.rsc_file = None
-
-    def _load_config(self):
-        with open(self.conf_path, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
         
     def find_rsc_file(self):
         """Find the RSC file based on processing type"""
@@ -194,7 +189,7 @@ class PSDS_Prep:
             f.write("snap\n")
 
         # Write initial parameters
-        parms = Parms(self.conf_path)
+        parms = Parms(self.project_name)
         parms.initialize()
 
         # Calibrate amplitudes
@@ -266,7 +261,7 @@ class PSDS_Prep:
 
         # Run mt_extract_cands
         print("-> Extracting candidate PS pixels...")
-        mt_extract_cands = MTExtractCands()
+        mt_extract_cands = MTExtractCands(self.project_name)
         mt_extract_cands.run()
 
         end_time = time.time()

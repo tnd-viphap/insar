@@ -7,23 +7,28 @@ import glob
 import subprocess
 import time
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+from config.parser import ConfigParser
+
 class StaMPSExporter:
-    def __init__(self, stamps_flag, project_result, renew_flag, to_remove=None):
+    def __init__(self, stamps_flag, project_result, renew_flag, to_remove=None, project_name="default"):
         super().__init__()
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         
-        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         self.bar_message = '\n#####################################################################\n'
         self.renew_flag = bool(int(renew_flag))
         self.stamps_flag = stamps_flag
-        self._load_config()
         self.project_result = project_result
-        if not os.path.exists(os.path.join(self.STAMPFOLDER, self.project_result)):
-            os.makedirs(os.path.join(self.STAMPFOLDER, self.project_result), exist_ok=True)
+        if not os.path.exists(os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result)):
+            os.makedirs(os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result), exist_ok=True)
             
         # Remove old runs with provided to_remove
         if to_remove:
             for idx in to_remove:
-                folder_to_remove = [os.path.join(self.STAMPFOLDER, self.project_result, f) for f in os.listdir(os.path.join(self.STAMPFOLDER, self.project_result)) if f[-1] == str(idx)]
+                folder_to_remove = [os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result, f) for f in os.listdir(os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result)) if f[-1] == str(idx)]
                 if folder_to_remove:
                     if os.path.exists(folder_to_remove[0]):
                         shutil.rmtree(folder_to_remove[0])
@@ -34,17 +39,10 @@ class StaMPSExporter:
         self._setup_folders()
         self._setup_logging()
         
-    def _load_config(self):
-        with open(self.inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
-
     def _setup_folders(self):
-        _, tail = os.path.split(self.MASTER)
-        project_outputs = os.listdir(os.path.join(self.STAMPFOLDER, self.project_result))
-        comsar = self.COMSAR
+        _, tail = os.path.split(self.config["project_definition"]["master"])
+        project_outputs = os.listdir(os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result))
+        comsar = self.config["api_flags"]["comsar"]
         if self.stamps_flag == "NORMAL":
             core = "NORMAL"
         elif comsar == "0" and self.stamps_flag != "NORMAL":
@@ -55,16 +53,16 @@ class StaMPSExporter:
             project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_")[-1][-1]))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
+                self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
+                self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.STAMPFOLDER}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
+            self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
 
     def _setup_logging(self):
-        self.outlog = os.path.join(self.LOGFOLDER, 'export_proc_stdout.log')
+        self.outlog = os.path.join(self.config["project_definition"]["log_folder"], 'export_proc_stdout.log')
         self.out_file = open(self.outlog, 'a')
         self.err_file = self.out_file
         
@@ -98,9 +96,9 @@ class StaMPSExporter:
         self.out_file.write(message)
         self.out_file.write(self.bar_message)
 
-        sorted_dimfiles = sorted(glob.glob(self.COREGFOLDER + '/*' + self.IW1 + '.dim'))
+        sorted_dimfiles = sorted(glob.glob(self.config["project_definition"]["coreg_folder"] + '/*' + self.config["processing_parameters"]["iw1"] + '.dim'))
         
-        with open(self.BASELINE_CACHE, "r") as file:
+        with open(self.config["cache_files"]["baseline_cache"], "r") as file:
             for line in file.readlines():
                 print(f"-> {line.strip()}: Poor intergerogram due to invalid baseline checking...")
                 try:
@@ -119,7 +117,7 @@ class StaMPSExporter:
         for k, dimfile in enumerate(sorted_dimfiles, start=1):
             _, tail = os.path.split(dimfile)
             message = f'[{k}] Exporting pair: master-slave pair {tail}'
-            ifgdim = Path(self.IFGFOLDER + tail)
+            ifgdim = Path(self.config["project_definition"]["ifg_folder"] + tail)
 
             if ifgdim.is_file():
                 print(message)
@@ -133,8 +131,8 @@ class StaMPSExporter:
                             print(f"-> Result of {tail} exported. Skipping...\n")
                             continue
 
-                graphxml = self.GRAPHSFOLDER + 'export.xml'
-                graph2run = self.GRAPHSFOLDER + 'export2run.xml'
+                graphxml = self.config["project_definition"]["graphs_folder"] + 'export.xml'
+                graph2run = self.config["project_definition"]["graphs_folder"] + 'export2run.xml'
 
                 with open(graphxml, 'r') as file:
                     filedata = file.read()
@@ -146,7 +144,7 @@ class StaMPSExporter:
                 with open(graph2run, 'w') as file:
                     file.write(filedata)
 
-                args = [self.GPTBIN_PATH, graph2run, '-c', self.CACHE, '-q', self.CPU]
+                args = [self.config["snap_gpt"]["gptbin_path"], graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
 
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 timeStarted = time.time()
@@ -191,23 +189,16 @@ class StaMPSExporter:
     def cleanup(self):
         time.sleep(1)
         try:
-            if "target.data" in os.listdir(self.PROJECTFOLDER):
-                shutil.rmtree(os.path.join(self.PROJECTFOLDER, "target.data"))
-            if "target.dim" in os.listdir(self.PROJECTFOLDER):
-                os.remove(os.path.join(self.PROJECTFOLDER, "target.dim"))
+            if "target.data" in os.listdir(self.config["project_definition"]["project_folder"]):
+                shutil.rmtree(os.path.join(self.config["project_definition"]["project_folder"], "target.data"))
+            if "target.dim" in os.listdir(self.config["project_definition"]["project_folder"]):
+                os.remove(os.path.join(self.config["project_definition"]["project_folder"], "target.dim"))
         except:
             pass
         
     def _update_config(self):
-        with open(self.inputfile, 'r') as file:
-            lines = file.readlines()
-            for idx, line in enumerate(lines):
-                if line.startswith("CURRENT_RESULT"):
-                    lines[idx] = "CURRENT_RESULT=" + str(self.outputexportfolder).replace('\\', '/').replace('//', '/') + '\n'
-                    
-        with open(self.inputfile, "w") as file:
-            file.writelines(lines)
-            file.close()
+        self.config["processing_parameters"]["current_result"] = self.outputexportfolder
+        self.config_parser.update_project_config(self.project_name, self.config)
 
     def process(self):
         self._update_config()

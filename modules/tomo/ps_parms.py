@@ -1,3 +1,4 @@
+# type: ignore
 import os
 import sys
 from pathlib import Path
@@ -5,16 +6,24 @@ import numpy as np
 from datetime import datetime
 import json
 import logging
+from typing import Optional, Any, Dict
+
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+
+from config.parser import ConfigParser
 
 class Parms:
-    def __init__(self, project_conf_path=None):
+    def __init__(self, project_name="default"):
         """
         Initialize parameters class for PS/SB processing
         
         Args:
             project_conf_path (str): Path to project configuration file
         """
-        self.project_conf_path = project_conf_path or "../../snap2stamps/bin/project.conf"
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         self.parms = {
             'Created': datetime.today(),
             'small_baseline_flag': 'n'  # PS ifgs with single masters

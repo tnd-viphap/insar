@@ -18,41 +18,46 @@ from affine import Affine
 project_folder = os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")
 sys.path.append(project_folder)
 
+from config.parser import ConfigParser
 from modules.tomo.ps_parms import Parms
 
 
 class StaMPSEXE:
-    def __init__(self, oobj="normal", display=' -nodisplay'):
+    def __init__(self, oobj="normal", display=' -nodisplay', project_name="default"):
         super().__init__()
         
         self.display = display
         self.oobj = oobj
-        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")+'/modules/snap2stamps/bin', "project.conf")
-        self._load_config()
+        self.project_name = project_name
+        
+        # Initialize config parser
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'config.json')
+        self.config_parser = ConfigParser(config_path)
+        self.config = self.config_parser.get_project_config(self.project_name)
+        
+        # Set attributes from config
+        for section, values in self.config.items():
+            if isinstance(values, dict):
+                for key, value in values.items():
+                    setattr(self, key.upper(), value)
+        
         self._load_rslcpar()
         print(f"############## Running: Step 10: StaMPS ##############")
         
-    def _load_config(self):
-        with open(self.inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
-                    
     def _csvtoshp(self):
-        for patch in [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]:
+        for patch in [os.path.join(self.config['processing_parameters']['current_result'], f) for f in os.listdir(self.config['processing_parameters']['current_result']) if f.startswith('PATCH_')]:
             csv_file = [f for f in os.listdir(patch) if f.endswith('.csv')]
             folder = patch.split('/')[-2]
             if csv_file:
                 data = gpd.read_file(csv_file[0])
                 data.geometry = [Point(x, y) for x, y in zip(data.LON, data.LAT)]
-                data.to_file(os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{folder}.shp'))
+                data.to_file(os.path.join(self.config['project_definition']['data_folder'], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{folder}.shp'))
 
     def _load_rslcpar(self):
-        parms = Parms(self.inputfile)
+        parms = Parms(self.config['project_definition']['config_path'])
         parms.load()
-        master_date = self.CURRENT_RESULT.split('/')[-1].split('_')[1]
-        with open(os.path.join(self.CURRENT_RESULT, f'rslc/{master_date}.rslc.par'), 'r') as file:
+        master_date = self.config['processing_parameters']['current_result'].split('/')[-1].split('_')[1]
+        with open(os.path.join(self.config['project_definition']['coreg_folder'], f'rslc/{master_date}.rslc.par'), 'r') as file:
             for line in file.readlines():
                 line = line.strip().split('\t')
                 if line[0].startswith('range_pixel_spacing'):
@@ -174,7 +179,7 @@ class StaMPSEXE:
         return gdf
     
     def ps_dem_err(self):
-        parms = Parms(self.inputfile)
+        parms = Parms(self.config['project_definition']['config_path'])
         parms.load()
         slant_range = parms.get('range_pixel_spacing')
         near_range = parms.get('near_range_slc')
@@ -198,7 +203,7 @@ class StaMPSEXE:
         return dem_err
         
     def ps_lonlat_err(self, dem_err):
-        parms = Parms(self.inputfile)
+        parms = Parms(self.config['project_definition']['config_path'])
         parms.load()
         la = sio.loadmat("la2.mat")['la']
         heading = parms.get('heading')
@@ -277,11 +282,11 @@ class StaMPSEXE:
         gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
         coordinates = gpd.GeoSeries([Point(float(lon[i]), float(lat[i])) for i in range(len(lon))])
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")
-        gdf.to_file(f'{self.DATAFOLDER}geom/temp_cr.shp', driver='ESRI Shapefile')
+        gdf.to_file(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shp', driver='ESRI Shapefile')
 
         # Rasterize the data
         print("   -> Interpolating data...")
-        gdf = gpd.read_file(f'{self.DATAFOLDER}geom/temp_cr.shp')  # or create it manually
+        gdf = gpd.read_file(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shp')  # or create it manually
         gdf = gdf.set_crs(4326)
         if gdf.crs.is_geographic:
             gdf = gdf.to_crs(epsg=32648)
@@ -350,30 +355,31 @@ class StaMPSEXE:
         print(f"   -> Shapefile saved to {shapefile_name}")
         
         # Clean up temporary file
-        if os.path.exists(f'{self.DATAFOLDER}geom/temp_cr.shp'):
-            os.remove(f'{self.DATAFOLDER}geom/temp_cr.shp')
-            os.remove(f'{self.DATAFOLDER}geom/temp_cr.shx')
-            os.remove(f'{self.DATAFOLDER}geom/temp_cr.dbf')
-            os.remove(f'{self.DATAFOLDER}geom/temp_cr.prj')
-            os.remove(f'{self.DATAFOLDER}geom/temp_cr.cpg')
+        if os.path.exists(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shp'):
+            os.remove(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shp')
+            os.remove(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shx')
+            os.remove(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.dbf')
+            os.remove(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.prj')
+            os.remove(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.cpg')
     
     def run(self):
         self.csv_files = []
-        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.CURRENT_RESULT}/STAMPS.log")
+        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config["project_definition"]["project_folder"]}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
-        patch_paths = [os.path.join(self.CURRENT_RESULT, f) for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
-        patch_identifier = [f for f in os.listdir(self.CURRENT_RESULT) if f.startswith('PATCH_')]
+        patch_paths = [os.path.join(self.config["project_definition"]["project_folder"], f) for f in os.listdir(self.config["project_definition"]["project_folder"]) if f.startswith('PATCH_')]
+        patch_identifier = [f for f in os.listdir(self.config["project_definition"]["project_folder"]) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
-            csv_filename = os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}_cr.csv')
+            csv_filename = os.path.join(self.config["project_definition"]["data_folder"], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{identity}_cr.csv')
             self.csv_files.append(csv_filename)
-            shutil.copy(os.path.join(self.CURRENT_RESULT, 'parms.json'), path)
+            shutil.copy(os.path.join(self.config["project_definition"]["project_folder"], 'parms.json'), path)
             os.chdir(path)
             dem_err = self.ps_dem_err()
             self.ps_lonlat_err(dem_err)
-            self.ps_export_gis(csv_filename, os.path.join(self.DATAFOLDER, f'geom/{self.CURRENT_RESULT.split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
-            os.chdir(self.CURRENT_RESULT) 
-        os.chdir(self.PROJECTFOLDER)
+            self.ps_export_gis(csv_filename, os.path.join(self.config["project_definition"]["data_folder"], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
+            os.chdir(self.config["project_definition"]["project_folder"]) 
+        os.chdir(self.config["project_definition"]["project_folder"])
         return self.csv_files
+
 if __name__ == "__main__":
-    StaMPSEXE().run()
+    StaMPSEXE(project_name="default").run()

@@ -1,0 +1,304 @@
+{
+  "projects": {
+    "default": {
+      "project_definition": {
+        "project_folder": "D:/projects/insar/config",
+        "graphs_folder": "D:/projects/insar/config/modules/snap2stamps/graphs/",
+        "log_folder": "D:/projects/insar/config/logs/",
+        "data_folder": "D:/projects/insar/config/data/",
+        "master_folder": "D:/projects/insar/config/data/master/",
+        "slaves_folder": "D:/projects/insar/config/data/slaves/",
+        "raw_data_folder": "D:/projects/insar/config/data/raw/",
+        "coreg_folder": "D:/projects/insar/config/process/coreg/",
+        "ifg_folder": "D:/projects/insar/config/process/ifg/",
+        "stamp_folder": "D:/projects/insar/config/results/",
+        "config_path": "D:/projects/insar/config/modules/snap2stamps/bin/project.conf"
+      },
+      "cache_files": {
+        "download_cache": "D:/projects/insar/config/data/download_cache.txt",
+        "broken_cache": "D:/projects/insar/config/data/broken_cache.txt",
+        "baseline_cache": "D:/projects/insar/config/data/baseline_cache.txt"
+      },
+      "search_parameters": {
+        "datalake": "D:/projects/insar/config/data/lake.json",
+        "direction": "DESCENDING",
+        "frame": 540
+      },
+      "processing_parameters": {
+        "iw1": "IW1",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": null,
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
+        "reest_flag": 1,
+        "current_result": null,
+        "ministack": 5,
+        "unified": 0,
+        "ptype": null
+      },
+      "aoi_bbox": {
+        "lon_min": 106.6969,
+        "lat_min": 10.7615,
+        "lon_max": 106.7275,
+        "lat_max": 10.7945
+      },
+      "snap_gpt": {
+        "gptbin_path": "C:/Program Files/snap/bin/gpt.exe"
+      },
+      "api_flags": {
+        "comsar": 0
+      },
+      "gnss": {
+        "remote_gnssfile": "C:/Users/ViphapCom2/Documents/GNSS_Viphap/gnss/data/output.csv",
+        "server_name": "ViphapCom2",
+        "server_ip": "192.168.101.100",
+        "nrovers": 2
+      },
+      "computing_resources": {
+        "cpu": 13,
+        "cache": "24G"
+      }
+    },
+    "coluy": {
+      "project_definition": {
+        "project_folder": "/home/viphap/insar_caucoluy/",
+        "graphs_folder": "/home/viphap/insar_caucoluy/modules/snap2stamps/graphs/",
+        "log_folder": "/home/viphap/insar_caucoluy/logs/",
+        "data_folder": "/home/viphap/insar_caucoluy/data/",
+        "master": "/home/viphap/insar_caucoluy/data/master/20221019/20221019_M.dim",
+        "master_folder": "/home/viphap/insar_caucoluy/data/master/",
+        "slaves_folder": "/home/viphap/insar_caucoluy/data/slaves/",
+        "raw_data_folder": "/home/viphap/insar_caucoluy/data/raw/",
+        "coreg_folder": "/home/viphap/insar_caucoluy/process/coreg/",
+        "ifg_folder": "/home/viphap/insar_caucoluy/process/ifg/",
+        "stamp_folder": "/home/viphap/insar_caucoluy/results/",
+        "config_path": "/home/viphap/insar_caucoluy/modules/snap2stamps/bin/project.conf"
+      },
+      "cache_files": {
+        "download_cache": "/home/viphap/insar_caucoluy/data/download_cache.txt",
+        "broken_cache": "/home/viphap/insar_caucoluy/data/broken_cache.txt",
+        "baseline_cache": "/home/viphap/insar_caucoluy/data/baseline_cache.txt"
+      },
+      "search_parameters": {
+        "datalake": "/home/viphap/insar_caucoluy/data/lake.json",
+        "direction": "DESCENDING",
+        "frame": 540
+      },
+      "processing_parameters": {
+        "iw1": "IW1",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20201017",
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
+        "reest_flag": 1,
+        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
+        "ministack": 5,
+        "unified": 0
+      },
+      "aoi_bbox": {
+        "lon_min": 108.8721,
+        "lat_min": 15.1294,
+        "lon_max": 108.8996,
+        "lat_max": 15.1569
+      },
+      "snap_gpt": {
+        "gptbin_path": "/home/viphap/snap9/bin/gpt"
+      },
+      "api_flags": {
+        "comsar": 0
+      },
+      "gnss": {
+        "remote_gnssfile": "C:/Users/ViphapCom2/Documents/GNSS_Viphap/gnss/data/output.csv",
+        "server_name": "ViphapCom2",
+        "server_ip": "192.168.101.100",
+        "nrovers": 2
+      },
+      "computing_resources": {
+        "cpu": 13,
+        "cache": "40G"
+      }
+    },
+    "maychai": {
+      "project_definition": {
+        "project_folder": "/home/viphap/insar_caucoluy/",
+        "graphs_folder": "/home/viphap/insar_caucoluy/modules/snap2stamps/graphs/",
+        "log_folder": "/home/viphap/insar_caucoluy/logs/",
+        "data_folder": "/home/viphap/insar_caucoluy/data/",
+        "master": "/home/viphap/insar_caucoluy/data/master/20221019/20221019_M.dim",
+        "master_folder": "/home/viphap/insar_caucoluy/data/master/",
+        "slaves_folder": "/home/viphap/insar_caucoluy/data/slaves/",
+        "raw_data_folder": "/home/viphap/insar_caucoluy/data/raw/",
+        "coreg_folder": "/home/viphap/insar_caucoluy/process/coreg/",
+        "ifg_folder": "/home/viphap/insar_caucoluy/process/ifg/",
+        "stamp_folder": "/home/viphap/insar_caucoluy/results/",
+        "config_path": "/home/viphap/insar_caucoluy/modules/snap2stamps/bin/project.conf"
+      },
+      "cache_files": {
+        "download_cache": "/home/viphap/insar_caucoluy/data/download_cache.txt",
+        "broken_cache": "/home/viphap/insar_caucoluy/data/broken_cache.txt",
+        "baseline_cache": "/home/viphap/insar_caucoluy/data/baseline_cache.txt"
+      },
+      "search_parameters": {
+        "datalake": "/home/viphap/insar_caucoluy/data/lake.json",
+        "direction": "DESCENDING",
+        "frame": 540
+      },
+      "processing_parameters": {
+        "iw1": "IW1",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20201017",
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
+        "reest_flag": 1,
+        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
+        "ministack": 5,
+        "unified": 0
+      },
+      "aoi_bbox": {
+        "lon_min": 108.8721,
+        "lat_min": 15.1294,
+        "lon_max": 108.8996,
+        "lat_max": 15.1569
+      },
+      "snap_gpt": {
+        "gptbin_path": "/home/viphap/snap9/bin/gpt"
+      },
+      "api_flags": {
+        "comsar": 0
+      },
+      "gnss": {
+        "remote_gnssfile": "C:/Users/ViphapCom2/Documents/GNSS_Viphap/gnss/data/output.csv",
+        "server_name": "ViphapCom2",
+        "server_ip": "192.168.101.100",
+        "nrovers": 2
+      },
+      "computing_resources": {
+        "cpu": 13,
+        "cache": "40G"
+      }
+    },
+    "metrohcm": {
+      "project_definition": {
+        "project_folder": "/home/viphap/insar_caucoluy/",
+        "graphs_folder": "/home/viphap/insar_caucoluy/modules/snap2stamps/graphs/",
+        "log_folder": "/home/viphap/insar_caucoluy/logs/",
+        "data_folder": "/home/viphap/insar_caucoluy/data/",
+        "master": "/home/viphap/insar_caucoluy/data/master/20221019/20221019_M.dim",
+        "master_folder": "/home/viphap/insar_caucoluy/data/master/",
+        "slaves_folder": "/home/viphap/insar_caucoluy/data/slaves/",
+        "raw_data_folder": "/home/viphap/insar_caucoluy/data/raw/",
+        "coreg_folder": "/home/viphap/insar_caucoluy/process/coreg/",
+        "ifg_folder": "/home/viphap/insar_caucoluy/process/ifg/",
+        "stamp_folder": "/home/viphap/insar_caucoluy/results/",
+        "config_path": "/home/viphap/insar_caucoluy/modules/snap2stamps/bin/project.conf"
+      },
+      "cache_files": {
+        "download_cache": "/home/viphap/insar_caucoluy/data/download_cache.txt",
+        "broken_cache": "/home/viphap/insar_caucoluy/data/broken_cache.txt",
+        "baseline_cache": "/home/viphap/insar_caucoluy/data/baseline_cache.txt"
+      },
+      "search_parameters": {
+        "datalake": "/home/viphap/insar_caucoluy/data/lake.json",
+        "direction": "DESCENDING",
+        "frame": 540
+      },
+      "processing_parameters": {
+        "iw1": "IW1",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20201017",
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
+        "reest_flag": 1,
+        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
+        "ministack": 5,
+        "unified": 0
+      },
+      "aoi_bbox": {
+        "lon_min": 108.8721,
+        "lat_min": 15.1294,
+        "lon_max": 108.8996,
+        "lat_max": 15.1569
+      },
+      "snap_gpt": {
+        "gptbin_path": "/home/viphap/snap9/bin/gpt"
+      },
+      "api_flags": {
+        "comsar": 0
+      },
+      "gnss": {
+        "remote_gnssfile": "C:/Users/ViphapCom2/Documents/GNSS_Viphap/gnss/data/output.csv",
+        "server_name": "ViphapCom2",
+        "server_ip": "192.168.101.100",
+        "nrovers": 2
+      },
+      "computing_resources": {
+        "cpu": 13,
+        "cache": "40G"
+      }
+    },
+    "noibai": {
+      "project_definition": {
+        "project_folder": "/home/viphap/insar_caucoluy/",
+        "graphs_folder": "/home/viphap/insar_caucoluy/modules/snap2stamps/graphs/",
+        "log_folder": "/home/viphap/insar_caucoluy/logs/",
+        "data_folder": "/home/viphap/insar_caucoluy/data/",
+        "master": "/home/viphap/insar_caucoluy/data/master/20221019/20221019_M.dim",
+        "master_folder": "/home/viphap/insar_caucoluy/data/master/",
+        "slaves_folder": "/home/viphap/insar_caucoluy/data/slaves/",
+        "raw_data_folder": "/home/viphap/insar_caucoluy/data/raw/",
+        "coreg_folder": "/home/viphap/insar_caucoluy/process/coreg/",
+        "ifg_folder": "/home/viphap/insar_caucoluy/process/ifg/",
+        "stamp_folder": "/home/viphap/insar_caucoluy/results/",
+        "config_path": "/home/viphap/insar_caucoluy/modules/snap2stamps/bin/project.conf"
+      },
+      "cache_files": {
+        "download_cache": "/home/viphap/insar_caucoluy/data/download_cache.txt",
+        "broken_cache": "/home/viphap/insar_caucoluy/data/broken_cache.txt",
+        "baseline_cache": "/home/viphap/insar_caucoluy/data/baseline_cache.txt"
+      },
+      "search_parameters": {
+        "datalake": "/home/viphap/insar_caucoluy/data/lake.json",
+        "direction": "DESCENDING",
+        "frame": 540
+      },
+      "processing_parameters": {
+        "iw1": "IW1",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20201017",
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
+        "reest_flag": 1,
+        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
+        "ministack": 5,
+        "unified": 0
+      },
+      "aoi_bbox": {
+        "lon_min": 108.8721,
+        "lat_min": 15.1294,
+        "lon_max": 108.8996,
+        "lat_max": 15.1569
+      },
+      "snap_gpt": {
+        "gptbin_path": "/home/viphap/snap9/bin/gpt"
+      },
+      "api_flags": {
+        "comsar": 0
+      },
+      "gnss": {
+        "remote_gnssfile": "C:/Users/ViphapCom2/Documents/GNSS_Viphap/gnss/data/output.csv",
+        "server_name": "ViphapCom2",
+        "server_ip": "192.168.101.100",
+        "nrovers": 2
+      },
+      "computing_resources": {
+        "cpu": 13,
+        "cache": "40G"
+      }
+    }
+  }
+}

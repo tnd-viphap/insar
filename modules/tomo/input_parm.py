@@ -5,28 +5,31 @@ import sys
 import warnings
 
 import numpy as np
+from config.parser import ConfigParser
 
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 warnings.filterwarnings("ignore")
 
 class Input:
-    def __init__(self, calwin, output=True):
+    def __init__(self, calwin, output=True, project_name="default"):
+        # Initialize config parser
+        config_path = os.path.join(project_path, "config", "config.json")
+        self.config_parser = ConfigParser(config_path)
+        self.config = self.config_parser.get_project_config(project_name)
 
-        self.project_conf = os.path.join(project_path, "modules/snap2stamps/bin/project.conf").replace("\\", "/")
-
-        self.COMSAR_fetch = self.read_conf_value('COMSAR')
+        self.COMSAR_fetch = str(self.config['api_flags']['comsar'])
         self.ComSAR_flag = self.COMSAR_fetch.lower() in ('true', '1')
         print("-> ComSAR Enabled" if self.ComSAR_flag else "-> PSDS Enabled")
 
-        self.miniStackSize = int(self.read_conf_value('MINISTACK'))
+        self.miniStackSize = int(self.config['processing_parameters']['ministack'])
 
-        self.Unified_fetch = self.read_conf_value('UNIFIED')
+        self.Unified_fetch = str(self.config['processing_parameters']['unified'])
         self.Unified_flag = self.Unified_fetch.lower() in ('true', '1')
         print("-> Unified ComSAR Enabled" if self.Unified_flag else "-> Unified ComSAR Disabled")
 
         self.InSAR_processor = 'snap'
-        self.InSAR_path = self.read_conf_value('CURRENT_RESULT')
+        self.InSAR_path = self.config['processing_parameters']['current_result']
 
         self.slcstack = {}
         self.interfstack = {}
@@ -34,20 +37,6 @@ class Input:
         self.CalWin = calwin
         self.print_flag = output
 
-    def read_conf_value(self, key):
-        """Reads the value of a key from a configuration file."""
-        try:
-            with open(self.project_conf, 'r') as file:
-                for line in file:
-                    if line.strip().startswith(key):
-                        parts = line.split('=')
-                        if len(parts) > 1:
-                            return parts[1].strip()
-            print(f"WARNING: {key} not found in the file.")
-            return ''
-        except FileNotFoundError:
-            raise FileNotFoundError("Cannot open the file.")
-        
     def imgread(self, directory, prefix, nlines, dtype_str='cpxfloat32', extension='', verbose=False):
         """
         Read a stack of binary files with consistent dimensions and type.
@@ -169,8 +158,6 @@ class Input:
             raise AssertionError('Can not broadcast enough data')
 
 if __name__ == "__main__":
-    # test_ImgRead()
-    # None
-    slcstack, interfstack = Input([7, 25]).run()
+    slcstack, interfstack = Input([7, 25], project_name="default").run()
     print(slcstack["datastack"][0]["data"].shape)
 

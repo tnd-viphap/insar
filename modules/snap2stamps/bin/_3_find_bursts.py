@@ -6,48 +6,41 @@ import geopandas as gpd
 import stsa
 from shapely.geometry import Point, Polygon
 import time
+import sys
+
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+from config.parser import ConfigParser
 
 
 class Burst:
-    def __init__(self):
+    def __init__(self, project_name="default"):
         super().__init__()
-        with open(os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf"), 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
                     
-        self.polygon = Polygon([Point(self.LONMIN, self.LATMIN), Point(self.LONMAX, self.LATMIN), Point(self.LONMAX, self.LATMAX), Point(self.LONMIN, self.LATMAX), Point(self.LONMIN, self.LATMIN)])
+        self.polygon = Polygon([Point(self.config["aoi_bbox"]["lon_min"], self.config["aoi_bbox"]["lat_min"]), Point(self.config["aoi_bbox"]["lon_max"], self.config["aoi_bbox"]["lat_min"]), Point(self.config["aoi_bbox"]["lon_max"], self.config["aoi_bbox"]["lat_max"]), Point(self.config["aoi_bbox"]["lon_min"], self.config["aoi_bbox"]["lat_max"]), Point(self.config["aoi_bbox"]["lon_min"], self.config["aoi_bbox"]["lat_min"])])
     
     # Update config
     def modify_master(self, output: list):
-        lines = ''''''
-        with open(self.CONFIG_PATH, 'r') as file:
-            lines = file.readlines()
-            for idx, line in enumerate(lines):
-                if output[0] and line.startswith("IW1"):
-                    lines[idx] = "IW1=" + output[0] + '\n'
-                if output[1] and line.startswith("FIRST_BURST"):
-                    lines[idx] = "FIRST_BURST=" + output[1] + '\n'
-                if output[1] and line.startswith("LAST_BURST"):
-                    lines[idx] = "LAST_BURST=" + output[2] + '\n'
-            
-        with open(self.CONFIG_PATH, "w") as file:
-            file.writelines(lines)
-            file.close()
+        self.config["processing_parameters"]["iw1"] = output[0]
+        self.config["processing_parameters"]["first_burst"] = output[1]
+        self.config["processing_parameters"]["last_burst"] = output[2]
+        self.config_parser.update_project_config(self.project_name, self.config)
             
     def find_burst(self, folder=None):
         # Find burst footprints
         s1 = stsa.TopsSplitAnalyzer(target_subswaths=['iw1', 'iw2', 'iw3'], polarization="vv")
-        zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.MASTERFOLDER}/*/*.zip")]
+        zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.config["project_definition"]["master_folder"]}/*/*.zip")]
         if zip:
-            s1.load_zip(os.path.join(self.PROJECTFOLDER, zip[0].replace("./", "")))
-            if not os.path.exists(os.path.join(self.DATAFOLDER, "geom")):
-                os.makedirs(os.path.join(self.DATAFOLDER, "geom"))
-            s1.to_shapefile(f"{self.DATAFOLDER}geom/master_bursts.shp")
+            s1.load_zip(os.path.join(self.config["project_definition"]["project_folder"], zip[0].replace("./", "")))
+            if not os.path.exists(os.path.join(self.config["project_definition"]["data_folder"], "geom")):
+                os.makedirs(os.path.join(self.config["project_definition"]["data_folder"], "geom"))
+            s1.to_shapefile(f"{self.config["project_definition"]["data_folder"]}geom/master_bursts.shp")
             
             # Find bursts
-            gdf = gpd.read_file(f"{self.DATAFOLDER}geom/master_bursts.shp")
+            gdf = gpd.read_file(f"{self.config["project_definition"]["data_folder"]}geom/master_bursts.shp")
             if any(gdf.geometry.intersects(self.polygon)):
                 gdf = gdf[gdf.geometry.intersects(self.polygon)]
                 subswath = gdf.subswath.values[0]

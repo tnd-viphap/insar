@@ -20,8 +20,13 @@ from modules.snap2stamps.bin._3_find_bursts import Burst
 from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
 from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+
+from config.parser import ConfigParser
+
 class Download:
-    def __init__(self, search_result, download_on: list = [None, None]):
+    def __init__(self, search_result, download_on: list = [None, None], project_name="default"):
         super().__init__()
         
         self.logger = logging.getLogger()
@@ -50,27 +55,24 @@ class Download:
                     self.search_result = self.search_result[:end_idx]
         
         # Read input file
-        inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
-        with open(inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
             
         self.print_lock = threading.Lock()  # Ensure thread-safe printing
         
         # Create necessary directories if they don't exist
-        os.makedirs(self.RAWDATAFOLDER, exist_ok=True)
-        os.makedirs(self.MASTERFOLDER, exist_ok=True)
-        os.makedirs(self.SLAVESFOLDER, exist_ok=True)
-        os.makedirs(self.DATAFOLDER, exist_ok=True)
+        os.makedirs(self.config["project_definition"]["raw_data_folder"], exist_ok=True)
+        os.makedirs(self.config["project_definition"]["master_folder"], exist_ok=True)
+        os.makedirs(self.config["project_definition"]["slaves_folder"], exist_ok=True)
+        os.makedirs(self.config["project_definition"]["data_folder"], exist_ok=True)
         
-        self.processed_files = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
+        self.processed_files = os.listdir(self.config["project_definition"]["master_folder"]) + os.listdir(self.config["project_definition"]["slaves_folder"])
 
     def _get_expected_size(self, file_id):
         """Retrieve expected file size from lake.json."""
         try:
-            with open(self.DATALAKE, "r") as file:
+            with open(self.config["search_parameters"]["datalake"], "r") as file:
                 self.data = json.load(file)
                 for entry in self.data:
                     if isinstance(entry, dict) and "properties" in entry:
@@ -161,17 +163,17 @@ class Download:
     def _update_download_cache(self, file_id):
         """Update the download cache with the new file ID."""
         try:
-            if os.path.exists(self.DOWNLOAD_CACHE):
-                with open(self.DOWNLOAD_CACHE, "r") as cache:
+            if os.path.exists(self.config["cache_files"]["download_cache"]):
+                with open(self.config["cache_file"]["download_cache"], "r") as cache:
                     lines = cache.readlines()
                     file_id = file_id + '\n'
                     if file_id not in lines:
                         lines.append(file_id)
                         lines = list(sorted(set(lines)))
-                        with open(self.DOWNLOAD_CACHE, "w") as cache_file:
+                        with open(self.config["cache_files"]["download_cache"], "w") as cache_file:
                             cache_file.writelines(lines)
             else:
-                with open(self.DOWNLOAD_CACHE, "w") as cache:
+                with open(self.config["cache_files"]["download_cache"], "w") as cache:
                     cache.write(file_id + "\n")
         except Exception as e:
             self.logger.error(f"Error updating download cache: {str(e)}")
@@ -202,27 +204,27 @@ class Download:
         
         def check_and_clean_disk_space():
             """Internal function to check disk space and perform cleaning if needed."""
-            percentage = self._get_disk_space(self.RAWDATAFOLDER)
+            percentage = self._get_disk_space(self.config["project_definition"]["raw_data_folder"])
             if percentage <= 30.0:
                 print("-> Disk space is about full. Performing data cleaning...")
                 incomplete_download = []
                 
                 # Identify and move incomplete downloads
-                for product in os.listdir(self.RAWDATAFOLDER):
-                    product_path = os.path.join(self.RAWDATAFOLDER, product)
+                for product in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+                    product_path = os.path.join(self.config["project_definition"]["raw_data_folder"], product)
                     if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
-                        incomplete_path = os.path.join(self.DATAFOLDER, product).replace("\\", "/")
+                        incomplete_path = os.path.join(self.config["project_definition"]["data_folder"], product).replace("\\", "/")
                         incomplete_download.append(incomplete_path)
-                        shutil.move(product_path, self.DATAFOLDER)
+                        shutil.move(product_path, self.config["project_definition"]["data_folder"])
                 
                 # Cleaning sequence
                 time.sleep(2)
-                MasterSelect(self.REEST_FLAG, None, True).select_master()
+                MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True).select_master()
                 time.sleep(2)
                 
                 # Move incomplete files back to RAWDATAFOLDER
                 for file in incomplete_download:
-                    shutil.move(file, self.RAWDATAFOLDER)
+                    shutil.move(file, self.config["project_definition"]["raw_data_folder"])
                 
                 time.sleep(2)
                 Burst().find_burst()
@@ -253,20 +255,20 @@ class Download:
                         
                         # Temporary move of current downloads
                         incomplete_download = []
-                        for product in os.listdir(self.RAWDATAFOLDER):
-                            product_path = os.path.join(self.RAWDATAFOLDER, product)
+                        for product in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+                            product_path = os.path.join(self.config["project_definition"]["raw_data_folder"], product)
                             if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
-                                incomplete_path = os.path.join(self.DATAFOLDER, product).replace("\\", "/")
+                                incomplete_path = os.path.join(self.config["project_definition"]["data_folder"], product).replace("\\", "/")
                                 incomplete_download.append(incomplete_path)
-                                shutil.move(product_path, self.DATAFOLDER)
+                                shutil.move(product_path, self.config["project_definition"]["data_folder"])
                         
                         # Run cleaning sequence
                         time.sleep(2)
-                        MasterSelect(self.REEST_FLAG, None, True).select_master()
+                        MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True).select_master()
                         
                         # Move incomplete files back to RAWDATAFOLDER
                         for file in incomplete_download:
-                            shutil.move(file, self.RAWDATAFOLDER)
+                            shutil.move(file, self.config["project_definition"]["raw_data_folder"])
                         
                         time.sleep(2)
                         Burst().find_burst()
@@ -279,19 +281,16 @@ class Download:
                         print("-> Continue downloading...")
 
 class SLC_Search:
-    def __init__(self, max_date=None, download_on: list = [None, None]):
+    def __init__(self, max_date=None, download_on: list = [None, None], project_name="default"):
         super().__init__()
         
         # Read input file
-        inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
-        with open(inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
 
         # Define AOI
-        self.AOI = f"POLYGON (({self.LONMIN} {self.LATMIN},{self.LONMAX} {self.LATMIN},{self.LONMAX} {self.LATMAX},{self.LONMIN} {self.LATMAX},{self.LONMIN} {self.LATMIN}))"
+        self.AOI = f"POLYGON (({self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmin"]},{self.config["aoi_bbox"]["lonmax"]} {self.config["aoi_bbox"]["latmin"]},{self.config["aoi_bbox"]["lonmax"]} {self.config["aoi_bbox"]["latmax"]},{self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmax"]},{self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmin"]}))"
         
         self.logger = self._setup_logger()
         self.download_on = download_on
@@ -307,23 +306,23 @@ class SLC_Search:
         self.monthly_data = {}
         
         # Get list of already processed images
-        if os.path.exists(self.MASTERFOLDER):
-            for file in os.listdir(self.MASTERFOLDER):
+        if os.path.exists(self.config["project_definition"]["master_folder"]):
+            for file in os.listdir(self.config["project_definition"]["master_folder"]):
                 month_key = file[0:6]  # YYYYMM
                 if month_key not in self.monthly_data:
                     self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
                 self.monthly_data[month_key]['processed'].append(file)
                 
-        if os.path.exists(self.SLAVESFOLDER):
-            for file in os.listdir(self.SLAVESFOLDER):
+        if os.path.exists(self.config["project_definition"]["slaves_folder"]):
+            for file in os.listdir(self.config["project_definition"]["slaves_folder"]):
                 month_key = file[0:6]  # YYYYMM
                 if month_key not in self.monthly_data:
                     self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
                 self.monthly_data[month_key]['processed'].append(file)
         
         # Track incomplete downloads
-        if os.path.exists(self.RAWDATAFOLDER):
-            for file in os.listdir(self.RAWDATAFOLDER):
+        if os.path.exists(self.config["project_definition"]["raw_data_folder"]):
+            for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
                 if file.endswith('.zip'):
                     month_key = file[17:23]  # YYYYMM
                     if month_key not in self.monthly_data:
@@ -363,9 +362,9 @@ class SLC_Search:
             return start_date, end_date
             
         # If no download_on specified, use existing logic
-        if os.listdir(self.MASTERFOLDER) or os.listdir(self.SLAVESFOLDER):
-            if os.path.exists(self.DOWNLOAD_CACHE):
-                with open(self.DOWNLOAD_CACHE, "r") as file:
+        if os.listdir(self.config["project_definition"]["master_folder"]) or os.listdir(self.config["project_definition"]["slaves_folder"]):
+            if os.path.exists(self.config["cache_files"]["download_cache"]):
+                with open(self.config["cache_files"]["download_cache"], "r") as file:
                     lines = file.readlines()
                     if lines:
                         latest_product = lines[-1].strip()
@@ -375,11 +374,11 @@ class SLC_Search:
                 self.logger.info(f"-> Resuming from latest available data: {latest_date}")
                 return latest_date, datetime.now()
             else:
-                images = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
+                images = os.listdir(self.config["project_definition"]["master_folder"]) + os.listdir(self.config["project_definition"]["slaves_folder"])
                 latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
                 return latest_date, datetime.now()
         else:
-            images = [f[17:25] for f in os.listdir(self.RAWDATAFOLDER)]
+            images = [f[17:25] for f in os.listdir(self.config["project_definition"]["raw_data_folder"])]
             if images:
                 latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
                 return latest_date, datetime.now()
@@ -428,7 +427,7 @@ class SLC_Search:
         # First, handle incomplete downloads
         for month_key, data in self.monthly_data.items():
             for file in data['incomplete']:
-                file_path = os.path.join(self.RAWDATAFOLDER, file)
+                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
                 if self._is_file_incomplete(file_path):
                     # Find matching result in results
                     for result in results:
@@ -464,7 +463,7 @@ class SLC_Search:
         """Perform a full search for Sentinel-1 data."""
         # Load existing lake data or initialize an empty list
         try:
-            with open(self.DATALAKE, "r") as file:
+            with open(self.config["search_parameters"]["datalake"], "r") as file:
                 lake_data = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             lake_data = []
@@ -474,7 +473,7 @@ class SLC_Search:
         incomplete_results = []
         for month_key, data in self.monthly_data.items():
             for file in data['incomplete']:
-                file_path = os.path.join(self.RAWDATAFOLDER, file)
+                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
                 if self._is_file_incomplete(file_path):
                     file_date = datetime.strptime(file[17:25], "%Y%m%d")
                     
@@ -483,8 +482,8 @@ class SLC_Search:
                             platform=["Sentinel-1A", "Sentinel-1C"],
                             processingLevel="SLC",
                             intersectsWith=self.AOI,
-                            flightDirection=self.DIRECTION,
-                            frame=int(self.FRAME),
+                            flightDirection=self.config["search_parameters"]["direction"],
+                            frame=int(self.config["search_parameters"]["frame_no"]),
                             start=file_date - timedelta(days=1),
                             end=file_date + timedelta(days=1)
                         )
@@ -519,8 +518,8 @@ class SLC_Search:
                     platform=["Sentinel-1A", "Sentinel-1C"],
                     processingLevel="SLC",
                     intersectsWith=self.AOI,
-                    flightDirection=self.DIRECTION,
-                    frame=int(self.FRAME),
+                    flightDirection=self.config["search_parameters"]["direction"],
+                    frame=int(self.config["search_parameters"]["frame_no"]),
                     start=start,
                     end=end
                 )
@@ -551,7 +550,7 @@ class SLC_Search:
                 self.final_results.append(result)
         
         # Save updated lake data
-        with open(self.DATALAKE, 'w') as file:
+        with open(self.config["search_parameters"]["datalake"], 'w') as file:
             json.dump(lake_data, file, indent=4) 
         
         self.logger.info(f"Found {len(self.final_results)} images for download.")

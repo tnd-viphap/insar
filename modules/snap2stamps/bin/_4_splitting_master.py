@@ -5,27 +5,23 @@ import subprocess
 import sys
 import time
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+from config.parser import ConfigParser
+
 class MasterSplitter:
-    def __init__(self):
+    def __init__(self, project_name="default"):
         super().__init__()
-        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
-        if not os.path.exists(self.inputfile):
-            print("Configuration file is missing")
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         self.bar_message = '\n#####################################################################\n'
-        self._load_config()
         self._create_folders()
-        self.graph2run = os.path.join(self.GRAPHSFOLDER, 'splitgraph2run.xml')
-        self.outlog = os.path.join(self.LOGFOLDER, 'split_proc_stdout.log')
-    
-    def _load_config(self):
-        with open(self.inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
+        self.graph2run = os.path.join(self.config["project_definition"]["graphs_folder"], 'splitgraph2run.xml')
+        self.outlog = os.path.join(self.config["project_definition"]["log_folder"], 'split_proc_stdout.log')
     
     def _create_folders(self):
-        for folder in [self.LOGFOLDER]:
+        for folder in [self.config["project_definition"]["log_folder"]]:
             if not os.path.exists(folder):
                 os.makedirs(folder)
     
@@ -36,12 +32,12 @@ class MasterSplitter:
             out_file.write(self.bar_message)
             
             k = 0
-            for acdatefolder in sorted(os.listdir(self.MASTERFOLDER)):
+            for acdatefolder in sorted(os.listdir(self.config["project_definition"]["master_folder"])):
                 k += 1
                 print(f'[{k}] Folder: {acdatefolder}')
                 out_file.write(f'[{k}] Folder: {acdatefolder}\n')
                 
-                folder_path = os.path.join(self.MASTERFOLDER, acdatefolder)
+                folder_path = os.path.join(self.config["project_definition"]["master_folder"], acdatefolder)
                 files = glob.glob(folder_path + '/*.zip')
                 out_file.write(str(files) + '\n')
                 
@@ -50,7 +46,7 @@ class MasterSplitter:
                 
                 _, tail = os.path.split(files[0])
                 outputname = tail[17:25] + '_M.dim'
-                if tail[17:25] in os.listdir(self.MASTERFOLDER) and len(os.listdir(folder_path)) > 1:
+                if tail[17:25] in os.listdir(self.config["project_definition"]["master_folder"]) and len(os.listdir(folder_path)) > 1:
                     print("Master image is already processed")
                     if tail in os.listdir(folder_path):
                         print("Raw data detected. Deleting...")
@@ -58,20 +54,20 @@ class MasterSplitter:
                     continue
                 
                 if len(files) == 1:
-                    graphxml = os.path.join(self.GRAPHSFOLDER, 'slave_split_applyorbit.xml')
+                    graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slave_split_applyorbit.xml')
                     
                     with open(graphxml, 'r') as file:
                         filedata = file.read()
                         filedata = filedata.replace('INPUTFILE', files[0])
-                        filedata = filedata.replace('IWs', self.IW1)
-                        filedata = filedata.replace('FIRST_BURST', self.FIRST_BURST)
-                        filedata = filedata.replace('LAST_BURST', self.LAST_BURST)
+                        filedata = filedata.replace('IWs', self.config["processing_parameters"]["iw1"])
+                        filedata = filedata.replace('FIRST_BURST', self.config["processing_parameters"]["first_burst"])
+                        filedata = filedata.replace('LAST_BURST', self.config["processing_parameters"]["last_burst"])
                         filedata = filedata.replace('OUTPUTFILE', os.path.join(folder_path, outputname))
                     
                     with open(self.graph2run, 'w') as file:
                         file.write(filedata)
                 
-                args = [self.GPTBIN_PATH, self.graph2run, '-c', self.CACHE, '-q', self.CPU]
+                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
                 print(args)
                 out_file.write(str(args) + '\n')
                 

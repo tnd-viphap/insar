@@ -1,6 +1,7 @@
 # type: ignore
 import os
 import shutil
+import sys
 import time
 import zipfile
 
@@ -10,31 +11,31 @@ from sct.analyses.graphical_output import sct_pta_graphs
 from sct.analyses.point_target_analysis import point_target_analysis_with_corrections
 from sct.configuration.sct_configuration import SCTConfiguration
 
+from config.parser import ConfigParser
 from modules.utils.compute_cr_ea import gps2ecef_pyproj, shift_target_point
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
 
 class PTA:
-    def __init__(self, prod, eof=None):
+    def __init__(self, prod, eof=None, project_name="default"):
 
         # Read input file
-        inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "modules/snap2stamps/bin/project.conf")
-        with open(inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         
         self.config = SCTConfiguration.from_toml("modules/pta/pta.toml")
         self.prod = prod
         self.eof = eof
         
         prod_date = os.path.split(self.prod)[-1][17:25]
-        self.pta_output_folder = f"{self.PROJECTFOLDER}/process/pta/{prod_date}"
-        self.pta_target_file = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_target.csv"
-        self.pta_output_result_file = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_results.csv"
-        self.pta_output_graphs = f"{self.PROJECTFOLDER}/process/pta/{prod_date}/pta_graphs"
-        if not os.path.exists(f"{self.PROJECTFOLDER}/process/pta"):
-            os.makedirs(f"{self.PROJECTFOLDER}/process/pta")
+        self.pta_output_folder = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}"
+        self.pta_target_file = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_target.csv"
+        self.pta_output_result_file = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_results.csv"
+        self.pta_output_graphs = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_graphs"
+        if not os.path.exists(f"{self.config["project_definition"]["project_folder"]}/process/pta"):
+            os.makedirs(f"{self.config["project_definition"]["project_folder"]}/process/pta")
         if not os.path.exists(self.pta_output_folder):
             os.makedirs(self.pta_output_folder)
         if not os.path.exists(self.pta_output_graphs):

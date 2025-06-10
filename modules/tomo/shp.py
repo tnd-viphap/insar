@@ -8,10 +8,14 @@ import numpy as np
 from scipy.ndimage import label
 from tqdm import tqdm
 
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(project_path)
+
 from modules.tomo.bwstest import BWS
+from config.parser import ConfigParser
 
 class SHP:
-    def __init__(self, slcstack, calwin=[15, 15], alpha=0.05):
+    def __init__(self, slcstack, calwin=[15, 15], alpha=0.05, project_name="default"):
         """
         Identify statistically homogeneous pixels (SHPs) in a stack.
 
@@ -31,10 +35,11 @@ class SHP:
         if self.slcstack.ndim != 3:
             raise ValueError("Input must be a 3D matrix.")
         
-        self.inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0].split("modules")[0], "modules/snap2stamps/bin/project.conf")
-        self._load_config()
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
 
-        self.log_dir = os.path.join(self.CURRENT_RESULT, 'logs')
+        self.log_dir = os.path.join(self.config["processing_parameters"]["current_result"], 'logs')
         
     def _write_to_log(self, message):
         """Write message to log file with timestamp."""
