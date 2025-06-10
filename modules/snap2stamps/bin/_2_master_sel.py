@@ -83,7 +83,10 @@ class MasterSelect:
             for item in os.listdir(self.MASTERFOLDER):
                 if item != exclude:
                     src_path = os.path.join(self.MASTERFOLDER, item)
-                    shutil.move(src_path, self.SLAVESFOLDER)
+                    try:
+                        shutil.move(src_path, self.SLAVESFOLDER)
+                    except:
+                        pass
 
     def move_master(self, src_dir):
         if not os.path.isdir(src_dir):

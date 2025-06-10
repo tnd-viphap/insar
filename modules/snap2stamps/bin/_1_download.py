@@ -3,7 +3,6 @@ import concurrent.futures
 import json
 import logging
 import os
-import random
 import sys
 import threading
 import time
@@ -14,6 +13,7 @@ from shapely import from_wkt
 import asf_search as asf
 from asf_search.exceptions import ASFSearch5xxError
 from tenacity import retry, stop_after_attempt, wait_exponential
+import platform
 
 from modules.snap2stamps.bin._2_master_sel import MasterSelect
 from modules.snap2stamps.bin._3_find_bursts import Burst
@@ -29,17 +29,26 @@ class Download:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
         self.download_on = download_on
-        if not None in self.download_on:
+        
+        # Handle date filtering based on download_on parameter
+        if self.download_on[0] is not None or self.download_on[1] is not None:
             start_date = self.download_on[0]
             end_date = self.download_on[1]
-            start_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])>=int(start_date)]
-            if start_idx:
-                start_idx = start_idx[0]
-                if end_date:
-                    end_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25])<=int(end_date)][-1]+1
-                    self.search_result = self.search_result[start_idx:end_idx]
-                else:
+            
+            # Filter by start date if provided
+            if start_date is not None:
+                start_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25]) >= int(start_date)]
+                if start_idx:
+                    start_idx = start_idx[0]
                     self.search_result = self.search_result[start_idx:]
+            
+            # Filter by end date if provided
+            if end_date is not None:
+                end_idx = [self.search_result.index(f) for f in self.search_result if int(f.properties["fileID"][17:25]) <= int(end_date)]
+                if end_idx:
+                    end_idx = end_idx[-1] + 1
+                    self.search_result = self.search_result[:end_idx]
+        
         # Read input file
         inputfile = os.path.join(os.path.split(os.path.abspath(__file__))[0], "project.conf")
         with open(inputfile, 'r') as file:
@@ -50,20 +59,26 @@ class Download:
             
         self.print_lock = threading.Lock()  # Ensure thread-safe printing
         
+        # Create necessary directories if they don't exist
+        os.makedirs(self.RAWDATAFOLDER, exist_ok=True)
+        os.makedirs(self.MASTERFOLDER, exist_ok=True)
+        os.makedirs(self.SLAVESFOLDER, exist_ok=True)
+        os.makedirs(self.DATAFOLDER, exist_ok=True)
+        
         self.processed_files = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
 
     def _get_expected_size(self, file_id):
         """Retrieve expected file size from lake.json."""
-        with open(self.DATALAKE, "r") as file:
-            self.data = json.load(file)
-        """Retrieve expected file size from lake.json safely."""
-        for entry in self.data:
-            if isinstance(entry, dict) and "properties" in entry:
-                properties = entry["properties"]
-                if isinstance(properties, dict) and properties.get("fileID") == file_id:
-                    file.close()
-                    return properties.get("bytes")
-        file.close()
+        try:
+            with open(self.DATALAKE, "r") as file:
+                self.data = json.load(file)
+                for entry in self.data:
+                    if isinstance(entry, dict) and "properties" in entry:
+                        properties = entry["properties"]
+                        if isinstance(properties, dict) and properties.get("fileID") == file_id:
+                            return properties.get("bytes")
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.logger.error(f"Error reading datalake: {str(e)}")
         return None
 
     def _resume_download(self, result, savepath):
@@ -86,7 +101,7 @@ class Download:
         
         if file_id[17:25] in self.processed_files:
             print("-> Processed data detected. Skipping this product...")
-            return
+            return None
 
         with self.print_lock:
             print(f"Starting download: {file_name} ({current_size}/{expected_size} bytes)...")
@@ -94,47 +109,89 @@ class Download:
         url = result.properties["url"]
         headers = {"Range": f"bytes={current_size}-"} if current_size > 0 else {}
 
-        with self.session.get(url, headers=headers, stream=True) as response:
-            response.raise_for_status()
-            mode = "ab" if "Range" in headers else "wb"
-            with open(file_path, mode) as file:
-                downloaded = current_size
-                start_time = time.time()
+        try:
+            with self.session.get(url, headers=headers, stream=True) as response:
+                response.raise_for_status()
+                mode = "ab" if "Range" in headers else "wb"
+                
+                # Create a temporary file for the download
+                temp_file_path = file_path + ".tmp"
+                with open(temp_file_path, mode) as file:
+                    downloaded = current_size
+                    start_time = time.time()
 
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        file.write(chunk)
-                        downloaded += len(chunk)
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            file.write(chunk)
+                            downloaded += len(chunk)
 
-                        percent = (downloaded / expected_size) * 100
-                        elapsed_time = time.time() - start_time
-                        speed = downloaded / (elapsed_time + 1e-6)  # Bytes per second
+                            percent = (downloaded / expected_size) * 100
+                            elapsed_time = time.time() - start_time
+                            speed = downloaded / (elapsed_time + 1e-6)  # Bytes per second
 
-                        with self.print_lock:
-                            #sys.stdout.write(f"\r[{file_name}] {percent:.2f}% ({downloaded}/{expected_size} bytes) | {speed / 1e6:.2f} MB/s")
-                            sys.stdout.flush()
-        print("\n")
+                            with self.print_lock:
+                                sys.stdout.write(f"\r[{file_name}] {percent:.2f}% ({downloaded}/{expected_size} bytes) | {speed / 1e6:.2f} MB/s")
+                                sys.stdout.flush()
+                
+                # Only rename the file if download was successful
+                if downloaded == expected_size:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    os.rename(temp_file_path, file_path)
+                    
+                    # Update download cache
+                    self._update_download_cache(file_id)
+                    
+                    with self.print_lock:
+                        self.logger.info(f"\nDownloaded: {file_name}")
+                    return file_name
+                else:
+                    # If download was incomplete, keep the temporary file
+                    with self.print_lock:
+                        self.logger.warning(f"\nIncomplete download: {file_name}")
+                    return None
+                    
+        except Exception as e:
+            with self.print_lock:
+                self.logger.error(f"Error downloading {file_name}: {str(e)}")
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            return None
 
-        with self.print_lock:
-            self.logger.info(f"\nDownloaded: {file_name}")
+    def _update_download_cache(self, file_id):
+        """Update the download cache with the new file ID."""
+        try:
+            if os.path.exists(self.DOWNLOAD_CACHE):
+                with open(self.DOWNLOAD_CACHE, "r") as cache:
+                    lines = cache.readlines()
+                    file_id = file_id + '\n'
+                    if file_id not in lines:
+                        lines.append(file_id)
+                        lines = list(sorted(set(lines)))
+                        with open(self.DOWNLOAD_CACHE, "w") as cache_file:
+                            cache_file.writelines(lines)
+            else:
+                with open(self.DOWNLOAD_CACHE, "w") as cache:
+                    cache.write(file_id + "\n")
+        except Exception as e:
+            self.logger.error(f"Error updating download cache: {str(e)}")
 
-        # **Save fileID to download_cache.txt**
-        if os.path.exists(self.DOWNLOAD_CACHE):
-            with open(self.DOWNLOAD_CACHE, "r") as cache:
-                lines = cache.readlines()
-                file_id = file_id+'\n'
-                lines.append(file_id)
-                lines = list(sorted(set(lines)))
-                with open(self.DOWNLOAD_CACHE, "w") as cache_file:  # Open in append mode
-                    cache_file.writelines(lines)
-                    cache_file.close()
-                cache.close()
+    def _get_disk_space(self, path):
+        """Get disk space information for Windows."""
+        if platform.system() == "Windows":
+            import ctypes
+            free_bytes = ctypes.c_ulonglong(0)
+            total_bytes = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                ctypes.c_wchar_p(path), None, ctypes.pointer(total_bytes), ctypes.pointer(free_bytes)
+            )
+            return (free_bytes.value / total_bytes.value) * 100
         else:
-            with open(self.DOWNLOAD_CACHE, "a") as cache:
-                cache.write(file_id+"\n")
-                cache.close()
-
-        return file_name
+            stat = os.statvfs("/")
+            total = stat.f_blocks * stat.f_frsize
+            free = stat.f_bfree * stat.f_frsize
+            percentage = float(free) / float(total) * 100
+            return percentage
 
     def download(self, savepath):
         """
@@ -145,11 +202,7 @@ class Download:
         
         def check_and_clean_disk_space():
             """Internal function to check disk space and perform cleaning if needed."""
-            stat = os.statvfs("/")
-            total = stat.f_blocks * stat.f_frsize
-            free = stat.f_bfree * stat.f_frsize
-            percentage = float(free) / float(total) * 100
-            
+            percentage = self._get_disk_space(self.RAWDATAFOLDER)
             if percentage <= 30.0:
                 print("-> Disk space is about full. Performing data cleaning...")
                 incomplete_download = []
@@ -226,7 +279,7 @@ class Download:
                         print("-> Continue downloading...")
 
 class SLC_Search:
-    def __init__(self, max_date=None):
+    def __init__(self, max_date=None, download_on: list = [None, None]):
         super().__init__()
         
         # Read input file
@@ -241,6 +294,7 @@ class SLC_Search:
         self.AOI = f"POLYGON (({self.LONMIN} {self.LATMIN},{self.LONMAX} {self.LATMIN},{self.LONMAX} {self.LATMAX},{self.LONMIN} {self.LATMAX},{self.LONMIN} {self.LATMIN}))"
         
         self.logger = self._setup_logger()
+        self.download_on = download_on
         self.start_date, self.end_date = self._determine_date_range()
         self.current_date = self.start_date
         self.final_results = []
@@ -248,6 +302,33 @@ class SLC_Search:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
         self.resume = False
         self.max_date = max_date
+        
+        # Track existing data by month
+        self.monthly_data = {}
+        
+        # Get list of already processed images
+        if os.path.exists(self.MASTERFOLDER):
+            for file in os.listdir(self.MASTERFOLDER):
+                month_key = file[0:6]  # YYYYMM
+                if month_key not in self.monthly_data:
+                    self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
+                self.monthly_data[month_key]['processed'].append(file)
+                
+        if os.path.exists(self.SLAVESFOLDER):
+            for file in os.listdir(self.SLAVESFOLDER):
+                month_key = file[0:6]  # YYYYMM
+                if month_key not in self.monthly_data:
+                    self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
+                self.monthly_data[month_key]['processed'].append(file)
+        
+        # Track incomplete downloads
+        if os.path.exists(self.RAWDATAFOLDER):
+            for file in os.listdir(self.RAWDATAFOLDER):
+                if file.endswith('.zip'):
+                    month_key = file[17:23]  # YYYYMM
+                    if month_key not in self.monthly_data:
+                        self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
+                    self.monthly_data[month_key]['incomplete'].append(file)
 
     def _setup_logger(self):
         """Set up logging."""
@@ -259,8 +340,29 @@ class SLC_Search:
         return logger
 
     def _determine_date_range(self):
+        """Determine the search date range based on existing data and download_on parameter."""
         time.sleep(1)
-        """Determine the search date range based on existing data."""
+        
+        # If download_on is specified, use those dates
+        if self.download_on[0] is not None or self.download_on[1] is not None:
+            start_date = None
+            end_date = None
+            
+            if self.download_on[0] is not None:
+                start_date = datetime.strptime(self.download_on[0], "%Y%m%d")
+            if self.download_on[1] is not None:
+                end_date = datetime.strptime(self.download_on[1], "%Y%m%d")
+                
+            # If only one date is provided, use appropriate default for the other
+            if start_date is None:
+                start_date = datetime(2014, 10, 1)  # Default start date
+            if end_date is None:
+                end_date = datetime.now()  # Default end date
+                
+            self.logger.info(f"-> Using specified date range: {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}")
+            return start_date, end_date
+            
+        # If no download_on specified, use existing logic
         if os.listdir(self.MASTERFOLDER) or os.listdir(self.SLAVESFOLDER):
             if os.path.exists(self.DOWNLOAD_CACHE):
                 with open(self.DOWNLOAD_CACHE, "r") as file:
@@ -308,6 +410,56 @@ class SLC_Search:
             self.logger.error(f"Unexpected error during ASF search: {str(e)}")
             raise
 
+    def _get_monthly_count(self, month_key):
+        """Get total count of images for a month (processed + incomplete)."""
+        if month_key not in self.monthly_data:
+            return 0
+        return len(self.monthly_data[month_key]['processed']) + len(self.monthly_data[month_key]['incomplete'])
+
+    def _is_file_incomplete(self, file_path):
+        """Check if a file is incomplete based on size."""
+        return float(os.path.getsize(file_path)) / 1024**3 <= 3.8
+
+    def _filter_monthly_results(self, results):
+        """Filter results based on existing data and max_date per month."""
+        filtered_results = []
+        monthly_counts = {month: self._get_monthly_count(month) for month in self.monthly_data.keys()}
+        
+        # First, handle incomplete downloads
+        for month_key, data in self.monthly_data.items():
+            for file in data['incomplete']:
+                file_path = os.path.join(self.RAWDATAFOLDER, file)
+                if self._is_file_incomplete(file_path):
+                    # Find matching result in results
+                    for result in results:
+                        if result.properties['fileID'].split("-")[0] == file.split("-")[0]:
+                            filtered_results.append(result)
+                            monthly_counts[month_key] += 1
+                            break
+        
+        # Then handle new downloads, respecting max_date
+        for result in results:
+            month_key = result.properties['fileID'][17:23]
+            if month_key not in monthly_counts:
+                monthly_counts[month_key] = 0
+            
+            # Skip if we already have max_date images for this month
+            if monthly_counts[month_key] >= self.max_date:
+                continue
+                
+            # Skip if already processed
+            if month_key in self.monthly_data and result.properties['fileID'][17:25] in [f[0:8] for f in self.monthly_data[month_key]['processed']]:
+                continue
+                
+            # Skip if already in filtered results
+            if result in filtered_results:
+                continue
+                
+            filtered_results.append(result)
+            monthly_counts[month_key] += 1
+        
+        return filtered_results
+
     def search(self):
         """Perform a full search for Sentinel-1 data."""
         # Load existing lake data or initialize an empty list
@@ -317,45 +469,39 @@ class SLC_Search:
         except (FileNotFoundError, json.JSONDecodeError):
             lake_data = []
 
-        # Check for incomplete raw files
-        print("-> Finding incomplete products that are not in the searching date range...")
-        incomplete_files = []
-        for file in os.listdir(self.RAWDATAFOLDER):
-            # Identify potentially incomplete files
-            file_date = datetime.strptime(file[17:25], "%Y%m%d")
-            
-            # Check if file is not in processed folders
-            if not any(file in processed_dir for processed_dir in [self.MASTERFOLDER, self.SLAVESFOLDER]):
-                incomplete_files.append(file)
-
-        # Search for incomplete files first
+        # First, search for incomplete downloads
+        print("-> Checking for incomplete downloads...")
         incomplete_results = []
-        for incomplete_file in incomplete_files:
-            file_date = datetime.strptime(incomplete_file[17:25], "%Y%m%d")
-            
-            # Search around the incomplete file's date
-            start = file_date - timedelta(days=1)
-            end = file_date + timedelta(days=1)
+        for month_key, data in self.monthly_data.items():
+            for file in data['incomplete']:
+                file_path = os.path.join(self.RAWDATAFOLDER, file)
+                if self._is_file_incomplete(file_path):
+                    file_date = datetime.strptime(file[17:25], "%Y%m%d")
+                    
+                    try:
+                        results = self._safe_search(
+                            platform=["Sentinel-1A", "Sentinel-1C"],
+                            processingLevel="SLC",
+                            intersectsWith=self.AOI,
+                            flightDirection=self.DIRECTION,
+                            frame=int(self.FRAME),
+                            start=file_date - timedelta(days=1),
+                            end=file_date + timedelta(days=1)
+                        )
+                        
+                        # Find matching result for the incomplete file
+                        for result in results:
+                            if result.properties['fileID'].split("-")[0] == file.split("-")[0]:
+                                incomplete_results.append(result)
+                                if not result in lake_data:
+                                    lake_data.append(result.geojson())
+                                break
+                                
+                    except Exception as e:
+                        self.logger.error(f"Error searching for incomplete file {file}: {str(e)}")
+                        continue
 
-            try:
-                results = self._safe_search(
-                    platform=["Sentinel-1A", "Sentinel-1C"],
-                    processingLevel="SLC",
-                    intersectsWith=self.AOI,
-                    flightDirection=self.DIRECTION,
-                    frame=int(self.FRAME),
-                    start=start,
-                    end=end
-                )
-                for result in results:
-                    if not result in lake_data:
-                        lake_data.append(result.geojson())
-                incomplete_results.extend(results)
-            except Exception as e:
-                self.logger.error(f"Error searching for incomplete file {incomplete_file}: {str(e)}")
-                continue
-
-        print(f"-> Found {len(incomplete_results)} incomplete products")
+        print(f"-> Found {len(incomplete_results)} incomplete downloads")
 
         # Proceed with regular search from latest date
         print(f"-> Search for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
@@ -385,90 +531,10 @@ class SLC_Search:
                     if not result in lake_data:
                         lake_data.append(result.geojson())
                 
-                self.selected_entries = []
                 if results:
-                    self.selected_result = random.choice(results)
-                    self.final_results.append(self.selected_result)
-                    if self.max_date:
-                        # Deduplicate results by acquisition date (fileID[17:25])
-                        unique_results = {}
-                        for r in results:
-                            if r == self.selected_result:
-                                continue
-                            date_key = r.properties['fileID'][17:25]
-                            if date_key not in unique_results:
-                                unique_results[date_key] = r
-
-                        # Filter out already selected dates in final_results
-                        existing_dates = set([r.properties['fileID'][17:25] for r in self.final_results])
-                        new_results = [r for date, r in unique_results.items() if date not in existing_dates]
-
-                        # Select up to max_date new unique results
-                        self.selected_entries = new_results[:self.max_date]
-                    
-                    # Combine selected entries
-                    if len(self.selected_entries) > 0:
-                        self.final_results.extend(self.selected_entries)
-
-                    # Get current state of directories once
-                    raw_files = os.listdir(self.RAWDATAFOLDER)
-                    master_files = os.listdir(self.MASTERFOLDER) if os.path.exists(self.MASTERFOLDER) else []
-                    slave_files = os.listdir(self.SLAVESFOLDER) if os.path.exists(self.SLAVESFOLDER) else []
-
-                    if raw_files:
-                        target_month = self.selected_result.properties['fileName'][17:23]
-                        
-                        # Check if we have any raw files from the same month
-                        matching_raw_files = [f for f in raw_files if f[17:23] == target_month]
-                        
-                        if matching_raw_files:
-                            print(f"-> Raw file(s) from {target_month[4:6]}/{target_month[0:4]} detected. Checking for resuming or reloading...")
-                            
-                            # Get the earliest raw file date for the search window
-                            earliest_date = min(datetime.strptime(f[17:25], "%Y%m%d") for f in matching_raw_files)
-                            
-                            try:
-                                result = self._safe_search(
-                                    platform=["Sentinel-1A", "Sentinel-1C"],
-                                    processingLevel="SLC",
-                                    intersectsWith=self.AOI,
-                                    flightDirection=self.DIRECTION,
-                                    frame=int(self.FRAME),
-                                    start=earliest_date - timedelta(1),
-                                    end=earliest_date + timedelta(1)
-                                )
-                                
-                                if result:
-                                    if self.max_date is None:
-                                        # Remove just the selected result
-                                        self.final_results.remove(self.selected_result)
-                                    else:
-                                        # Remove all entries from the same month
-                                        self.final_results = [r for r in self.final_results 
-                                                            if r.properties['fileID'][17:23] != target_month]
-                                    
-                                    self.final_results.append(result[0])
-                                    self.resume = True
-                            except Exception as e:
-                                self.logger.error(f"Error searching for raw file matches: {str(e)}")
-                                continue
-
-                    elif master_files and slave_files:
-                        # Get all processed months
-                        processed_months = set()
-                        for f in master_files + slave_files:
-                            processed_months.add(f[0:6])
-                        
-                        target_month = self.selected_result.properties['fileName'][17:23]
-                        
-                        if target_month in processed_months:
-                            if self.max_date is None:
-                                if self.selected_result in self.final_results:
-                                    self.final_results.remove(self.selected_result)
-                            else:
-                                # Remove all entries from the processed month
-                                self.final_results = [r for r in self.final_results 
-                                                    if r.properties['fileID'][17:23] != target_month]
+                    # Filter results based on existing data and max_date
+                    filtered_results = self._filter_monthly_results(results)
+                    self.final_results.extend(filtered_results)
 
             except Exception as e:
                 self.logger.error(f"Error during monthly search: {str(e)}")
@@ -479,20 +545,15 @@ class SLC_Search:
             # Move to the next month
             self.current_date += timedelta(days=30)
         
-        # Combine incomplete results with regular search results
+        # Add incomplete results to final results
         for result in incomplete_results:
-            if not result in self.final_results:
+            if result not in self.final_results:
                 self.final_results.append(result)
         
         # Save updated lake data
         with open(self.DATALAKE, 'w') as file:
             json.dump(lake_data, file, indent=4) 
         
-        # Final filtering of results
-        processed_data = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
-        if processed_data:
-            processed_month = [f[0:6] for f in processed_data]
-            self.final_results = [f for f in self.final_results if not f.geojson()["properties"]["fileID"][17:23] in processed_month]
         self.logger.info(f"Found {len(self.final_results)} images for download.")
         return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 

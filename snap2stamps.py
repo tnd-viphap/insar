@@ -90,7 +90,7 @@ class Manager:
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
-        results = SLC_Search(self.max_date).search()
+        results = SLC_Search(self.max_date, self.download_on).search()
         time.sleep(2)
         downloader = Download(results, self.download_on)
         if results:
