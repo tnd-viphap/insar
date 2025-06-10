@@ -62,7 +62,7 @@ class Initialize:
         self.config_parser = ConfigParser(config_path)
         
         # Get project folder
-        project_folder = os.path.split(os.path.abspath(__file__))[0].split('modules')[0].replace('\\', '/')
+        project_folder = os.path.abspath(os.path.dirname(os.path.dirname(__file__))).replace('\\', '/')
         if plf == "Windows":
             project_in_disk = project_folder[0].upper()
             project_folder = f"{project_in_disk}:{project_folder.split(':')[1]}"

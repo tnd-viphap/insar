@@ -20,7 +20,7 @@ from modules.snap2stamps.bin._3_find_bursts import Burst
 from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
 from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 
 from config.parser import ConfigParser
@@ -290,7 +290,7 @@ class SLC_Search:
         self.config = self.config_parser.get_project_config(self.project_name)
 
         # Define AOI
-        self.AOI = f"POLYGON (({self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmin"]},{self.config["aoi_bbox"]["lonmax"]} {self.config["aoi_bbox"]["latmin"]},{self.config["aoi_bbox"]["lonmax"]} {self.config["aoi_bbox"]["latmax"]},{self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmax"]},{self.config["aoi_bbox"]["lonmin"]} {self.config["aoi_bbox"]["latmin"]}))"
+        self.AOI = f"POLYGON (({self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']}))"
         
         self.logger = self._setup_logger()
         self.download_on = download_on

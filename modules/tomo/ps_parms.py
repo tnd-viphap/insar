@@ -42,20 +42,9 @@ class Parms:
             logger.addHandler(handler)
         return logger
         
-    def _read_project_conf(self, key):
-        """Read value from project configuration file"""
-        try:
-            with open(self.project_conf_path, 'r') as f:
-                for line in f:
-                    if key in line:
-                        return line.split('=')[1].strip()
-        except FileNotFoundError:
-            self.logger.error(f"Could not open {self.project_conf_path}")
-        return ''
-        
     def _get_processor(self):
         """Get processor type from processor.txt file"""
-        result_folder = self._read_project_conf("CURRENT_RESULT")
+        result_folder = self.config["processing_parameters"]["current_result"]
         processor_file = Path(result_folder) / 'processor.txt'
         
         # Try to find processor.txt in current and parent directories
@@ -184,7 +173,7 @@ class Parms:
         
     def save(self):
         """Save parameters to file"""
-        result_folder = self._read_project_conf("CURRENT_RESULT")
+        result_folder = self.config["processing_parameters"]["current_result"]
         parmfile = Path(result_folder) / 'parms.json'
         
         try:
@@ -209,7 +198,7 @@ class Parms:
             
     def load(self):
         """Load parameters from file"""
-        result_folder = self._read_project_conf("CURRENT_RESULT")
+        result_folder = self.config["processing_parameters"]["current_result"]
         parmfile = Path(result_folder) / 'parms.json'
         
         if parmfile.exists():

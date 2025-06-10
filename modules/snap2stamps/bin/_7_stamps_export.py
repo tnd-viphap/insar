@@ -7,7 +7,7 @@ import glob
 import subprocess
 import time
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 
@@ -53,16 +53,16 @@ class StaMPSExporter:
             project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_")[-1][-1]))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
+                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
+                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.config["project_definition"]["stamp_folder"]}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
+            self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
 
     def _setup_logging(self):
-        self.outlog = os.path.join(self.config["project_definition"]["log_folder"], 'export_proc_stdout.log')
+        self.outlog = os.path.join(self.config['project_definition']['log_folder'], 'export_proc_stdout.log')
         self.out_file = open(self.outlog, 'a')
         self.err_file = self.out_file
         
@@ -96,9 +96,9 @@ class StaMPSExporter:
         self.out_file.write(message)
         self.out_file.write(self.bar_message)
 
-        sorted_dimfiles = sorted(glob.glob(self.config["project_definition"]["coreg_folder"] + '/*' + self.config["processing_parameters"]["iw1"] + '.dim'))
+        sorted_dimfiles = sorted(glob.glob(self.config['project_definition']['coreg_folder'] + '/*' + self.config['processing_parameters']['iw1'] + '.dim'))
         
-        with open(self.config["cache_files"]["baseline_cache"], "r") as file:
+        with open(self.config['cache_files']['baseline_cache'], "r") as file:
             for line in file.readlines():
                 print(f"-> {line.strip()}: Poor intergerogram due to invalid baseline checking...")
                 try:
@@ -117,7 +117,7 @@ class StaMPSExporter:
         for k, dimfile in enumerate(sorted_dimfiles, start=1):
             _, tail = os.path.split(dimfile)
             message = f'[{k}] Exporting pair: master-slave pair {tail}'
-            ifgdim = Path(self.config["project_definition"]["ifg_folder"] + tail)
+            ifgdim = Path(self.config['project_definition']['ifg_folder'] + tail)
 
             if ifgdim.is_file():
                 print(message)

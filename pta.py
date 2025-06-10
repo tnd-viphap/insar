@@ -30,12 +30,12 @@ class PTA:
         self.eof = eof
         
         prod_date = os.path.split(self.prod)[-1][17:25]
-        self.pta_output_folder = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}"
-        self.pta_target_file = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_target.csv"
-        self.pta_output_result_file = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_results.csv"
-        self.pta_output_graphs = f"{self.config["project_definition"]["project_folder"]}/process/pta/{prod_date}/pta_graphs"
-        if not os.path.exists(f"{self.config["project_definition"]["project_folder"]}/process/pta"):
-            os.makedirs(f"{self.config["project_definition"]["project_folder"]}/process/pta")
+        self.pta_output_folder = f"{self.config['project_definition']['project_folder']}/process/pta/{prod_date}"
+        self.pta_target_file = f"{self.config['project_definition']['project_folder']}/process/pta/{prod_date}/pta_target.csv"
+        self.pta_output_result_file = f"{self.config['project_definition']['project_folder']}/process/pta/{prod_date}/pta_results.csv"
+        self.pta_output_graphs = f"{self.config['project_definition']['project_folder']}/process/pta/{prod_date}/pta_graphs"
+        if not os.path.exists(f"{self.config['project_definition']['project_folder']}/process/pta"):
+            os.makedirs(f"{self.config['project_definition']['project_folder']}/process/pta")
         if not os.path.exists(self.pta_output_folder):
             os.makedirs(self.pta_output_folder)
         if not os.path.exists(self.pta_output_graphs):

@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../..')).replace("/config", "")
 sys.path.append(project_path)
 
 from modules.tomo.extract_pixels import MTExtractCands
@@ -274,7 +274,8 @@ class ComSAR_Prep:
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("usage: comsar_prep.py yyyymmdd datadir da_thresh [rg_patches az_patches rg_overlap az_overlap maskfile]")
+        print("usage: comsar_prep.py project_name yyyymmdd datadir da_thresh [rg_patches az_patches rg_overlap az_overlap maskfile]")
+        print("    project_name             = project name")
         print("    yyyymmdd                 = master date")
         print("    datadir                  = data directory (with expected structure)")
         print("    da_thresh                = (delta) amplitude dispersion threshold")
@@ -286,15 +287,16 @@ if __name__ == "__main__":
         print("    maskfile (optional) char file, same dimensions as slcs, 0 to include, 1 otherwise")
         sys.exit(4)
         
-    master_date = sys.argv[1]
-    data_dir = sys.argv[2]
-    da_thresh = float(sys.argv[3]) if len(sys.argv) > 3 else None
-    rg_patches = int(sys.argv[4]) if len(sys.argv) > 4 else 1
-    az_patches = int(sys.argv[5]) if len(sys.argv) > 5 else 1
-    rg_overlap = int(sys.argv[6]) if len(sys.argv) > 6 else 50
-    az_overlap = int(sys.argv[7]) if len(sys.argv) > 7 else 50
-    maskfile = sys.argv[8] if len(sys.argv) > 8 else None
+    project_name = sys.argv[1]
+    master_date = sys.argv[2]
+    data_dir = sys.argv[3]
+    da_thresh = float(sys.argv[4]) if len(sys.argv) > 4 else None
+    rg_patches = int(sys.argv[5]) if len(sys.argv) > 5 else 1
+    az_patches = int(sys.argv[6]) if len(sys.argv) > 6 else 1
+    rg_overlap = int(sys.argv[7]) if len(sys.argv) > 7 else 50
+    az_overlap = int(sys.argv[8]) if len(sys.argv) > 8 else 50
+    maskfile = sys.argv[9] if len(sys.argv) > 9 else None
     
     prep = ComSAR_Prep(master_date, data_dir, da_thresh, rg_patches, az_patches, 
-                     rg_overlap, az_overlap, maskfile)
+                     rg_overlap, az_overlap, maskfile, project_name)
     prep.run()

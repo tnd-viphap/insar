@@ -5,7 +5,7 @@ import subprocess
 import sys
 import time
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 

@@ -4,7 +4,9 @@ import os
 import time
 import sys
 import shutil
-sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
+
+project_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(project_path)
 
 from config.parser import ConfigParser, Initialize
 from modules.snap2stamps.bin._1_download import SLC_Search, Download
@@ -63,7 +65,7 @@ class Manager:
         self.python_files = [f.replace("\\", "/") for f in self.python_files]
 
         # Initialize config parser
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'config.json')
+        config_path = os.path.join(project_path, 'config', 'config.json')
         self.config_parser = ConfigParser(config_path)
         self.config = self.config_parser.get_project_config(self.project_name)
 
@@ -143,8 +145,31 @@ class Manager:
         
 
 if __name__ == "__main__":
-    bbox = [106.6783, 10.7236, 106.7746, 10.8136]
-    Manager(bbox, "DESCENDING", 540, project_name="default").run_stages()
+    # Parameters
+    ## Phase 1: SNAP2STAMPS
+    bbox = [106.691059, 20.837039, 106.776203, 20.899435]
+    direction = 'DESCENDING'
+    frame_no = 522
+    max_date = 2
+    download_range = ["20240101", None] # ["20220901", None] means downloading from 01/09/2022 until now
+    reest_flag = 1
+    process_range = [None, None]
+    identity_master = "20250110"
+    max_perp = 600.0
+    da_threshold = 0.4
+    renew_flag = 1
+    unified_flag = 0
+    ministack_size = 5 
+    ## Phase 2: STAMPS
+    oobj = "normal"
+
+    # Running phases
+    session = Manager(bbox, direction, frame_no, download_range, max_date,
+                      reest_flag, identity_master, max_perp, da_threshold,
+                      renew_flag=renew_flag,
+                      process_range=process_range,
+                      stamps_flag='TOMO', ptype=0,
+                      stack_size=ministack_size, uni=unified_flag, project_name="noibai").run_stages()
     """
     try:
         Manager().run_stages()

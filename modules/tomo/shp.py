@@ -1,5 +1,6 @@
 # type: ignore
 import os
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
@@ -11,8 +12,9 @@ from tqdm import tqdm
 project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(project_path)
 
-from modules.tomo.bwstest import BWS
 from config.parser import ConfigParser
+from modules.tomo.bwstest import BWS
+
 
 class SHP:
     def __init__(self, slcstack, calwin=[15, 15], alpha=0.05, project_name="default"):
@@ -58,13 +60,6 @@ class SHP:
         
         with open(log_file, 'a') as f:
             f.write(f"{timestamp} - {message}\n")
-
-    def _load_config(self):
-        with open(self.inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
 
     @staticmethod
     def process_batch(task_batch):
@@ -118,7 +113,7 @@ class SHP:
 
         self._write_to_log("SHP family parallel computation started...")
         idx = 0
-        with ProcessPoolExecutor(max_workers=int(self.CPU)) as executor:
+        with ProcessPoolExecutor(max_workers=int(self.config["computing_resources"]["cpu"])) as executor:
             for result_batch in executor.map(SHP.process_batch, task_batches):
                 for mask in result_batch:
                     _PixelInd[:, idx] = mask

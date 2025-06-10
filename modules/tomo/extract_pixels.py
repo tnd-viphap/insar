@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 import json
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../..')).replace("/config", "")
 sys.path.append(project_path)
 
 from modules.tomo.psclonlat import PSLonLat
@@ -28,7 +28,6 @@ class MTExtractCands:
         self.logger = self._setup_logger()
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(project_name)
-        self._load_config()
         self.work_dir = self.config['processing_parameters']['current_result']
 
         self.dophase = 1
@@ -60,13 +59,6 @@ class MTExtractCands:
             self.psclonlat = Path(os.path.join(project_path, "modules/StaMPS/src/psclonlat.exe"))
             self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/src/pscdem.exe"))
             self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/src/pscphase.exe"))
-
-    def _load_config(self):
-        with open(self.project_conf_path, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)  # Dynamically set variables
         
     def _setup_logger(self):
         """Setup logging configuration"""
@@ -348,7 +340,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    extractor = MTExtractCands()
+    extractor = MTExtractCands(project_name="noibai")
     success = extractor.run(num_cores=args.cores)
     
     sys.exit(0 if success else 1)

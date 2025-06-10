@@ -12,7 +12,7 @@ import rasterio
 import rasterio.errors
 from shapely.io import from_wkt
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 
@@ -30,7 +30,7 @@ class CoregIFG:
         self.config = self.config_parser.get_project_config(self.project_name)
         self.bar_message = '\n#####################################################################\n'
 
-        self.polygon = f"POLYGON (({self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_min"]},{self.config["aoi_bbox"]["lon_max"]} {self.config["aoi_bbox"]["lat_min"]},{self.config["aoi_bbox"]["lon_max"]} {self.config["aoi_bbox"]["lat_max"]},{self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_max"]},{self.config["aoi_bbox"]["lon_min"]} {self.config["aoi_bbox"]["lat_min"]}))"
+        self.polygon = f"POLYGON (({self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']}))"
 
         self.outlog = self.config["project_definition"]["log_folder"] + 'coreg_ifg_proc_stdout.log'
         self.graphxml = self.config["project_definition"]["graphs_folder"] + 'coreg_ifg_computation_subset.xml'

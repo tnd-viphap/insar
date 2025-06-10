@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 
@@ -139,12 +139,12 @@ class MasterSelect:
             with open(graphxml, 'r') as file:
                 filedata = file.read()
                 filedata = filedata.replace('SOURCE', current_master)
-                filedata = filedata.replace('OUTPUT', current_master.replace(f"_{self.config["processing_parameters"]["iw1"]}", "_M"))
+                filedata = filedata.replace('OUTPUT', current_master.replace(f"_{self.config['processing_parameters']['iw1']}", "_M"))
             
             with open(self.graph2runsm, 'w') as file:
                 file.write(filedata)
                 
-            if (om in cm) or (os.path.split(current_master)[1].replace(f"{self.config["processing_parameters"]["iw1"]}", "M") in os.listdir(os.path.split(current_master)[0])):
+            if (om in cm) or (os.path.split(current_master)[1].replace(f"{self.config['processing_parameters']['iw1']}", "M") in os.listdir(os.path.split(current_master)[0])):
                 print("-> Converted S-M data detected. Skipping...")
             else:
                 print("-> Converting S-M...")

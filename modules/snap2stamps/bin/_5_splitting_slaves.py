@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.path.abspath(__file__), "../../../../"))
 from modules.utils.single_search_download import Search_Download, Downloader
 from modules.snap2stamps.bin._3_find_bursts import Burst
 from pta import PTA
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 
@@ -146,9 +146,9 @@ class SlavesSplitter:
                     with open(graphxml, 'r') as file:
                         filedata = file.read()
                         filedata = filedata.replace('INPUTFILE', files[0])
-                        filedata = filedata.replace('IWs', self.config["processing_parameters"]["iw1"])
-                        filedata = filedata.replace('FIRST_BURST', self.config["processing_parameters"]["first_burst"])
-                        filedata = filedata.replace('LAST_BURST', self.config["processing_parameters"]["last_burst"])
+                        filedata = filedata.replace('IWs', self.config['processing_parameters']['iw1'])
+                        filedata = filedata.replace('FIRST_BURST', self.config['processing_parameters']['first_burst'])
+                        filedata = filedata.replace('LAST_BURST', self.config['processing_parameters']['last_burst'])
                         filedata = filedata.replace('OUTPUTFILE', outputname)
 
                     with open(self.graph2run, 'w') as file:

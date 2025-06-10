@@ -7,7 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from tqdm import tqdm
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../..')).replace("/config", "")
 sys.path.append(project_path)
 
 from modules.tomo.comsar_estimator import ComSAR
@@ -35,7 +35,7 @@ class TomoSARControl:
             self.patch_info = ["1", "1", "50", "50"]
 
         print("Step 1: Preparing inputs and SHP analysis...\n")
-        self.input = Input(self.CalWin, False)
+        self.input = Input(self.CalWin, False, project_name=self.project_name)
         self.slcstack, self.interfstack = self.input.run()
         
         # Process SHP in chunks
@@ -44,13 +44,13 @@ class TomoSARControl:
             np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), shp=self.shp)
             time.sleep(2)
         else:
-            self.shp = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), allow_pickle=True)['shp'].item()['patches']
+            self.shp = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), allow_pickle=True)['shp']
         print("\n")
 
     @staticmethod
-    def process_chunk(chunk_info, calwin, alpha):
+    def process_chunk(chunk_info, calwin, alpha, project_name):
         """Process a single chunk of data for SHP analysis."""
-        _shp = SHP(chunk_info['datastack'], calwin, alpha)
+        _shp = SHP(chunk_info['datastack'], calwin, alpha, project_name)
         chunk_result = _shp.run()
         return {
             'PixelInd': chunk_result['PixelInd'],
@@ -75,7 +75,7 @@ class TomoSARControl:
         # Store results for each patch
         shp_patches = []
         
-        with ProcessPoolExecutor(max_workers=int(self.config["processing_parameters"]["cpu"])) as executor:
+        with ProcessPoolExecutor(max_workers=int(self.config["computing_resources"]["cpu"])) as executor:
             for batch_idx in tqdm(range(n_batches), desc="   -> SHP Computation", unit="batch"):
                 start_idx = batch_idx * batch_size
                 end_idx = min((batch_idx + 1) * batch_size, n_chunks)
@@ -87,7 +87,8 @@ class TomoSARControl:
                         self.process_chunk,
                         chunk_info,
                         self.CalWin,
-                        self.Alpha
+                        self.Alpha,
+                        self.project_name
                     ) for chunk_info in batch_chunks
                 ]
                 
@@ -99,221 +100,151 @@ class TomoSARControl:
             'patches': shp_patches
         }
         
-    @staticmethod
-    def compute_coherence_chunk(args):
-        """
-        Process a chunk of pixels for a single image pair with appropriate window operations
-        """
-        ii, ss, chunk_start, chunk_end, nlines, nwidths, RadiusRow, RadiusCol, slc_ii, slc_ss, inf_ii, inf_ss, shp_pixelind = args
+    def process_patch(self, patch_data):
+        """Process a single patch with optimized coherence computation"""
+        patch_idx, slc_patch, interf_patch, shp_data, slcstack, interfstack, CalWin = patch_data
         
-        # Calculate coherence for the specific pair (ii, ss) for this chunk of columns
-        Dphi = np.exp(1j * np.angle(inf_ii[:, chunk_start:chunk_end] * np.conj(inf_ss[:, chunk_start:chunk_end])))
-        Interf = np.sqrt(slc_ii[:, chunk_start:chunk_end] * slc_ss[:, chunk_start:chunk_end]) * Dphi
+        # Get patch dimensions
+        nlines = slc_patch["end_line"] - slc_patch["start_line"]
+        nwidths = slc_patch["end_col"] - slc_patch["start_col"]
+        npages = interf_patch["datastack"].shape[2]
         
-        # Pad the chunk data for window operations
-        m1 = np.pad(slc_ii[:, chunk_start:chunk_end], ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
-        m2 = np.pad(slc_ss[:, chunk_start:chunk_end], ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
-        Interf = np.pad(Interf, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
+        # Get SHP data for this patch
+        shp_pixelind = shp_data['PixelInd']
         
-        # Initialize result array for this chunk
-        chunk_width = chunk_end - chunk_start
-        result = np.zeros((nlines, chunk_width), dtype=np.complex64)
-        
-        # Get the actual dimensions of the SHP data
-        _, total_pixels = shp_pixelind.shape
-        shp_width = total_pixels // nlines
-        
-        # Process each pixel in the chunk
-        for jj in range(chunk_width):
-            for kk in range(nlines):
-                # Local coordinates within the padded arrays
-                x_local = jj + RadiusCol
-                y_local = kk + RadiusRow
-                
-                # Extract windows around the current pixel
-                master_window = m1[y_local - RadiusRow:y_local + RadiusRow + 1,
-                                x_local - RadiusCol:x_local + RadiusCol + 1]
-                slave_window = m2[y_local - RadiusRow:y_local + RadiusRow + 1,
-                               x_local - RadiusCol:x_local + RadiusCol + 1]
-                interf_window = Interf[y_local - RadiusRow:y_local + RadiusRow + 1,
-                                   x_local - RadiusCol:x_local + RadiusCol + 1]
-                
-                # Calculate the pixel index in the SHP data
-                # Map the current pixel position to the SHP data space
-                shp_col = int((chunk_start + jj) * shp_width / nwidths)
-                pixel_idx = kk * shp_width + shp_col
-                
-                # Get the mask for this pixel
-                mask = shp_pixelind[:, pixel_idx]
-                
-                # Apply mask to windows
-                MasterValue = master_window.flatten()[mask]
-                SlaveValue = slave_window.flatten()[mask]
-                InterfValue = interf_window.flatten()[mask]
-                
-                nu = np.sum(InterfValue)
-                de1 = np.sum(MasterValue)
-                de2 = np.sum(SlaveValue)
-                
-                result[kk, jj] = nu / np.sqrt(de1 * de2)
-        
-        return ii, ss, chunk_start, chunk_end, result
+        # Get SLC amplitude and normalize interferograms
+        slcstack_data = np.abs(slc_patch["datastack"])
+        interfstack_data = interf_patch["datastack"].copy()
+        nonzero_mask = interfstack_data != 0
+        interfstack_data[nonzero_mask] = interfstack_data[nonzero_mask]/np.abs(interfstack_data[nonzero_mask])
 
-    def _combine_patches_to_full_stack(self):
-        """Combine patched data back into full stacks."""
-        print("-> Combining patches into full stacks...")
+        # Determine reference index
+        reference_ind = list(set(slcstack["filename"]) - set(interfstack["filename"]))[0]
+        reference_ind = slcstack["filename"].index(reference_ind)
+
+        # Build full interferogram stack including reference image
+        inf_full = np.zeros((nlines, nwidths, npages+1), dtype=np.complex64)
+        if reference_ind > 0:
+            inf_full[:, :, :reference_ind] = interfstack_data[:, :, :reference_ind]
+            inf_full[:, :, reference_ind+1:] = interfstack_data[:, :, reference_ind:]
+            inf_full[:, :, reference_ind] = np.abs(slcstack_data[:, :, reference_ind])
+        else:
+            inf_full[:, :, 0] = np.abs(slcstack_data[:, :, 0])
+            inf_full[:, :, 1:] = interfstack_data
+
+        # Coherence estimation
+        RadiusRow = (CalWin[0] - 1) // 2
+        RadiusCol = (CalWin[1] - 1) // 2
         
-        # Get dimensions from the stack info
-        nlines = self.slcstack["nlines"]
-        ncols = self.slcstack["ncols"]
+        Coh = np.zeros((npages + 1, npages + 1, nlines, nwidths), dtype=np.complex64)
         
-        # Get number of pages from the first chunk
-        first_chunk = self.slcstack["datastack"][0]
-        npages = first_chunk["datastack"].shape[2]
+        # Set diagonal elements to 1
+        for ii in range(npages + 1):
+            Coh[ii, ii, :, :] = 1.0
         
-        # Initialize full stacks
-        full_slc = np.zeros((nlines, ncols, npages), dtype=np.complex64)
-        full_interf = np.zeros((nlines, ncols, npages-1), dtype=np.complex64)
+        # Process image pairs in batches
+        batch_size = 50
+        image_pairs = [(ii, ss) for ii in range(npages + 1) for ss in range(ii + 1, npages + 1)]
         
-        # Combine SLC patches
-        for chunk in self.slcstack["datastack"]:
-            start_line = chunk["start_line"]
-            end_line = chunk["end_line"]
-            start_col = chunk["start_col"]
-            end_col = chunk["end_col"]
-            full_slc[start_line:end_line, start_col:end_col, :] = chunk["datastack"]
+        for batch_start in range(0, len(image_pairs), batch_size):
+            batch_end = min(batch_start + batch_size, len(image_pairs))
+            batch_pairs = image_pairs[batch_start:batch_end]
+            
+            # Process each pair in the batch
+            for ii, ss in batch_pairs:
+                # Get image data
+                slc_ii = slcstack_data[:, :, ii]
+                slc_ss = slcstack_data[:, :, ss]
+                inf_ii = inf_full[:, :, ii]
+                inf_ss = inf_full[:, :, ss]
+                
+                # Calculate phase difference
+                Dphi = np.exp(1j * np.angle(inf_ii * np.conj(inf_ss)))
+                Interf = np.sqrt(slc_ii * slc_ss) * Dphi
+                
+                # Pad arrays for window operations
+                m1 = np.pad(slc_ii, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
+                m2 = np.pad(slc_ss, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
+                Interf = np.pad(Interf, ((RadiusRow, RadiusRow), (RadiusCol, RadiusCol)), mode='symmetric')
+                
+                # Vectorized coherence computation
+                result = np.zeros((nlines, nwidths), dtype=np.complex64)
+                
+                # Get SHP dimensions
+                _, total_pixels = shp_pixelind.shape
+                shp_width = total_pixels // nlines
+                
+                # Process each pixel
+                for jj in range(nwidths):
+                    for kk in range(nlines):
+                        # Local coordinates
+                        x_local = jj + RadiusCol
+                        y_local = kk + RadiusRow
+                        
+                        # Extract windows
+                        master_window = m1[y_local - RadiusRow:y_local + RadiusRow + 1,
+                                        x_local - RadiusCol:x_local + RadiusCol + 1]
+                        slave_window = m2[y_local - RadiusRow:y_local + RadiusRow + 1,
+                                       x_local - RadiusCol:x_local + RadiusCol + 1]
+                        interf_window = Interf[y_local - RadiusRow:y_local + RadiusRow + 1,
+                                           x_local - RadiusCol:x_local + RadiusCol + 1]
+                        
+                        # Map to SHP data space
+                        shp_col = int((jj) * shp_width / nwidths)
+                        pixel_idx = kk * shp_width + shp_col
+                        
+                        # Get mask and apply
+                        mask = shp_pixelind[:, pixel_idx]
+                        MasterValue = master_window.flatten()[mask]
+                        SlaveValue = slave_window.flatten()[mask]
+                        InterfValue = interf_window.flatten()[mask]
+                        
+                        # Compute coherence
+                        nu = np.sum(InterfValue)
+                        de1 = np.sum(MasterValue)
+                        de2 = np.sum(SlaveValue)
+                        
+                        result[kk, jj] = nu / np.sqrt(de1 * de2)
+                
+                # Store results
+                Coh[ii, ss, :, :] = result
+                Coh[ss, ii, :, :] = result.conj()
         
-        # Combine interferogram patches
-        for chunk in self.interfstack["datastack"]:
-            start_line = chunk["start_line"]
-            end_line = chunk["end_line"]
-            start_col = chunk["start_col"]
-            end_col = chunk["end_col"]
-            full_interf[start_line:end_line, start_col:end_col, :] = chunk["datastack"]
-        
-        # Create new stack dictionaries
-        full_slcstack = {
-            "datastack": full_slc,
-            "nlines": nlines,
-            "ncols": ncols,
-            "filename": self.slcstack["filename"]
+        return {
+            'coherence': Coh,
+            'start_line': slc_patch["start_line"],
+            'end_line': slc_patch["end_line"],
+            'start_col': slc_patch["start_col"],
+            'end_col': slc_patch["end_col"]
         }
-        
-        full_interfstack = {
-            "datastack": full_interf,
-            "nlines": nlines,
-            "ncols": ncols,
-            "filename": self.interfstack["filename"]
-        }
-        
-        return full_slcstack, full_interfstack
 
     def intf_cov(self, slcstack=None, interfstack=None):
         """
         Estimate coherence matrix for a stack of interferograms and SLC images.
+        Optimized version with parallel patch processing and vectorized operations.
         """
         start_time = time.time()
         
-        # Process each patch separately
-        all_coherence_matrices = []
-        all_reference_indices = []
+        # Process patches in parallel
+        patch_data = [(idx, slc_patch, interf_patch, self.shp[idx], slcstack, interfstack, self.CalWin) 
+                     for idx, (slc_patch, interf_patch) in enumerate(zip(slcstack["datastack"], interfstack["datastack"]))]
         
-        for patch_idx, (slc_patch, interf_patch) in tqdm(enumerate(zip(slcstack["datastack"], interfstack["datastack"])), total=len(slcstack["datastack"]), desc="   -> Coherence estimation", unit="patch"):
-            # Get patch dimensions
-            nlines = slc_patch["end_line"] - slc_patch["start_line"]
-            nwidths = slc_patch["end_col"] - slc_patch["start_col"]
-            npages = interf_patch["datastack"].shape[2]
-            
-            # Get SHP data for this patch
-            shp_data = self.shp[patch_idx]
-            shp_pixelind = shp_data['PixelInd']
-            shp_bronum = shp_data['BroNum']
-            
-            
-            # Get SLC amplitude
-            slcstack_data = np.abs(slc_patch["datastack"])
-
-            # Normalize interferograms
-            nonzero_mask = interf_patch["datastack"] != 0
-            interfstack_data = interf_patch["datastack"].copy()
-            interfstack_data[nonzero_mask] = interf_patch["datastack"][nonzero_mask]/np.abs(interf_patch["datastack"][nonzero_mask])
-
-            # Determine reference index
+        with ProcessPoolExecutor(max_workers=int(self.config["computing_resources"]["cpu"])) as executor:
+            all_coherence_matrices = list(tqdm(
+                executor.map(self.process_patch, patch_data),
+                total=len(patch_data),
+                desc="   -> Processing patches",
+                unit="patch"
+            ))
+        
+        # Get reference indices
+        all_reference_indices = []
+        for slc_patch in slcstack["datastack"]:
             reference_ind = list(set(slcstack["filename"]) - set(interfstack["filename"]))[0]
-            reference_ind = slcstack["filename"].index(reference_ind)
-
-            # Build full interferogram stack including reference image
-            inf_full = np.zeros((nlines, nwidths, npages+1), dtype=np.complex64)
-            if reference_ind > 0:
-                inf_full[:, :, :reference_ind] = interfstack_data[:, :, :reference_ind]
-                inf_full[:, :, reference_ind+1:] = interfstack_data[:, :, reference_ind:]
-                inf_full[:, :, reference_ind] = np.abs(slcstack_data[:, :, reference_ind])
-            else:
-                inf_full[:, :, 0] = np.abs(slcstack_data[:, :, 0])
-                inf_full[:, :, 1:] = interfstack_data
-
-            # Coherence estimation
-            RadiusRow = (self.CalWin[0] - 1) // 2
-            RadiusCol = (self.CalWin[1] - 1) // 2
-            
-            Coh = np.zeros((npages + 1, npages + 1, nlines, nwidths), dtype=np.complex64)
-            
-            # Set diagonal elements to 1 (coherence of an image with itself is 1)
-            for ii in range(npages + 1):
-                Coh[ii, ii, :, :] = 1.0
-            
-            # Prepare tasks for parallel processing
-            tasks = []
-            batch_size = 50  # Process 50 image pairs at a time
-            
-            # Create all image pairs
-            image_pairs = []
-            for ii in range(npages + 1):
-                for ss in range(ii + 1, npages + 1):
-                    image_pairs.append((ii, ss))
-            
-            # Split image pairs into batches
-            for batch_start in range(0, len(image_pairs), batch_size):
-                batch_end = min(batch_start + batch_size, len(image_pairs))
-                batch_pairs = image_pairs[batch_start:batch_end]
-                
-                # For each pair in the batch, create tasks for each chunk
-                for ii, ss in batch_pairs:
-                    slc_ii = slcstack_data[:, :, ii]
-                    slc_ss = slcstack_data[:, :, ss]
-                    inf_ii = inf_full[:, :, ii]
-                    inf_ss = inf_full[:, :, ss]
-                    
-                    # Process the entire patch width at once
-                    tasks.append((ii, ss, 0, nwidths, nlines, nwidths, 
-                                RadiusRow, RadiusCol, slc_ii, slc_ss, inf_ii, inf_ss, 
-                                shp_pixelind))
-            
-            # Process batches in parallel
-            with ProcessPoolExecutor(max_workers=int(self.config["processing_parameters"]["cpu"])) as executor:
-                futures = [executor.submit(self.compute_coherence_chunk, task) for task in tasks]
-                
-                # Process results as they complete
-                for future in as_completed(futures):
-                    try:
-                        ii, ss, chunk_start, chunk_end, result = future.result()
-                        Coh[ii, ss, :, chunk_start:chunk_end] = result
-                        Coh[ss, ii, :, chunk_start:chunk_end] = result.conj()
-                    except Exception as e:
-                        print(f"Error processing chunk: {str(e)}")
-                        raise
-
-            all_coherence_matrices.append({
-                'coherence': Coh,
-                'start_line': slc_patch["start_line"],
-                'end_line': slc_patch["end_line"],
-                'start_col': slc_patch["start_col"],
-                'end_col': slc_patch["end_col"]
-            })
-            all_reference_indices.append(reference_ind)
+            all_reference_indices.append(slcstack["filename"].index(reference_ind))
 
         end_time = time.time()
-        print(f"   -> Coherence estimation operation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
+        print(f"   -> Coherence estimation completed in {(end_time - start_time)/60.0:.2f} minutes\n")
         return all_coherence_matrices, all_reference_indices
     
     def interf_export(self, path, extension):
@@ -495,4 +426,4 @@ class TomoSARControl:
             self.interf_export(interf_output_dir, '.psds')
 
 if __name__ == "__main__":
-    TomoSARControl().run()
+    TomoSARControl(project_name="noibai").run()

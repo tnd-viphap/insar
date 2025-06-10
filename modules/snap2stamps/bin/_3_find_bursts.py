@@ -8,7 +8,7 @@ from shapely.geometry import Point, Polygon
 import time
 import sys
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
 
@@ -32,15 +32,15 @@ class Burst:
     def find_burst(self, folder=None):
         # Find burst footprints
         s1 = stsa.TopsSplitAnalyzer(target_subswaths=['iw1', 'iw2', 'iw3'], polarization="vv")
-        zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.config["project_definition"]["master_folder"]}/*/*.zip")]
+        zip = [f for f in glob.iglob(f"{folder}/*.zip")] if folder else [f for f in glob.iglob(f"{self.config['project_definition']['master_folder']}/*/*.zip")]
         if zip:
             s1.load_zip(os.path.join(self.config["project_definition"]["project_folder"], zip[0].replace("./", "")))
             if not os.path.exists(os.path.join(self.config["project_definition"]["data_folder"], "geom")):
                 os.makedirs(os.path.join(self.config["project_definition"]["data_folder"], "geom"))
-            s1.to_shapefile(f"{self.config["project_definition"]["data_folder"]}geom/master_bursts.shp")
+            s1.to_shapefile(f"{self.config['project_definition']['data_folder']}geom/master_bursts.shp")
             
             # Find bursts
-            gdf = gpd.read_file(f"{self.config["project_definition"]["data_folder"]}geom/master_bursts.shp")
+            gdf = gpd.read_file(f"{self.config['project_definition']['data_folder']}geom/master_bursts.shp")
             if any(gdf.geometry.intersects(self.polygon)):
                 gdf = gdf[gdf.geometry.intersects(self.polygon)]
                 subswath = gdf.subswath.values[0]
