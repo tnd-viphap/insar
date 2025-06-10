@@ -291,7 +291,7 @@ class CoregIFG:
                 with open(self.graph2run, 'w') as file:
                     file.write(filedata)
 
-                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
 
                 # **Launch the processing**
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

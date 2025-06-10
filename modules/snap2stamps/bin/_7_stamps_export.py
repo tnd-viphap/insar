@@ -144,7 +144,7 @@ class StaMPSExporter:
                 with open(graph2run, 'w') as file:
                     file.write(filedata)
 
-                args = [self.config["snap_gpt"]["gptbin_path"], graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+                args = [self.config["snap_gpt"]["gptbin_path"], graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
 
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 timeStarted = time.time()

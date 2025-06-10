@@ -264,18 +264,18 @@ class Download:
                         
                         # Run cleaning sequence
                         time.sleep(2)
-                        MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True).select_master()
+                        MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True, self.project_name).select_master()
                         
                         # Move incomplete files back to RAWDATAFOLDER
                         for file in incomplete_download:
                             shutil.move(file, self.config["project_definition"]["raw_data_folder"])
                         
                         time.sleep(2)
-                        Burst().find_burst()
+                        Burst(self.project_name).find_burst()
                         time.sleep(2)
-                        MasterSplitter().process()
+                        MasterSplitter(self.project_name).process()
                         time.sleep(2)
-                        SlavesSplitter().process()
+                        SlavesSplitter(self.project_name).process()
                         time.sleep(2)
                         
                         print("-> Continue downloading...")

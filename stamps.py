@@ -51,7 +51,7 @@ class StaMPSEXE:
             if csv_file:
                 data = gpd.read_file(csv_file[0])
                 data.geometry = [Point(x, y) for x, y in zip(data.LON, data.LAT)]
-                data.to_file(os.path.join(self.config['project_definition']['data_folder'], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{folder}.shp'))
+                data.to_file(os.path.join(self.config['project_definition']['data_folder'], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{folder}.shp"))
 
     def _load_rslcpar(self):
         parms = Parms(self.config['project_definition']['config_path'])
@@ -364,19 +364,19 @@ class StaMPSEXE:
     
     def run(self):
         self.csv_files = []
-        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config["project_definition"]["project_folder"]}/STAMPS.log")
+        os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\' > {self.config['project_definition']['project_folder']}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.config["project_definition"]["project_folder"], f) for f in os.listdir(self.config["project_definition"]["project_folder"]) if f.startswith('PATCH_')]
         patch_identifier = [f for f in os.listdir(self.config["project_definition"]["project_folder"]) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
-            csv_filename = os.path.join(self.config["project_definition"]["data_folder"], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{identity}_cr.csv')
+            csv_filename = os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}_cr.csv")
             self.csv_files.append(csv_filename)
             shutil.copy(os.path.join(self.config["project_definition"]["project_folder"], 'parms.json'), path)
             os.chdir(path)
             dem_err = self.ps_dem_err()
             self.ps_lonlat_err(dem_err)
-            self.ps_export_gis(csv_filename, os.path.join(self.config["project_definition"]["data_folder"], f'geom/{self.config['processing_parameters']['current_result'].split("/")[-1]}_{identity}.shp'), [], [], 'ortho')
+            self.ps_export_gis(csv_filename, os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}.shp"), [], [], 'ortho')
             os.chdir(self.config["project_definition"]["project_folder"]) 
         os.chdir(self.config["project_definition"]["project_folder"])
         return self.csv_files

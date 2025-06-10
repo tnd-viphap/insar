@@ -26,7 +26,7 @@ class CRLink:
 
         self.psi_file = psi_result_file
         self.n_rovers = n_rovers
-        self.local_gnss_file = f"{self.config["project_definition"]["data_folder"]}/gnss/output.csv"
+        self.local_gnss_file = f"{self.config['project_definition']['data_folder']}/gnss/output.csv"
 
     def _update_n_rovers(self, config_file, n_rovers):
         lines = ''''''
@@ -41,8 +41,8 @@ class CRLink:
         time.sleep(1)
 
     def _fetch_gnss_data(self):
-        if not os.path.exists(f"{self.config["project_definition"]["data_folder"]}/gnss/"):
-            os.makedirs(f"{self.config["project_definition"]["data_folder"]}/gnss/", exist_ok=True)
+        if not os.path.exists(f"{self.config['project_definition']['data_folder']}/gnss/"):
+            os.makedirs(f"{self.config['project_definition']['data_folder']}/gnss/", exist_ok=True)
         # SSH Connection
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -55,7 +55,7 @@ class CRLink:
         time.sleep(1)
 
     def _get_total_loc_err(self):
-        pta_folder = f"{self.config["project_definition"]["project_folder"]}/process/pta/"
+        pta_folder = f"{self.config['project_definition']['project_folder']}/process/pta/"
         if not os.path.exists(pta_folder):
             os.makedirs(pta_folder)
         pta_result_folders = os.listdir(pta_folder)
@@ -156,8 +156,8 @@ class CRLink:
         gnss_data['TIMESTAMP'] = pd.to_datetime(gnss_data['TIMESTAMP'])
         
         # Get slave dates
-        if len(os.listdir(self.config["project_definition"]["slaves_folder"])) > 0:
-            slave_dates = [d for d in os.listdir(self.config["project_definition"]["slaves_folder"]) if os.path.isdir(os.path.join(self.config["project_definition"]["slaves_folder"], d))]
+        if len(os.listdir(self.config['project_definition']['slaves_folder'])) > 0:
+            slave_dates = [d for d in os.listdir(self.config['project_definition']['slaves_folder']) if os.path.isdir(os.path.join(self.config['project_definition']['slaves_folder'], d))]
             slave_dates = [pd.to_datetime(d, format="%Y%m%d") for d in slave_dates]
         
             # Process each target
@@ -224,10 +224,10 @@ class CRLink:
 
     def _combined_insar_gnss(self):
         # Combined INSAR and GNSS results
-        if not os.path.exists(f"{self.config["project_definition"]["data_folder"]}crlink/"):
-            os.makedirs(f"{self.config["project_definition"]["data_folder"]}crlink/", exist_ok=True)
+        if not os.path.exists(f"{self.config['project_definition']['data_folder']}crlink/"):
+            os.makedirs(f"{self.config['project_definition']['data_folder']}crlink/", exist_ok=True)
         self.combined_results = pd.merge(self.insar_points, self.gnss_results, on=['target_name'], how='inner')
-        self.combined_results.to_csv(f"{self.config["project_definition"]["data_folder"]}crlink/CRLink_results.csv", index=False)
+        self.combined_results.to_csv(f"{self.config['project_definition']['data_folder']}crlink/CRLink_results.csv", index=False)
 
     def run(self):
         self._fetch_gnss_data()

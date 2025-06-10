@@ -121,6 +121,7 @@ class Initialize:
                 'log_folder': folders['log_folder'],
                 'data_folder': folders['data_folder'],
                 'master_folder': folders['master_folder'],
+                'master': folders['master_folder'] + os.listdir(folders['master_folder'])[0] + f"/{os.listdir(folders['master_folder'])[0]}_M.dim" if os.listdir(folders['master_folder']) else "",
                 'slaves_folder': folders['slaves_folder'],
                 'raw_data_folder': folders['rawdata_folder'],
                 'coreg_folder': folders['coreg_folder'],
@@ -142,11 +143,11 @@ class Initialize:
                 'iw1': 'IW1',  # Default value from conf files
                 'first_burst': 5,  # Default value from conf files
                 'last_burst': 5,  # Default value from conf files
-                'old_master': None,  # Will be set when master is selected
+                'old_master': os.listdir(folders['master_folder'])[0],  # Will be set when master is selected
                 'max_perp': self.max_perp or 150.0,  # Default from conf files
                 'da_threshold': 0.4,  # Default from conf files
                 'reest_flag': 1,  # Default from conf files
-                'current_result': None,  # Will be set during processing
+                'current_result': folders['stamp_folder'] + list(sorted(os.listdir(folders['stamp_folder']), key=lambda x: int(x.split('_')[1])))[-1],  # Will be set during processing
                 'ministack': self.stack_size or 5,  # Default from conf files
                 'unified': self.unified_flag or 0,  # Default from conf files
                 'ptype': self.ptype

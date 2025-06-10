@@ -106,7 +106,7 @@ class Manager:
             
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(self.reest_flag, self.identity_master, self.project_name).select_master()
+        MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
         print("\n")
 
         # Find master burst
