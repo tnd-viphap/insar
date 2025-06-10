@@ -153,7 +153,7 @@
         "max_perp": 600.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250110_PSDS_v10",
+        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250110_PSDS_v9",
         "ministack": 5,
         "unified": 0,
         "ptype": 1

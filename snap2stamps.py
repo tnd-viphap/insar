@@ -135,12 +135,12 @@ class Manager:
 
         # StaMPS export
         print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, self.project_name).process()
+        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, None, self.project_name).process()
         print('\n')
 
         # StaMPS preparation
         print(f"############## Running: Step 9: StaMPS Preparation ##############")
-        StaMPSPrep(self.stamps_flag, self.da_threshold, self.project_name).process()
+        StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
         print('\n')
         
 

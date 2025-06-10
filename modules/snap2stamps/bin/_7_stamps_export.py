@@ -42,22 +42,22 @@ class StaMPSExporter:
     def _setup_folders(self):
         _, tail = os.path.split(self.config["project_definition"]["master"])
         project_outputs = os.listdir(os.path.join(self.config["project_definition"]["stamp_folder"], self.project_result))
-        comsar = self.config["api_flags"]["comsar"]
+        comsar = bool(int(self.config["api_flags"]["comsar"]))
         if self.stamps_flag == "NORMAL":
-            core = "NORMAL"
-        elif comsar == "0" and self.stamps_flag != "NORMAL":
-            core = "PSDS"
-        elif comsar == "1" and self.stamps_flag != "NORMAL":
-            core = "ComSAR"
+            self.core = "NORMAL"
+        elif not comsar and self.stamps_flag != "NORMAL":
+            self.core = "PSDS"
+        elif comsar and self.stamps_flag != "NORMAL":
+            self.core = "ComSAR"
         if project_outputs:
             project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_")[-1][-1]))
             mark = int(project_outputs[-1][-1])+1
             if self.renew_flag:
-                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark}"
+                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{self.core}_v{mark}"
             else:
-                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v{mark-1}"
+                self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{self.core}_v{mark-1}"
         else:
-            self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{core}_v1"
+            self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{self.core}_v1"
 
         os.makedirs(self.outputexportfolder, exist_ok=True)
 
