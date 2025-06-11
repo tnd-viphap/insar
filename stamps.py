@@ -223,13 +223,25 @@ class StaMPSEXE:
 
     def ps_export_gis(self, csv_filename, shapefile_name, lon_rg=None, lat_rg=None, ortho=None):
         if not os.path.exists("ps_plot_ts_v-dao.mat"):
-            command = f"matlab -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
-            os.system(command)
+            if platform.system() == 'Windows':
+                matlab_cmd = (
+                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
+                f"-r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
+            )
+                subprocess.run(matlab_cmd, shell=True)
+            else:
+                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\"")
         print("   -> TS V-dao done")
         
         if not os.path.exists("ps_plot_v-dao.mat"):
-            command = f"matlab -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
-            os.system(command)
+            if platform.system() == 'Windows':
+                matlab_cmd = (
+                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
+                f"-r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
+            )
+                subprocess.run(matlab_cmd, shell=True)
+            else:
+                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\"")
         print("   -> V-dao done")
         
         # Load necessary data
@@ -306,6 +318,7 @@ class StaMPSEXE:
         
         # Ensure proper coordinate conversion back to WGS84
         interpolated_data = interpolated_data.to_crs(epsg=4326)
+        interpolated_data = interpolated_data.dropna(subset=['VLOS'])
         
         # Update LON and LAT columns with the new coordinates
         interpolated_data['LON'] = None
@@ -324,6 +337,7 @@ class StaMPSEXE:
 
         # Compute Jenks natural breaks
         vlos_values = interpolated_data['VLOS'].values
+        
         breaks = jenkspy.jenks_breaks(vlos_values, n_classes=n_classes)
 
         # Create colormap (Spectral has max 11 distinct steps)
@@ -370,7 +384,7 @@ class StaMPSEXE:
     def run(self):
         self.csv_files = []
         with open(os.path.join(project_folder, "config", "project.conf"), "w") as f:
-            f.write(f"CURRENT_RESULT={self.config['processing_parameters']['current_result']}")
+            f.write(f"CURRENT_RESULT={self.config['processing_parameters']['current_result']}" + "\n")
             f.write(f"MAX_PERP={self.config['processing_parameters']['max_perp']}")
             f.close()
         if platform.system() == 'Windows':
