@@ -150,10 +150,24 @@ else
 end
 
 if exist(llname,'file')
-    fid=fopen(llname,'r');
-    lonlat=fread(fid,[2,inf],'float',endian);
-    lonlat=lonlat';
+    % Check if file is binary by trying to read first few bytes
+    fid = fopen(llname,'r');
+    first_bytes = fread(fid, 4, 'uint8');
     fclose(fid);
+    
+    % If first bytes look like binary data, use fread with endian
+    if any(first_bytes > 127) || any(first_bytes < 32)
+        fid = fopen(llname,'r');
+        lonlat = fread(fid,[2,inf],'float',endian);
+        lonlat = lonlat';
+        fclose(fid);
+    else
+        % Otherwise use load for text file
+        lonlat = load(llname); % expects 2 columns: lon lat
+        if size(lonlat,2) ~= 2
+            error([llname, ' does not have 2 columns!']);
+        end
+    end
 else
     error([llname,' does not exist']);
 end
@@ -184,6 +198,7 @@ if max(xynew(1,:))-min(xynew(1,:))<max(xy(1,:))-min(xy(1,:)) &...
 end
         
 xy=single(xy');
+disp(xy);
 [dummy,sort_ix]=sortrows(xy,[2,1]); % sort in ascending y order
 xy=xy(sort_ix,:);
 xy=[[1:n_ps]',xy];

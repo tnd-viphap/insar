@@ -102,7 +102,7 @@ end
 
 try
     clear();
-    current_result = read_conf_value('../snap2stamps/bin/project.conf');
+    current_result = read_conf_value('../../config/project.conf');
     chdir(current_result);
 
     % Change priority of StaMPS

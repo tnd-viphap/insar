@@ -18,7 +18,6 @@ from config.parser import ConfigParser
 
 class StaMPSPrep:
     def __init__(self, stamps_flag, threshold, patch_info=None, project_name="default"):
-        super().__init__()
         self.project_name = project_name
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(self.project_name)
@@ -36,7 +35,7 @@ class StaMPSPrep:
         timeStarted = time.time()
         # os.chdir(self.CURRENT_RESULT)
         if self.stamps_flag == 'NORMAL':
-            StampsPrep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], self.project_name).run()
+            StampsPrep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
         else:
             flag = 'comsar' if self.config["api_flags"]["comsar"] == "1" else 'psds'
             # Python-based PSDS_main.m
@@ -44,9 +43,9 @@ class StaMPSPrep:
             # Python-based mt_prep_snap_psds.m
             print(f"-> Preparing {flag} patches...")
             if flag == 'comsar':
-                ComSAR_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], self.project_name).run()
+                ComSAR_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
             else:
-                PSDS_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], self.project_name).run()
+                PSDS_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
         timeDelta = time.time() - timeStarted
         print(f'-> Finished process in {timeDelta} seconds.')
             

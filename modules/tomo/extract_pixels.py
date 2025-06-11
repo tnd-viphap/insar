@@ -16,6 +16,7 @@ project_path = os.path.abspath(os.path.join(__file__, '../../..')).replace("/con
 sys.path.append(project_path)
 
 from modules.tomo.psclonlat import PSLonLat
+from modules.tomo.pscphase import PSCPhase
 from config.parser import ConfigParser
 
 class MTExtractCands:
@@ -205,15 +206,17 @@ class MTExtractCands:
                     
             # Process phase
             if dophase:
-                cmd = [
-                    str(self.pscphase).replace('\\', '/'),
-                    f"{self.work_dir}/pscphase.in",
-                    "pscands.1.ij",
-                    "pscands.1.ph"
-                ]
-                with open(self.log_file, 'a') as log:
-                    log.write(f"\n=== Processing {patch} with pscphase ===\n")
-                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                # cmd = [
+                #     str(self.pscphase).replace('\\', '/'),
+                #     f"{self.work_dir}/pscphase.in",
+                #     "pscands.1.ij",
+                #     "pscands.1.ph"
+                # ]
+                # with open(self.log_file, 'a') as log:
+                #     log.write(f"\n=== Processing {patch} with pscphase ===\n")
+                #     subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                pscphase = PSCPhase(f"{self.work_dir}/pscphase.in", "pscands.1.ij", "pscands.1.ph", self.log_file)
+                pscphase.run()
             os.chdir("..")        
             return True
         except Exception as e:

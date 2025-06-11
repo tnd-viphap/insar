@@ -83,65 +83,66 @@ class Manager:
         self.failed_scripts = {}
 
     def run_stages(self):
-        # Initialize the project configuration
-        print(
-            f"############## Running: Step 1: Gather project structure ##############"
-        )
-        Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
-                  self.stack_size, self.uni, self.project_name)
-        print("\n")
+        None
+        # # Initialize the project configuration
+        # print(
+        #     f"############## Running: Step 1: Gather project structure ##############"
+        # )
+        # Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
+        #           self.stack_size, self.uni, self.project_name)
+        # print("\n")
         
-        # Do searching for data
-        print(f"############## Running: Step 2: Download SLC Images ##############")
-        print("-> Searching for new products...")
-        results = SLC_Search(self.max_date, self.download_on, self.project_name).search()
-        time.sleep(2)
-        downloader = Download(results, self.download_on, self.project_name)
-        if results:
-            print(f"-> Found {len(results)} products. Downloading...")
-            downloader.download(self.config['project_definition']['raw_data_folder'])
-            time.sleep(2)
-        else:
-            print("-> No new products. Skip downloading and processing!")
+        # # Do searching for data
+        # print(f"############## Running: Step 2: Download SLC Images ##############")
+        # print("-> Searching for new products...")
+        # results = SLC_Search(self.max_date, self.download_on, self.project_name).search()
+        # time.sleep(2)
+        # downloader = Download(results, self.download_on, self.project_name)
+        # if results:
+        #     print(f"-> Found {len(results)} products. Downloading...")
+        #     downloader.download(self.config['project_definition']['raw_data_folder'])
+        #     time.sleep(2)
+        # else:
+        #     print("-> No new products. Skip downloading and processing!")
             
-        # Select master
-        print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
-        print("\n")
+        # # Select master
+        # print(f"############## Running: Step 3: Select MASTER ##############")
+        # MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
+        # print("\n")
 
-        # Find master burst
-        print(f"############## Running: Step 4: Find MASTER burst ##############")
-        Burst(self.project_name).find_burst()
-        print("\n")
+        # # Find master burst
+        # print(f"############## Running: Step 4: Find MASTER burst ##############")
+        # Burst(self.project_name).find_burst()
+        # print("\n")
 
-        # Master split and slaves split
-        print(f"############## Running: Step 5: Split MASTER ##############")
-        MasterSplitter(self.project_name).process()
-        print("\n")
-        print(f"############## Running: Step 6: Split SLAVES ##############")
-        SlavesSplitter(self.project_name).process()
-        print("\n")
+        # # Master split and slaves split
+        # print(f"############## Running: Step 5: Split MASTER ##############")
+        # MasterSplitter(self.project_name).process()
+        # print("\n")
+        # print(f"############## Running: Step 6: Split SLAVES ##############")
+        # SlavesSplitter(self.project_name).process()
+        # print("\n")
 
-        # Run coregistration and make interferogram
-        print(
-            f"############## Running: Step 7: Coregistration and Interferogram ##############"
-        )
-        if bool(self.reest_flag) and bool(self.renew_flag):
-            shutil.rmtree(self.config['project_definition']['coreg_folder'])
-            shutil.rmtree(self.config['project_definition']['ifg_folder'])
-        time.sleep(2)
-        CoregIFG(self.max_perp, self.process_range, self.project_name).process()
-        print('\n')
+        # # Run coregistration and make interferogram
+        # print(
+        #     f"############## Running: Step 7: Coregistration and Interferogram ##############"
+        # )
+        # if bool(self.reest_flag) and bool(self.renew_flag):
+        #     shutil.rmtree(self.config['project_definition']['coreg_folder'])
+        #     shutil.rmtree(self.config['project_definition']['ifg_folder'])
+        # time.sleep(2)
+        # CoregIFG(self.max_perp, self.process_range, self.project_name).process()
+        # print('\n')
 
-        # StaMPS export
-        print(f"############## Running: Step 8: StaMPS Export ##############")
-        StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, None, self.project_name).process()
-        print('\n')
+        # # StaMPS export
+        # print(f"############## Running: Step 8: StaMPS Export ##############")
+        # StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, None, self.project_name).process()
+        # print('\n')
 
         # StaMPS preparation
-        print(f"############## Running: Step 9: StaMPS Preparation ##############")
-        StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
-        print('\n')
+        # print(f"############## Running: Step 9: StaMPS Preparation ##############")
+        # StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
+        # print('\n')
         
 
 if __name__ == "__main__":

@@ -39,12 +39,14 @@ class TomoSARControl:
         self.slcstack, self.interfstack = self.input.run()
         
         # Process SHP in chunks
-        if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz")):
-            self.shp = self._process_shp_chunks()['patches']
-            np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), shp=self.shp)
-            time.sleep(2)
-        else:
-            self.shp = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), allow_pickle=True)['shp']
+        if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "psds.npz")) or \
+            not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz")):
+            if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz")):
+                self.shp = self._process_shp_chunks()['patches']
+                np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), shp=self.shp)
+                time.sleep(2)
+            else:
+                self.shp = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "shp.npz"), allow_pickle=True)['shp']
         print("\n")
 
     @staticmethod
@@ -346,14 +348,15 @@ class TomoSARControl:
                        self.input.InSAR_processor).run()
         else:
             print("Step 2: PSDS estimation\n")
-            if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz")):
-                print("-> Computing SHP-based coherence started...")
-                all_coherence_matrices, all_reference_indices = self.intf_cov(self.slcstack, self.interfstack)
-                np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), coherence=all_coherence_matrices, reference_indices=all_reference_indices)
-            else:
-                print("-> Loading existing coherence matrix...")
-                all_coherence_matrices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['coherence']
-                all_reference_indices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['reference_indices']
+            if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "psds.npz")):
+                if not os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz")):
+                    print("-> Computing SHP-based coherence started...")
+                    all_coherence_matrices, all_reference_indices = self.intf_cov(self.slcstack, self.interfstack)
+                    np.savez(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), coherence=all_coherence_matrices, reference_indices=all_reference_indices)
+                else:
+                    print("-> Loading existing coherence matrix...")
+                    all_coherence_matrices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['coherence']
+                    all_reference_indices = np.load(os.path.join(self.config["processing_parameters"]["current_result"], "coherence.npz"), allow_pickle=True)['reference_indices']
             
             # Check if PSDS results already exist
             psds_result_file = os.path.join(self.config["processing_parameters"]["current_result"], "psds.npz")
