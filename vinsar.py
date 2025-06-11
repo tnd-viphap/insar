@@ -36,7 +36,7 @@ if __name__ == "__main__":
                       stamps_flag='TOMO', ptype=1,
                       stack_size=ministack_size, uni=unified_flag, project_name=project_name).run_stages()
     time.sleep(1)
-    ps_results = StaMPSEXE(oobj, '', project_name).run()
+    ps_results = StaMPSEXE(oobj, project_name).run()
 
     ## Phase 3: CRLink
     n_rovers =
