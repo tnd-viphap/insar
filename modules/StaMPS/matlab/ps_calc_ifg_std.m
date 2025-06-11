@@ -33,37 +33,6 @@ function []=PS_calc_ifg_std
   
   % Open the file for reading
   bperp_values = ps.bperp;
-  fid = fopen('../../../modules/snap2stamps/bin/project.conf');
-  if fid == -1
-      error('Cannot open the file.');
-  end
-  
-  % Read the file line by line
-  max_bperp = '';
-  while ~feof(fid)
-      line = fgetl(fid);
-      if startsWith(line, 'MAX_PERP')
-          parts = strsplit(line, '=');
-          if numel(parts) > 1
-              max_bperp = strtrim(parts{2}); % Trim spaces from the value
-              break; % Stop after finding the first match
-          end
-      end
-  end
-  
-  % Close the file
-  fclose(fid);
-  
-  % Display the extracted value
-  if isempty(max_bperp)
-      WARNING('MAX_PERP not found in the file.');
-  else
-      fprintf('Extracted value: %s\n', max_bperp);
-  end
-  max_bperp = str2double(max_bperp);
-  % Find interferograms with |bperp| >= 150
-  toremove_bperp_indices = find(abs(bperp_values) >= max_bperp);
-  
   n_ps=length(ps.xy);
   master_ix=sum(ps.master_day>ps.day)+1;
   
@@ -86,42 +55,5 @@ function []=PS_calc_ifg_std
     end
   end
   fprintf('\n')
-  
-  % Calculate mean standard deviation and find interferograms with std <= mean
-  mean_std = mean(ifg_std);
-  high_std_indices = find(ifg_std > mean_std);
-  
-  fprintf('Mean standard deviation: %3.2f degrees\n', mean_std);
-  fprintf('Interferograms with standard deviation > mean:\n');
-  if strcmpi(small_baseline_flag,'y')
-      for i = high_std_indices'
-          fprintf('%3d %s_%s %3.2f\n',i,datestr(ps.ifgday(i,1)),datestr(ps.ifgday(i,2)),ifg_std(i))
-      end
-  else
-      for i = high_std_indices'
-          fprintf('%3d %s %3.2f\n',i,datestr(ps.day(i)),ifg_std(i))
-      end
-  end
-  fprintf('\n')
-  
-  % Append high bperp indices to drop_ifg_index
-  drop_ifg_index = unique([high_std_indices; toremove_bperp_indices]);
-  
-  % Convert drop_ifg_index to a list and print
-  fprintf('drop_ifg_index values:\n');
-  list_str = '';
-  for i = 1:length(drop_ifg_index)
-      if i == 1
-          list_str = num2str(drop_ifg_index(i));
-      else
-          list_str = [list_str, ' ', num2str(drop_ifg_index(i))];
-      end
-  end
-  fprintf('%s\n\n', list_str);
-  
-  % Set the updated drop_ifg_index parameter
-  setparm('drop_ifg_index', list_str);
-  fprintf('Set drop_ifg_index parameter with %d interferograms (including those with |bperp| ≤ 150)\n', length(drop_ifg_index));
-  
   save(ifgstdname,'ifg_std'); 
   end

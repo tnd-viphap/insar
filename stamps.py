@@ -371,6 +371,8 @@ class StaMPSEXE:
         self.csv_files = []
         with open(os.path.join(project_folder, "config", "project.conf"), "w") as f:
             f.write(f"CURRENT_RESULT={self.config['processing_parameters']['current_result']}")
+            f.write(f"MAX_PERP={self.config['processing_parameters']['max_perp']}")
+            f.close()
         if platform.system() == 'Windows':
             matlab_cmd = (
                 f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "

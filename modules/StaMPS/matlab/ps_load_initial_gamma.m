@@ -138,7 +138,6 @@ for i=1:n_ifg
     [ph_bit,byte_count]=fread(fid,[(n_ps)*2,1],'float=>single');
     ph(:,i)=complex(ph_bit(1:2:end),ph_bit(2:2:end));
 end
-
 zero_ph=sum(ph==0,2);
 nonzero_ix=zero_ph<=1;       % if more than 1 phase is zero, drop node
 if master_master_flag==1
@@ -198,7 +197,6 @@ if max(xynew(1,:))-min(xynew(1,:))<max(xy(1,:))-min(xy(1,:)) &...
 end
         
 xy=single(xy');
-disp(xy);
 [dummy,sort_ix]=sortrows(xy,[2,1]); % sort in ascending y order
 xy=xy(sort_ix,:);
 xy=[[1:n_ps]',xy];
