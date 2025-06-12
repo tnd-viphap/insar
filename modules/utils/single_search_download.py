@@ -7,27 +7,25 @@ import threading
 import time
 import concurrent.futures
 
+project_path = os.path.join(os.path.dirname(__file__), "../..")
+sys.path.append(project_path)
+from config.parser import ConfigParser
+
 class Downloader:
     """ This is designed for redownloading when entering splitting phase but finding no data """
-    def __init__(self, search_result):
+    def __init__(self, search_result, project_name):
         super().__init__()
-        
+        self.project_name = project_name
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
         self.logger = logging.getLogger()
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
-        
-        # Read input file
-        inputfile = os.path.split(os.path.abspath(__file__))[0].replace("utils", "snap2stamps/bin/project.conf")
-        with open(inputfile, 'r') as file:
-            for line in file.readlines():
-                key, value = (line.split('=')[0].strip(), line.split('=')[1].strip()) if '=' in line else (None, None)
-                if key:
-                    setattr(self, key, value)
             
         self.print_lock = threading.Lock()  # Ensure thread-safe printing
         
-        self.processed_files = os.listdir(self.MASTERFOLDER) + os.listdir(self.SLAVESFOLDER)
+        self.processed_files = os.listdir(self.config['project_definition']['master_folder']) + os.listdir(self.config['project_definition']['slaves_folder'])
 
     def _resume_download(self, result, savepath):
         """Resume an interrupted download using HTTP Range requests, showing progress."""
@@ -78,18 +76,18 @@ class Downloader:
             self.logger.info(f"\nDownloaded: {file_name}")
 
         # **Save fileID to download_cache.txt**
-        if os.path.exists(self.DOWNLOAD_CACHE):
-            with open(self.DOWNLOAD_CACHE, "r") as cache:
+        if os.path.exists(self.config['cache_files']['download_cache']):
+            with open(self.config['cache_files']['download_cache'], "r") as cache:
                 lines = cache.readlines()
                 file_id = file_id+'\n'
                 lines.append(file_id)
                 lines = list(sorted(set(lines)))
-                with open(self.DOWNLOAD_CACHE, "w") as cache_file:  # Open in append mode
+                with open(self.config['cache_files']['download_cache'], "w") as cache_file:  # Open in append mode
                     cache_file.writelines(lines)
                     cache_file.close()
                 cache.close()
         else:
-            with open(self.DOWNLOAD_CACHE, "a") as cache:
+            with open(self.config['cache_files']['download_cache'], "a") as cache:
                 cache.write(file_id+"\n")
                 cache.close()
 
@@ -106,28 +104,24 @@ class Downloader:
                     self.logger.info(f"Downloaded: {file_name}") 
 
 class Search_Download:
-    def __init__(self):
+    def __init__(self, project_name):
+        self.project_name = project_name
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
 
-        self.inputfile = os.path.split(os.path.abspath(__file__))[0].replace("utils", "snap2stamps/bin/project.conf").replace("\\", "/")
-        with open(self.inputfile, "r") as file:
-            content = file.readlines()
-            keys = [f.split("=")[0].strip() for f in content]
-            values = [f.split("=")[-1].strip() for f in content]
-            for key, value in zip(keys, values):
-                setattr(self, key, value)
+        self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
+        self.config = self.config_parser.get_project_config(self.project_name)
 
-        self.AOI = f"POLYGON (({self.LONMIN} {self.LATMIN},{self.LONMAX} {self.LATMIN},{self.LONMAX} {self.LATMAX},{self.LONMIN} {self.LATMAX},{self.LONMIN} {self.LATMIN}))"
+        self.AOI = f"POLYGON (({self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_min']},{self.config['aoi_bbox']['lon_max']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_max']},{self.config['aoi_bbox']['lon_min']} {self.config['aoi_bbox']['lat_min']}))"
     
     def search(self, start=None, end=None):
         # Search around the incomplete file's date
         results = asf.search(
-            platform=["Sentinel-1A", "Sentinel-1B"],
+            platform=["Sentinel-1A", "Sentinel-1C"],
             processingLevel="SLC",
             intersectsWith=self.AOI,
-            flightDirection=self.DIRECTION,
-            frame=int(self.FRAME),
+            flightDirection=self.config['search_parameters']['direction'],
+            frame=int(self.config['search_parameters']['frame']),
             start=start,
             end=end
         )
@@ -137,12 +131,12 @@ class Search_Download:
             if savepath:
                 results[0].download(savepath, session=self.session)
             else:
-                results[0].download(RAWDATAFOLDER, session=self.session)
-            with open(self.DOWNLOAD_CACHE, "r") as cache:
+                results[0].download(self.config['project_definition']['raw_data_folder'], session=self.session)
+            with open(self.config['cache_files']['download_cache'], "r") as cache:
                 lines = cache.readlines()
                 lines.append(results[0].properties["fileID"]+"\n")
                 lines = list(sorted(set(lines)))
-            with open(self.DOWNLOAD_CACHE, "w") as write_cache:
+            with open(self.config['cache_files']['download_cache'], "w") as write_cache:
                 write_cache.writelines(lines)
             cache.close()
             write_cache.close()

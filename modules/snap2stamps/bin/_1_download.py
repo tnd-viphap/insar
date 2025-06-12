@@ -219,7 +219,7 @@ class Download:
                 
                 # Cleaning sequence
                 time.sleep(2)
-                MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True).select_master()
+                MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True, self.project_name).select_master()
                 time.sleep(2)
                 
                 # Move incomplete files back to RAWDATAFOLDER
@@ -227,11 +227,11 @@ class Download:
                     shutil.move(file, self.config["project_definition"]["raw_data_folder"])
                 
                 time.sleep(2)
-                Burst().find_burst()
+                Burst(self.project_name).find_burst()
                 time.sleep(2)
-                MasterSplitter().process()
+                MasterSplitter(self.project_name).process()
                 time.sleep(2)
-                SlavesSplitter().process()
+                SlavesSplitter(self.project_name).process()
                 time.sleep(2)
         
         # Download tracking
@@ -483,7 +483,7 @@ class SLC_Search:
                             processingLevel="SLC",
                             intersectsWith=self.AOI,
                             flightDirection=self.config["search_parameters"]["direction"],
-                            frame=int(self.config["search_parameters"]["frame_no"]),
+                            frame=int(self.config["search_parameters"]["frame"]),
                             start=file_date - timedelta(days=1),
                             end=file_date + timedelta(days=1)
                         )
@@ -519,7 +519,7 @@ class SLC_Search:
                     processingLevel="SLC",
                     intersectsWith=self.AOI,
                     flightDirection=self.config["search_parameters"]["direction"],
-                    frame=int(self.config["search_parameters"]["frame_no"]),
+                    frame=int(self.config["search_parameters"]["frame"]),
                     start=start,
                     end=end
                 )
@@ -557,8 +557,9 @@ class SLC_Search:
         return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
 if __name__ == "__main__":
-    search = SLC_Search()
+    search = SLC_Search(2, ["20240101", None], "maychai")
     results = search.search()
+    print(results)
     #if results[0:1]:
     #    downloader = Download(results[0:1])
     #    downloader.download(search.RAWDATAFOLDER)

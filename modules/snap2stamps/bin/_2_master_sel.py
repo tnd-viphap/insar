@@ -46,21 +46,13 @@ class MasterSelect:
         
         self.no_initial_master = False
 
-    def modify_master(self, config_file, master_info):
+    def modify_master(self, master_info):
         """Modify the project.conf file with the new MASTER and OLD_MASTER values."""
-        config_path = os.path.join(config_file, "project.conf")
-        with open(config_path, "r") as file:
-            lines = file.readlines()
-
-        for idx, line in enumerate(lines):
-            if master_info[0] and line.startswith("MASTER="):
-                strg = str(master_info[0]).replace('\\', '/').replace('//', '/')
-                lines[idx] = f"MASTER={strg}\n"
-            if master_info[1] and line.startswith("OLD_MASTER"):
-                lines[idx] = f"OLD_MASTER={master_info[1][0:8]}\n"
-
-        with open(config_path, "w") as file:
-            file.writelines(lines)
+        self.config['project_definition']['master'] = str(master_info[0]).replace('\\', '/').replace('//', '/')
+        self.config['processing_parameters']['old_master'] = master_info[1][0:8]
+        self.config_parser.update_project_config(self.project_name, self.config)
+        self.config_parser._load_config()
+        self.config = self.config_parser.get_project_config(self.project_name)
 
     def get_files_in_directory(self, directory, extension=None):
         """Returns a sorted list of unique filenames (or specific extensions) from a directory."""
@@ -166,7 +158,6 @@ class MasterSelect:
             selected_master = [f for f in self.all_files if str(self.identity_master) in f][0]
             print(f"Selected MASTER = {selected_master}\n")
             if self.reset_master:
-                print(f"Selected MASTER = {selected_master}\n")
                 master_in = "r" if selected_master in self.raw_files else "s" if selected_master in self.slave_files else "m"
             else:
                 master_in = "m"
@@ -192,7 +183,7 @@ class MasterSelect:
             self.move_slaves(selected_master)
 
             print(f"Moved {selected_master} to {master_folder}")
-            self.modify_master(os.path.dirname(os.path.abspath(__file__)), [output_name, old_master])
+            self.modify_master([output_name, old_master])
             print("New MASTER updated to configuration\n")
             
             # Convert master-slave
@@ -244,7 +235,7 @@ class MasterSelect:
                 self.move_slaves(selected_master)
 
                 print(f"Moved {selected_master} to {master_folder}")
-                self.modify_master(os.path.dirname(os.path.abspath(__file__)), [output_name, old_master])
+                self.modify_master([output_name, old_master])
                 print("New MASTER updated to configuration\n")
                 
                 # Convert master-slave
@@ -278,8 +269,10 @@ class MasterSelect:
                         print("Selected master data is missing. Check manually")
 
                 self.move_slaves(selected_master)
-                self.modify_master(os.path.dirname(os.path.abspath(__file__)), [None, old_master])
+                self.modify_master([None, old_master])
                 print("Keeping current MASTER.")
+
+        return selected_master
 
 if __name__ == "__main__":
     try:

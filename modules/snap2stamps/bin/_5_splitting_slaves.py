@@ -45,25 +45,28 @@ class SlavesSplitter:
                 files = glob.glob(folder_path + '/*.zip')
                 out_file.write(str(files) + '\n')
 
-                try:
-                    folder_date = datetime.strptime(acdatefolder, "%Y%m%d")
-                    last_modified_date = datetime.fromtimestamp(os.path.getmtime(folder_path))
-                    days_diff = int(abs((last_modified_date - folder_date).days))
-                    
-                    if days_diff <= 21 and datetime.now() >= folder_date + timedelta(days=21):
-                        print(f"-> Image {acdatefolder} has new orbit data. Renewing...")
-                        if os.path.exists(folder_path):
-                            shutil.rmtree(folder_path)
-                            os.makedirs(folder_path)
-                            for file in os.listdir(self.config["project_definition"]["coreg_folder"]):
-                                if acdatefolder in file:
-                                    if os.path.isfile(os.path.join(self.config["project_definition"]["coreg_folder"], file)):
-                                        os.remove(os.path.join(self.config["project_definition"]["coreg_folder"], file))
-                                    elif os.path.isdir(os.path.join(self.config["project_definition"]["coreg_folder"], file)):
-                                        shutil.rmtree(os.path.join(self.config["project_definition"]["coreg_folder"], file))
-                except:
-                    print(f"-> Error checking folder date {acdatefolder}")
+                if len(files) == 1:
                     pass
+                else:
+                    try:
+                        folder_date = datetime.strptime(acdatefolder, "%Y%m%d")
+                        last_modified_date = datetime.fromtimestamp(os.path.getmtime(folder_path))
+                        days_diff = int(abs((last_modified_date - folder_date).days))
+                        
+                        if days_diff <= 21 and datetime.now() >= folder_date + timedelta(days=21):
+                            print(f"-> Image {acdatefolder} has new orbit data. Renewing...")
+                            if os.path.exists(folder_path):
+                                shutil.rmtree(folder_path)
+                                os.makedirs(folder_path)
+                                for file in os.listdir(self.config["project_definition"]["coreg_folder"]):
+                                    if acdatefolder in file:
+                                        if os.path.isfile(os.path.join(self.config["project_definition"]["coreg_folder"], file)):
+                                            os.remove(os.path.join(self.config["project_definition"]["coreg_folder"], file))
+                                        elif os.path.isdir(os.path.join(self.config["project_definition"]["coreg_folder"], file)):
+                                            shutil.rmtree(os.path.join(self.config["project_definition"]["coreg_folder"], file))
+                    except:
+                        print(f"-> Error checking folder date {acdatefolder}")
+                        pass
                 
                 if not os.listdir(folder_path):
                     print(f"-> Found no data. Re-downloading data for {acdatefolder}...")
@@ -71,7 +74,7 @@ class SlavesSplitter:
                         product_date = datetime.strptime(acdatefolder, "%Y%m%d")
                         start = product_date - timedelta(days=1)
                         end = product_date + timedelta(days=1)
-                        instance = Search_Download()
+                        instance = Search_Download(self.project_name)
                         results = instance.search(start, end)
                         if results:
                             instance.download(results, folder_path)
@@ -81,7 +84,7 @@ class SlavesSplitter:
                 files = glob.glob(folder_path + '/*.zip')
                 if files:
                     head, tail = os.path.split(files[0])
-                    outputname = head + '/' + tail[17:25] + '_' + self.IW1 + '.dim'
+                    outputname = head + '/' + tail[17:25] + '_' + self.config['processing_parameters']['iw1'] + '.dim'
                 
                     if os.path.exists(outputname):
                         print(f"-> Slave image {tail[17:25]} is already processed.")
@@ -98,13 +101,13 @@ class SlavesSplitter:
                             end = product_date + timedelta(days=1)
                             
                             time.sleep(1)
-                            results = Search_Download().search(start, end)
+                            results = Search_Download(self.project_name).search(start, end)
                             if results:
-                                downloader = Downloader(results)
+                                downloader = Downloader(results, self.project_name)
                                 downloader._resume_download(results[0], folder_path)
                                     
                             time.sleep(1)
-                            found_burst = Burst().find_burst(folder_path)
+                            found_burst = Burst(self.project_name).find_burst(folder_path)
                             if found_burst == False:
                                 shutil.rmtree(folder_path)
                                 with open(self.config["cache_files"]["download_cache"], "r") as cache:
@@ -128,12 +131,12 @@ class SlavesSplitter:
                                 product_date = datetime.strptime(acdatefolder, "%Y%m%d")
                                 start = product_date - timedelta(days=1)
                                 end = product_date + timedelta(days=1)
-                                instance = Search_Download()
+                                instance = Search_Download(self.project_name)
                                 results = instance.search(start, end)
                                 if results:
                                     instance.download(results, folder_path)
                                 time.sleep(1)
-                                Burst().find_burst(folder_path)
+                                Burst(self.project_name).find_burst(folder_path)
                             except:
                                 time.sleep(1)
                                 shutil.rmtree(folder_path)
@@ -147,14 +150,14 @@ class SlavesSplitter:
                         filedata = file.read()
                         filedata = filedata.replace('INPUTFILE', files[0])
                         filedata = filedata.replace('IWs', self.config['processing_parameters']['iw1'])
-                        filedata = filedata.replace('FIRST_BURST', self.config['processing_parameters']['first_burst'])
-                        filedata = filedata.replace('LAST_BURST', self.config['processing_parameters']['last_burst'])
+                        filedata = filedata.replace('FIRST_BURST', str(self.config['processing_parameters']['first_burst']))
+                        filedata = filedata.replace('LAST_BURST', str(self.config['processing_parameters']['last_burst']))
                         filedata = filedata.replace('OUTPUTFILE', outputname)
 
                     with open(self.graph2run, 'w') as file:
                         file.write(filedata)
 
-                    args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+                    args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
                     print(args)
                     out_file.write(str(args) + '\n')
 

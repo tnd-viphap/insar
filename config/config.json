@@ -147,13 +147,13 @@
       },
       "processing_parameters": {
         "iw1": "IW1",
-        "first_burst": 5,
-        "last_burst": 5,
+        "first_burst": "5",
+        "last_burst": "6",
         "old_master": "20250110",
-        "max_perp": 600.0,
-        "da_threshold": 0.4,
+        "max_perp": 300.0,
+        "da_threshold": 0.45,
         "reest_flag": 1,
-        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250110_PSDS_v9",
+        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250110_PSDS_v11",
         "ministack": 5,
         "unified": 0,
         "ptype": 1

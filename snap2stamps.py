@@ -89,6 +89,9 @@ class Manager:
         )
         Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
                   self.stack_size, self.uni, self.project_name)
+        self.config['processing_parameters']['da_threshold'] = self.da_threshold
+        self.config_parser.update_project_config(self.project_name, self.config)
+        self.config = self.config_parser.get_project_config(self.project_name)
         print("\n")
         
         # Do searching for data
@@ -106,7 +109,7 @@ class Manager:
             
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
+        selected_master = MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
         print("\n")
 
         # Find master burst
@@ -126,9 +129,23 @@ class Manager:
         print(
             f"############## Running: Step 7: Coregistration and Interferogram ##############"
         )
+        # self.config_parser._load_config()
+        # self.config = self.config_parser.get_project_config(self.project_name)
+        # if self.identity_master:
+        #     if self.config['processing_parameters']['old_master'] == self.identity_master:
+        #         self.renew_flag = 0
+        # else:
+        #     if not self.config['processing_parameters']['old_master'] in selected_master:
+        #         self.renew_flag = 1
+        #     else:
+        #         self.renew_flag = 0
+        if bool(self.renew_flag):
+            with open(self.config['cache_files']['baseline_cache'], 'w') as f:
+                f.close()
         if bool(self.reest_flag) and bool(self.renew_flag):
             shutil.rmtree(self.config['project_definition']['coreg_folder'])
             shutil.rmtree(self.config['project_definition']['ifg_folder'])
+            
         time.sleep(2)
         CoregIFG(self.max_perp, self.process_range, self.project_name).process()
         print('\n')

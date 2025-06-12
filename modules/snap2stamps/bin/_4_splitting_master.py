@@ -60,14 +60,14 @@ class MasterSplitter:
                         filedata = file.read()
                         filedata = filedata.replace('INPUTFILE', files[0])
                         filedata = filedata.replace('IWs', self.config["processing_parameters"]["iw1"])
-                        filedata = filedata.replace('FIRST_BURST', self.config["processing_parameters"]["first_burst"])
-                        filedata = filedata.replace('LAST_BURST', self.config["processing_parameters"]["last_burst"])
+                        filedata = filedata.replace('FIRST_BURST', str(self.config["processing_parameters"]["first_burst"]))
+                        filedata = filedata.replace('LAST_BURST', str(self.config["processing_parameters"]["last_burst"]))
                         filedata = filedata.replace('OUTPUTFILE', os.path.join(folder_path, outputname))
                     
                     with open(self.graph2run, 'w') as file:
                         file.write(filedata)
                 
-                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
                 print(args)
                 out_file.write(str(args) + '\n')
                 

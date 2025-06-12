@@ -50,8 +50,8 @@ class StaMPSExporter:
         elif comsar and self.stamps_flag != "NORMAL":
             self.core = "ComSAR"
         if project_outputs:
-            project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_")[-1][-1]))
-            mark = int(project_outputs[-1][-1])+1
+            project_outputs = sorted(project_outputs, key=lambda x: int(x.split("_v")[-1]))
+            mark = int(project_outputs[-1].split("_v")[-1])+1
             if self.renew_flag:
                 self.outputexportfolder = f"{self.config['project_definition']['stamp_folder']}{self.project_result}INSAR_{tail[:8]}_{self.core}_v{mark}"
             else:
