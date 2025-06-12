@@ -423,12 +423,12 @@ class TomoSARControl:
             os.makedirs(interf_output_dir, exist_ok=True)
             
             # Export SLC files
-            print("-> Exporting processed SLC files...")
+            # print("-> Exporting processed SLC files...")
             self.slcstack["datastack"] = full_slc_despeckle
             self.slc_export(slc_output_dir, '.psar')
             
             # Export interferogram files
-            print("-> Exporting processed interferogram files...")
+            # print("-> Exporting processed interferogram files...")
             self.interfstack["datastack"] = full_interf_filtered
             self.interf_export(interf_output_dir, '.psds')
 
