@@ -14,7 +14,7 @@ sys.path.append(project_path)
 from config.parser import ConfigParser
 
 class Parms:
-    def __init__(self, project_name="default"):
+    def __init__(self, project_name="default", data_dir=None):
         """
         Initialize parameters class for PS/SB processing
         
@@ -24,6 +24,10 @@ class Parms:
         self.project_name = project_name
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(self.project_name)
+        if data_dir is None:
+            self.work_dir = self.config['processing_parameters']['current_result']
+        else:
+            self.work_dir = data_dir
         self.parms = {
             'Created': datetime.today(),
             'small_baseline_flag': 'n'  # PS ifgs with single masters
@@ -44,8 +48,7 @@ class Parms:
         
     def _get_processor(self):
         """Get processor type from processor.txt file"""
-        result_folder = self.config["processing_parameters"]["current_result"]
-        processor_file = Path(result_folder) / 'processor.txt'
+        processor_file = Path(self.work_dir) / 'processor.txt'
         
         # Try to find processor.txt in current and parent directories
         for _ in range(3):
@@ -173,8 +176,7 @@ class Parms:
         
     def save(self):
         """Save parameters to file"""
-        result_folder = self.config["processing_parameters"]["current_result"]
-        parmfile = Path(result_folder) / 'parms.json'
+        parmfile = Path(self.work_dir) / 'parms.json'
         
         try:
             # Convert datetime to string for JSON serialization
@@ -198,8 +200,7 @@ class Parms:
             
     def load(self):
         """Load parameters from file"""
-        result_folder = self.config["processing_parameters"]["current_result"]
-        parmfile = Path(result_folder) / 'parms.json'
+        parmfile = Path(self.work_dir) / 'parms.json'
         
         if parmfile.exists():
             try:

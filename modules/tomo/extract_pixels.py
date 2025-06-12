@@ -24,12 +24,15 @@ class MTExtractCands:
     Extract candidate pixels data from patches
     """
     
-    def __init__(self, project_name: str = "default"):
+    def __init__(self, project_name: str = "default", data_dir: str = None):
         """Initialize MTExtractCands class"""
         self.logger = self._setup_logger()
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(project_name)
-        self.work_dir = self.config['processing_parameters']['current_result']
+        if data_dir is None:
+            self.work_dir = self.config['processing_parameters']['current_result']
+        else:
+            self.work_dir = data_dir
 
         self.dophase = 1
         self.dolonlat = 1

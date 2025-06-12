@@ -69,7 +69,7 @@ class TomoSARControl:
         n_chunks = len(self.slcstack["datastack"])
         
         # Process chunks in parallel with batch size of 50
-        batch_size = 50
+        batch_size = 100
         n_batches = (n_chunks + batch_size - 1) // batch_size
         
         print(f"-> Processing {n_chunks} chunks for SHP in {n_batches} batches of {batch_size}")
@@ -145,7 +145,7 @@ class TomoSARControl:
             Coh[ii, ii, :, :] = 1.0
         
         # Process image pairs in batches
-        batch_size = 50
+        batch_size = 100
         image_pairs = [(ii, ss) for ii in range(npages + 1) for ss in range(ii + 1, npages + 1)]
         
         for batch_start in range(0, len(image_pairs), batch_size):
@@ -210,7 +210,11 @@ class TomoSARControl:
                 
                 # Store results
                 Coh[ii, ss, :, :] = result
-                Coh[ss, ii, :, :] = result.conj()
+            temp = np.ones(npages + 1)
+            for jj in range(nwidths):
+                for kk in range(nlines):
+                    W = Coh[:, :, kk, jj]
+                    Coh[:, :, kk, jj] = W + (W - np.diag(temp)).T
         
         return {
             'coherence': Coh,

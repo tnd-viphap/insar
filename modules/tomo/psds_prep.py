@@ -189,7 +189,7 @@ class PSDS_Prep:
             f.write("snap\n")
 
         # Write initial parameters
-        parms = Parms(self.project_name)
+        parms = Parms(self.project_name, self.work_dir)
         parms.initialize()
 
         # Calibrate amplitudes
@@ -261,7 +261,7 @@ class PSDS_Prep:
 
         # Run mt_extract_cands
         print("-> Extracting candidate PS pixels...")
-        mt_extract_cands = MTExtractCands(self.project_name)
+        mt_extract_cands = MTExtractCands(self.project_name, self.work_dir)
         mt_extract_cands.run()
 
         end_time = time.time()
