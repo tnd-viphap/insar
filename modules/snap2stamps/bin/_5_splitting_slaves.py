@@ -45,7 +45,7 @@ class SlavesSplitter:
                 files = glob.glob(folder_path + '/*.zip')
                 out_file.write(str(files) + '\n')
 
-                if len(files) == 1:
+                if len(files) >= 1:
                     pass
                 else:
                     try:

@@ -92,9 +92,10 @@ class MasterSelect:
             shutil.move(src_dir, self.config["project_definition"]["master_folder"])
         
     def master_to_slave(self, om, cm):
+        print(f"Master to slave: {om}, {cm}")
         if not os.path.exists(os.path.join(self.config["project_definition"]["slaves_folder"], om)):
             return
-        new_slave = os.path.join(self.config["project_definition"]["slaves_folder"], om, om+"_M").replace("_M", f"_{self.IW1}.dim")
+        new_slave = os.path.join(self.config["project_definition"]["slaves_folder"], om, om+"_M").replace("_M", f"_{self.config['processing_parameters']['iw1']}.dim")
         old_master = os.path.join(self.config["project_definition"]["slaves_folder"], om, om+"_M.dim")
         graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'toslaves.xml')
         
@@ -110,7 +111,7 @@ class MasterSelect:
             print("-> Converted M-S data detected. Skipping...")
         else:
             print("-> Converting M-S...")
-            args = [self.config["snap_gpt"]["gptbin_path"], self.graph2runms, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+            args = [self.config["snap_gpt"]["gptbin_path"], self.graph2runms, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
             process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             process.communicate()
             time.sleep(2)
@@ -140,7 +141,7 @@ class MasterSelect:
                 print("-> Converted S-M data detected. Skipping...")
             else:
                 print("-> Converting S-M...")
-                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2runsm, '-c', self.config["computing_resources"]["cache"], '-q', self.config["computing_resources"]["cpu"]]
+                args = [self.config["snap_gpt"]["gptbin_path"], self.graph2runsm, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
                 process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 process.communicate()
                 time.sleep(2)
