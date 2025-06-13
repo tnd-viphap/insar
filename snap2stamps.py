@@ -171,9 +171,9 @@ if __name__ == "__main__":
     max_date = 2
     download_range = ["20240101", None] # ["20220901", None] means downloading from 01/09/2022 until now
     reest_flag = 1
-    process_range = [None, None]
-    identity_master = "20250110"
-    max_perp = 600.0
+    process_range = ["20241001", None]
+    identity_master = "20250323"
+    max_perp = 150.0
     da_threshold = 0.4
     renew_flag = 1
     unified_flag = 0
@@ -187,7 +187,7 @@ if __name__ == "__main__":
                       renew_flag=renew_flag,
                       process_range=process_range,
                       stamps_flag='TOMO', ptype=0,
-                      stack_size=ministack_size, uni=unified_flag, project_name="noibai").run_stages()
+                      stack_size=ministack_size, uni=unified_flag, project_name="maychai").run_stages()
     """
     try:
         Manager().run_stages()

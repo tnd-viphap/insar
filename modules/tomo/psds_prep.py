@@ -251,7 +251,7 @@ class PSDS_Prep:
                     if platform.system() == "Linux":
                         f.write(line)
                     else:
-                        f.write("     "+line)
+                        f.write("      " + line)
             
         self.create_patches()
         self.prepare_psds_files()

@@ -30,9 +30,8 @@ class MTExtractCands:
         self.logger = self._setup_logger()
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(project_name)
-        if data_dir is None:
-            self.work_dir = self.config['processing_parameters']['current_result']
-        else:
+        self.work_dir = self.config['processing_parameters']['current_result']
+        if data_dir:
             self.work_dir = data_dir
 
         self.dophase = 1
@@ -153,7 +152,7 @@ class MTExtractCands:
                     # Select SB candidates
                     cmd = [
                         str(self.selsbc_path).replace('\\', '/'),
-                        f"{self.work_dir[1:]}/selsbc.in",
+                        f"{self.work_dir}/selsbc.in",
                         "patch.in",
                         "pscands.1.ij",
                         "pscands.1.da",

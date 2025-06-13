@@ -433,4 +433,4 @@ class TomoSARControl:
             self.interf_export(interf_output_dir, '.psds')
 
 if __name__ == "__main__":
-    TomoSARControl(project_name="noibai").run()
+    TomoSARControl(project_name="maychai").run()
