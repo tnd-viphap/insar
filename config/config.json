@@ -150,10 +150,10 @@
         "first_burst": "5",
         "last_burst": "5",
         "old_master": "20250323",
-        "max_perp": 300.0,
-        "da_threshold": 0.45,
+        "max_perp": 150.0,
+        "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250323_PSDS_v12",
+        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250323_PSDS_v13",
         "ministack": 5,
         "unified": 0,
         "ptype": 1

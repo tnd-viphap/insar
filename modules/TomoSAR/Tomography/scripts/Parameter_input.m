@@ -47,7 +47,7 @@ Cohthre_slc_filt = 0.05; % less than 0.05 is mostly water
 % ComSAR is much friendly Big Data processing. A rough approximation for
 % ComSAR RAM requirement is 0.3*Nslc*Nslc*Nline*Nwidth/2.7e8 (GB)
 % i.e., 200 images of 500x2000 size, 220 GB is for PSDS, but for ComSAR it requires only 45 GB.
-COMSAR_fetch = read_conf_value('../../../snap2stamps/bin/project.conf', 'COMSAR');
+COMSAR_fetch = read_conf_value('../../../../config/project.conf', 'COMSAR');
 if strcmpi(COMSAR_fetch, 'true') || strcmp(COMSAR_fetch, '1')
     ComSAR_flag = true;
     fprintf("-> ComSAR Enabled")
@@ -55,9 +55,9 @@ else
     ComSAR_flag = false;
     fprintf("-> PSDS Enabled")
 end
-miniStackSize = read_conf_value('../../../snap2stamps/bin/project.conf', 'MINISTACK');
+miniStackSize = read_conf_value('../../../../config/project.conf', 'MINISTACK');
 miniStackSize = str2num(miniStackSize);
-Unified_fetch = read_conf_value('../../../snap2stamps/bin/project.conf', 'UNIFIED');
+Unified_fetch = read_conf_value('../../../../config/project.conf', 'UNIFIED');
 if strcmpi(Unified_fetch, 'true') || strcmp(Unified_fetch, '1')
     Unified_flag = true;
     fprintf("-> Unified ComSAR Enabled")
@@ -72,7 +72,7 @@ switch InSAR_processor
     case 'snap' % 
         % Define path - expect the SNAP export STAMPS structure
         % check out a tutorial here https://youtu.be/HzvvJoDE8ic 
-        InSAR_path = read_conf_value('../../../snap2stamps/bin/project.conf', 'CURRENT_RESULT');
+        InSAR_path = read_conf_value('../../../../config/project.conf', 'CURRENT_RESULT');
         reference_date = split(InSAR_path, '/');
         size_split=length(reference_date);
         reference_date = split(reference_date{size_split}, '_');

@@ -17,6 +17,7 @@ sys.path.append(project_path)
 
 from modules.tomo.psclonlat import PSLonLat
 from modules.tomo.pscphase import PSCPhase
+from modules.tomo.pscdem import PSCDEM
 from config.parser import ConfigParser
 
 class MTExtractCands:
@@ -197,15 +198,17 @@ class MTExtractCands:
                     
             # Process DEM
             if dodem:
-                cmd = [
-                    str(self.pscdem).replace('\\', '/'),
-                    f"{self.work_dir}/pscdem.in",
-                    "pscands.1.ij",
-                    "pscands.1.hgt"
-                ]
-                with open(self.log_file, 'a') as log:
-                    log.write(f"\n=== Processing {patch} with pscdem ===\n")
-                    subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                # cmd = [
+                #     str(self.pscdem).replace('\\', '/'),
+                #     f"{self.work_dir}/pscdem.in",
+                #     "pscands.1.ij",
+                #     "pscands.1.hgt"
+                # ]
+                # with open(self.log_file, 'a') as log:
+                #     log.write(f"\n=== Processing {patch} with pscdem ===\n")
+                #     subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
+                pscdem = PSCDEM(f"{self.work_dir}/pscdem.in", "pscands.1.ij", "pscands.1.hgt")
+                pscdem.run()
                     
             # Process phase
             if dophase:

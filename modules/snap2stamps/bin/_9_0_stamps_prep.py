@@ -4,6 +4,7 @@ import platform
 import shutil
 import sys
 import time
+import subprocess
 
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../.."))
 
@@ -34,12 +35,28 @@ class StaMPSPrep:
     def process(self):
         timeStarted = time.time()
         # os.chdir(self.CURRENT_RESULT)
+        with open(os.path.join(project_path, "config", "project.conf"), "w") as f:
+            f.write(f"COMSAR={self.config['api_flags']['comsar']}" + "\n")
+            f.write(f"UNIFIED={self.config['processing_parameters']['unified']}" + "\n")
+            f.write(f"MINISTACK={self.config['processing_parameters']['ministack']}" + "\n")
+            f.write(f"CURRENT_RESULT={self.config['processing_parameters']['current_result']}" + "\n")
+            f.write(f"MAX_PERP={self.config['processing_parameters']['max_perp']}")
+            f.close()
         if self.stamps_flag == 'NORMAL':
             StampsPrep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
         else:
             flag = 'comsar' if self.config["api_flags"]["comsar"] == "1" else 'psds'
             # Python-based PSDS_main.m
-            TomoSARControl(project_name=self.project_name).run()
+            # TomoSARControl(project_name=self.project_name).run()
+            if platform.system() == 'Windows':
+                matlab_cmd = (
+                    f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash -nodesktop "
+                    f"-r \"run('{os.path.split(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))[0].replace(os.sep, '/')}/modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" "
+                    f"> \"{self.config['processing_parameters']['current_result'].replace(os.sep, '/')}/{flag.upper()}.log\""
+                )
+                subprocess.run(matlab_cmd, shell=True)
+            else:
+                os.system(f"matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/scripts/Parameter_input.m'); exit;\' > {self.config['project_definition']['project_folder']}/{flag.upper()}.log")
             # Python-based mt_prep_snap_psds.m
             print(f"-> Preparing {flag} patches...")
             if flag == 'comsar':

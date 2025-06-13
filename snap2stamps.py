@@ -90,6 +90,7 @@ class Manager:
         Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
                   self.stack_size, self.uni, self.project_name)
         self.config['processing_parameters']['da_threshold'] = self.da_threshold
+        self.config['processing_parameters']['max_perp'] = self.max_perp
         self.config_parser.update_project_config(self.project_name, self.config)
         self.config = self.config_parser.get_project_config(self.project_name)
         print("\n")
