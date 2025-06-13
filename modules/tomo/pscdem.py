@@ -162,8 +162,8 @@ def main():
     precision = sys.argv[4] if len(sys.argv) > 4 else "f"
 
     # Create PscDEM instance and process
-    pscdem = PscDEM(parmfile, ij_file, out_file, precision)
-    pscdem.process()
+    pscdem = PSCDEM(parmfile, ij_file, out_file, precision)
+    pscdem.run()
 
 if __name__ == "__main__":
     main() 
