@@ -207,7 +207,7 @@ class MTExtractCands:
                 # with open(self.log_file, 'a') as log:
                 #     log.write(f"\n=== Processing {patch} with pscdem ===\n")
                 #     subprocess.run(' '.join(cmd), shell=True, stdout=log, stderr=log)
-                pscdem = PSCDEM(f"{self.work_dir}/pscdem.in", "pscands.1.ij", "pscands.1.hgt")
+                pscdem = PSCDEM(f"{self.work_dir}/pscdem.in", "pscands.1.ij", "pscands.1.hgt", log_file=self.log_file)
                 pscdem.run()
                     
             # Process phase

@@ -12,7 +12,7 @@ from typing import Tuple, Optional, Union
 
 class PSCDEM:
     def __init__(self, parmfile: str, ij_file: str = "pscands.1.ij", 
-                 out_file: str = "pscands.1.hgt", precision: str = "f"):
+                 out_file: str = "pscands.1.hgt", precision: str = "f", log_file: str = None):
         """
         Initialize PscDEM class
         
@@ -31,7 +31,7 @@ class PSCDEM:
         self.pscands = None
         self.dem_data = None
         self.heights = None
-        
+        self.log_file = log_file
         # Initialize parameters
         self._read_parameters()
         
@@ -41,8 +41,10 @@ class PSCDEM:
             with open(self.parmfile, 'r') as f:
                 self.width = int(f.readline().strip())
                 self.dem_file = f.readline().strip()
-            print(f"Width: {self.width}")
-            print(f"DEM file: {self.dem_file}")
+            if self.log_file:
+                with open(self.log_file, 'a') as log:
+                    log.write(f"Width: {self.width}\n")
+                    log.write(f"DEM file: {self.dem_file}\n")
         except Exception as e:
             print(f"Error reading parameter file {self.parmfile}: {e}")
             sys.exit(1)
@@ -54,7 +56,9 @@ class PSCDEM:
         """
         try:
             self.pscands = np.loadtxt(self.ij_file, dtype=int)
-            print(f"Read {len(self.pscands)} PS candidates from {self.ij_file}")
+            if self.log_file:
+                with open(self.log_file, 'a') as log:
+                    log.write(f"Read {len(self.pscands)} PS candidates from {self.ij_file}\n")
             return self.pscands
         except Exception as e:
             print(f"Error reading ij file {self.ij_file}: {e}")
@@ -69,7 +73,9 @@ class PSCDEM:
             dtype = np.float32 if self.precision == 'f' else np.float64
             # Check if file exists
             if not os.path.exists(self.dem_file):
-                print(f"Warning: DEM file {self.dem_file} not found - using zeros")
+                if self.log_file:
+                    with open(self.log_file, 'a') as log:
+                        log.write(f"Warning: DEM file {self.dem_file} not found - using zeros\n")
                 self.dem_data = np.zeros((1, self.width), dtype=dtype)
                 return self.dem_data
                 
@@ -78,7 +84,9 @@ class PSCDEM:
                 # Check for sun raster header
                 header = f.read(32)
                 if int.from_bytes(header[:4], byteorder='little') == 0x59a66a95:
-                    print("pscdem: sun raster file - skipping header")
+                    if self.log_file:
+                        with open(self.log_file, 'a') as log:
+                            log.write("pscdem: sun raster file - skipping header\n")
                 else:
                     f.seek(0)  # Reset to start if not sun raster
                 
@@ -90,7 +98,9 @@ class PSCDEM:
             self.dem_data = dem_data.reshape(height, self.width)
             return self.dem_data
         except Exception as e:
-            print(f"Error reading DEM file {self.dem_file}: {e}")
+            if self.log_file:
+                with open(self.log_file, 'a') as log:
+                    log.write(f"Error reading DEM file {self.dem_file}: {e}\n")
             sys.exit(1)
 
     def extract_heights(self) -> np.ndarray:
@@ -118,12 +128,16 @@ class PSCDEM:
             # Save as binary data
             with open(self.out_file, 'wb') as f:
                 f.write(self.heights.tobytes())
-            print(f"Saved heights to {self.out_file}")
+            if self.log_file:
+                with open(self.log_file, 'a') as log:
+                    log.write(f"Saved heights to {self.out_file}\n")
         except Exception as e:
-            print(f"Error saving heights to {self.out_file}: {e}")
+            if self.log_file:
+                with open(self.log_file, 'a') as log:
+                    log.write(f"Error saving heights to {self.out_file}: {e}\n")
             sys.exit(1)
 
-    def process(self) -> None:
+    def run(self) -> None:
         """Process the entire workflow"""
         self.read_pscands_ij()
         self.read_dem()
