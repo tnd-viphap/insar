@@ -153,7 +153,7 @@
         "max_perp": 150.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250323_PSDS_v13",
+        "current_result": "D:/projects/insar/results/INSAR_20250323_PSDS_v13",
         "ministack": 5,
         "unified": 0,
         "ptype": 1
@@ -177,8 +177,8 @@
         "nrovers": 2
       },
       "computing_resources": {
-        "cpu": 22,
-        "cache": "102G"
+        "cpu": 13,
+        "cache": "24G"
       }
     },
     "metrohcm": {
