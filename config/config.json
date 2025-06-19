@@ -122,41 +122,41 @@
     },
     "maychai": {
       "project_definition": {
-        "project_folder": "E:/insar_caumaychai/insar",
-        "graphs_folder": "E:/insar_caumaychai/insar/modules/snap2stamps/graphs/",
-        "log_folder": "E:/insar_caumaychai/insar/logs/",
-        "data_folder": "E:/insar_caumaychai/insar/data/",
-        "master_folder": "E:/insar_caumaychai/insar/data/master/",
-        "master": "E:/insar_caumaychai/insar/data/master/20250323/20250323_M.dim",
-        "slaves_folder": "E:/insar_caumaychai/insar/data/slaves/",
-        "raw_data_folder": "E:/insar_caumaychai/insar/data/raw/",
-        "coreg_folder": "E:/insar_caumaychai/insar/process/coreg/",
-        "ifg_folder": "E:/insar_caumaychai/insar/process/ifg/",
-        "stamp_folder": "E:/insar_caumaychai/insar/results/",
-        "config_path": "E:/insar_caumaychai/insar/modules/snap2stamps/bin/project.conf"
+        "project_folder": "D:/projects/insar",
+        "graphs_folder": "D:/projects/insar/modules/snap2stamps/graphs/",
+        "log_folder": "D:/projects/insar/logs/",
+        "data_folder": "D:/projects/insar/data/",
+        "master_folder": "D:/projects/insar/data/master/",
+        "master": "D:/projects/insar/data/master/20241111/20241111_M.dim",
+        "slaves_folder": "D:/projects/insar/data/slaves/",
+        "raw_data_folder": "D:/projects/insar/data/raw/",
+        "coreg_folder": "D:/projects/insar/process/coreg/",
+        "ifg_folder": "D:/projects/insar/process/ifg/",
+        "stamp_folder": "D:/projects/insar/results/",
+        "config_path": "D:/projects/insar/modules/snap2stamps/bin/project.conf"
       },
       "cache_files": {
-        "download_cache": "E:/insar_caumaychai/insar/data/download_cache.txt",
-        "broken_cache": "E:/insar_caumaychai/insar/data/broken_cache.txt",
-        "baseline_cache": "E:/insar_caumaychai/insar/data/baseline_cache.txt"
+        "download_cache": "D:/projects/insar/data/download_cache.txt",
+        "broken_cache": "D:/projects/insar/data/broken_cache.txt",
+        "baseline_cache": "D:/projects/insar/data/baseline_cache.txt"
       },
       "search_parameters": {
-        "datalake": "E:/insar_caumaychai/insar/data/lake.json",
+        "datalake": "D:/projects/insar/data/lake.json",
         "direction": "DESCENDING",
         "frame": 522
       },
       "processing_parameters": {
         "iw1": "IW1",
-        "first_burst": "5",
-        "last_burst": "5",
-        "old_master": "20250323",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20241111",
         "max_perp": 150.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "E:/insar_caumaychai/insar/results/INSAR_20250323_PSDS_v13",
+        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
         "ministack": 5,
         "unified": 0,
-        "ptype": 1
+        "ptype": 0
       },
       "aoi_bbox": {
         "lon_min": 106.691059,
@@ -177,8 +177,8 @@
         "nrovers": 2
       },
       "computing_resources": {
-        "cpu": 22,
-        "cache": "102G"
+        "cpu": 13,
+        "cache": "24G"
       }
     },
     "metrohcm": {
