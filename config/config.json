@@ -159,10 +159,10 @@
         "ptype": 1
       },
       "aoi_bbox": {
-        "lon_min": 106.6969,
-        "lat_min": 10.7615,
-        "lon_max": 106.7275,
-        "lat_max": 10.7945
+        "lon_min": 106.691059,
+        "lat_min": 20.837039,
+        "lon_max": 106.776203,
+        "lat_max": 20.899435
       },
       "snap_gpt": {
         "gptbin_path": "/home/viphap/snap/bin/gpt"

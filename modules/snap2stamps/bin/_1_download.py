@@ -554,7 +554,7 @@ class SLC_Search:
             json.dump(lake_data, file, indent=4) 
         
         self.logger.info(f"Found {len(self.final_results)} images for download.")
-        return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
+        return list(set(list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))))
 
 if __name__ == "__main__":
     search = SLC_Search(2, ["20240101", None], "maychai")
