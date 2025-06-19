@@ -1,4 +1,4 @@
-export STAMPS="/media/viphap/88b9ea56-f0c1-45dd-b6dc-bf46504a647b/insar/modules/StaMPS"
+export STAMPS="/home/viphap/insar/modules/StaMPS"
 export SAR=
 export GETORB_BIN=
 export SAR_ODR_DIR=
@@ -6,8 +6,8 @@ export SAR_ODR_DIR=
 export VOR_DIR=
 export INS_DIR=
 export DORIS_BIN=
-export TRIANGLE_BIN="/media/viphap/88b9ea56-f0c1-45dd-b6dc-bf46504a647b/insar/modules/triangle/bin"
-export SNAPHU_BIN="/media/viphap/88b9ea56-f0c1-45dd-b6dc-bf46504a647b/insar/modules/snaphu-1.4.2/bin"
+export TRIANGLE_BIN="/home/viphap/insar/modules/triangle/bin"
+export SNAPHU_BIN="/home/viphap/insar/modules/snaphu-1.4.2/bin"
 
 export ROI_PAC="$SAR/ROI_PAC"
 #####################################
