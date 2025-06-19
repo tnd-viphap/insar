@@ -392,7 +392,7 @@ class SLC_Search:
             coordinates = result.geometry["coordinates"][0]
             points = [Point(f[0], f[1]) for f in coordinates]
             polygon = Polygon(points)
-            if polygon.contains_properly(from_wkt(self.AOI)):
+            if polygon.intersects(from_wkt(self.AOI)):
                 best.append(result)
         self.logger.info(f"-> Found {len(best)} useable products")
         return best
@@ -468,6 +468,7 @@ class SLC_Search:
         except (FileNotFoundError, json.JSONDecodeError):
             lake_data = []
 
+        scheduled_fileids = set()
         # First, search for incomplete downloads
         print("-> Checking for incomplete downloads...")
         incomplete_results = []
@@ -476,7 +477,6 @@ class SLC_Search:
                 file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
                 if self._is_file_incomplete(file_path):
                     file_date = datetime.strptime(file[17:25], "%Y%m%d")
-                    
                     try:
                         results = self._safe_search(
                             platform=["Sentinel-1A", "Sentinel-1C"],
@@ -487,15 +487,15 @@ class SLC_Search:
                             start=file_date - timedelta(days=1),
                             end=file_date + timedelta(days=1)
                         )
-                        
                         # Find matching result for the incomplete file
                         for result in results:
-                            if result.properties['fileID'].split("-")[0] == file.split("-")[0]:
+                            fileid = result.properties['fileID']
+                            if fileid.split("-")[0] == file.split("-")[0] and fileid not in scheduled_fileids:
                                 incomplete_results.append(result)
+                                scheduled_fileids.add(fileid)
                                 if not result in lake_data:
                                     lake_data.append(result.geojson())
                                 break
-                                
                     except Exception as e:
                         self.logger.error(f"Error searching for incomplete file {file}: {str(e)}")
                         continue
@@ -504,15 +504,12 @@ class SLC_Search:
 
         # Proceed with regular search from latest date
         print(f"-> Search for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
-        
         while self.current_date <= self.end_date:
             start = datetime(self.current_date.year, self.current_date.month, 1)
             next_month = self.current_date.month + 1 if self.current_date.month < 12 else 1
             next_year = self.current_date.year if self.current_date.month < 12 else self.current_date.year + 1
             end = datetime(next_year, next_month, 1) - timedelta(days=1)
-
             self.logger.info(f"Searching data from {start.strftime('%d/%m/%Y')} to {end.strftime('%d/%m/%Y')}")
-
             try:
                 results = self._safe_search(
                     platform=["Sentinel-1A", "Sentinel-1C"],
@@ -525,36 +522,31 @@ class SLC_Search:
                 )
                 # Find the best overlapping footprint on AOI
                 results = self._determine_best_overlap(results)
-                
                 for result in results:
-                    if not result in lake_data:
-                        lake_data.append(result.geojson())
-                
-                if results:
-                    # Filter results based on existing data and max_date
-                    filtered_results = self._filter_monthly_results(results)
-                    self.final_results.extend(filtered_results)
-
+                    fileid = result.properties['fileID']
+                    if fileid not in scheduled_fileids:
+                        if not result in lake_data:
+                            lake_data.append(result.geojson())
+                        self.final_results.append(result)
+                        scheduled_fileids.add(fileid)
             except Exception as e:
                 self.logger.error(f"Error during monthly search: {str(e)}")
                 # Continue to next month even if current month fails
                 self.current_date += timedelta(days=30)
                 continue
-
             # Move to the next month
             self.current_date += timedelta(days=30)
-        
-        # Add incomplete results to final results
+        # Add incomplete results to final results (if not already present)
         for result in incomplete_results:
-            if result not in self.final_results:
+            fileid = result.properties['fileID']
+            if fileid not in scheduled_fileids:
                 self.final_results.append(result)
-        
+                scheduled_fileids.add(fileid)
         # Save updated lake data
         with open(self.config["search_parameters"]["datalake"], 'w') as file:
             json.dump(lake_data, file, indent=4) 
-        
         self.logger.info(f"Found {len(self.final_results)} images for download.")
-        return list(set(list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))))
+        return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
 if __name__ == "__main__":
     search = SLC_Search(2, ["20240101", None], "maychai")
