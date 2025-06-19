@@ -89,10 +89,6 @@ class Manager:
         )
         Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
                   self.stack_size, self.uni, self.project_name)
-        self.config['processing_parameters']['da_threshold'] = self.da_threshold
-        self.config['processing_parameters']['max_perp'] = self.max_perp
-        self.config_parser.update_project_config(self.project_name, self.config)
-        self.config = self.config_parser.get_project_config(self.project_name)
         print("\n")
         
         # Do searching for data
@@ -175,7 +171,7 @@ if __name__ == "__main__":
     identity_master = "20250323"
     max_perp = 150.0
     da_threshold = 0.4
-    renew_flag = 1
+    renew_flag = 0
     unified_flag = 0
     ministack_size = 5 
     ## Phase 2: STAMPS
