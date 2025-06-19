@@ -165,7 +165,7 @@ class MasterSelect:
             old_master = self.master_files[0] if self.master_files else self.config["project_definition"]["master"].split("/")[-1] if "/" in self.config["project_definition"]["master"] else self.config["project_definition"]["master"].split("\\")[-1]
                 
             master_folder = os.path.join(self.config["project_definition"]["master_folder"], selected_master[17:25] if master_in=="r" else selected_master)
-            output_name = f"{master_folder}/{selected_master}_M.dim" if self.plf == "Linux" else \
+            output_name = f"{master_folder}/{selected_master}_M.dim" if not '.zip' in selected_master else \
                         master_folder + f"/{selected_master[17:25] if master_in=='r' else selected_master}_M.dim"
 
             # Move master file
