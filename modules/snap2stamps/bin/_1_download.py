@@ -264,7 +264,7 @@ class Download:
                         
                         # Run cleaning sequence
                         time.sleep(2)
-                        MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True, self.project_name).select_master()
+                        MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
                         
                         # Move incomplete files back to RAWDATAFOLDER
                         for file in incomplete_download:
