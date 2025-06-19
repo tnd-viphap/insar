@@ -56,7 +56,7 @@ class StaMPSPrep:
                 )
                 subprocess.run(matlab_cmd, shell=True)
             else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/scripts/Parameter_input.m'); exit;\' > {self.config['project_definition']['project_folder']}/{flag.upper()}.log")
+                os.system(f"matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\' > {self.config['project_definition']['project_folder']}/{flag.upper()}.log")
             # Python-based mt_prep_snap_psds.m
             print(f"-> Preparing {flag} patches...")
             if flag == 'comsar':
