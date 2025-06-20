@@ -273,7 +273,7 @@
         "max_perp": 600.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "D:/projects/insar/results/INSAR_20200909_PSDS_v3",
+        "current_result": "D:/VIPHAP/insar/results/INSAR_20200909_PSDS_v3",
         "ministack": 5,
         "unified": 0,
         "ptype": 0
