@@ -230,7 +230,7 @@ class StaMPSEXE:
             )
                 subprocess.run(matlab_cmd, shell=True)
             else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\"")
+                os.system(f"sudo matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\"")
         print("   -> TS V-dao done")
         
         if not os.path.exists("ps_plot_v-dao.mat"):
@@ -241,7 +241,7 @@ class StaMPSEXE:
             )
                 subprocess.run(matlab_cmd, shell=True)
             else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\"")
+                os.system(f"sudo matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\"")
         print("   -> V-dao done")
         
         # Load necessary data
@@ -391,7 +391,7 @@ class StaMPSEXE:
             )
             subprocess.run(matlab_cmd, shell=True)
         else:
-            os.system(f"echo Viphap@2023 | sudo -S matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\' > {self.config['project_definition']['project_folder']}/STAMPS.log")
+            os.system(f"sudo matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\' > {self.config['project_definition']['project_folder']}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.config["processing_parameters"]["current_result"], f) for f in os.listdir(self.config["processing_parameters"]["current_result"]) if f.startswith('PATCH_')]

@@ -300,7 +300,11 @@ class SLC_Search:
         self.session = asf.ASFSession()
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")
         self.resume = False
-        self.max_date = max_date
+        # Ensure max_date is at least 1
+        if max_date is None or max_date < 1:
+            self.max_date = 1
+        else:
+            self.max_date = max_date
         
         # Track existing data by month
         self.monthly_data = {}
@@ -423,7 +427,7 @@ class SLC_Search:
         """Filter results based on existing data and max_date per month."""
         filtered_results = []
         monthly_counts = {month: self._get_monthly_count(month) for month in self.monthly_data.keys()}
-        
+        max_date = self.max_date if self.max_date and self.max_date > 0 and self.max_date != None else 1
         # First, handle incomplete downloads
         for month_key, data in self.monthly_data.items():
             for file in data['incomplete']:
@@ -435,28 +439,22 @@ class SLC_Search:
                             filtered_results.append(result)
                             monthly_counts[month_key] += 1
                             break
-        
         # Then handle new downloads, respecting max_date
         for result in results:
             month_key = result.properties['fileID'][17:23]
             if month_key not in monthly_counts:
                 monthly_counts[month_key] = 0
-            
             # Skip if we already have max_date images for this month
-            if monthly_counts[month_key] >= self.max_date:
+            if monthly_counts[month_key] >= max_date:
                 continue
-                
             # Skip if already processed
             if month_key in self.monthly_data and result.properties['fileID'][17:25] in [f[0:8] for f in self.monthly_data[month_key]['processed']]:
                 continue
-                
             # Skip if already in filtered results
             if result in filtered_results:
                 continue
-                
             filtered_results.append(result)
             monthly_counts[month_key] += 1
-        
         return filtered_results
 
     def search(self):
@@ -522,6 +520,8 @@ class SLC_Search:
                 )
                 # Find the best overlapping footprint on AOI
                 results = self._determine_best_overlap(results)
+                # Filter results to respect max_date per month
+                results = self._filter_monthly_results(results)
                 for result in results:
                     fileid = result.properties['fileID']
                     if fileid not in scheduled_fileids:
