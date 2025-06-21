@@ -178,6 +178,7 @@ class CoregIFG:
                         cb_file.write(f"{os.path.split(dim_file)[1]}\n")
                         cb_file.close()
                 self.remove_poor_coreg(dim_file)
+                return False
             elif overlap_percentage < threshold:
                 print(f"-> {os.path.basename(slv_file)}: Poor coregistration detected (Low overlap: {overlap_percentage:.2f}%)\n")
                 if os.path.exists(self.cache_broken_path):
@@ -185,8 +186,10 @@ class CoregIFG:
                         cb_file.write(f"{os.path.split(dim_file)[1]}\n")
                         cb_file.close()
                 self.remove_poor_coreg(dim_file)
+                return False
             else:
                 print(f"-> {os.path.basename(slv_file)}: Good coregistration detected (Overlap: {overlap_percentage:.2f}% in pixels)\n")
+                return True
 
     def check_overlapping(self, master_dim, coreg_dim):
         bbox_master = self.parse_bbox(master_dim)
@@ -213,14 +216,17 @@ class CoregIFG:
             overlap_percentage = (intersection / ref_area) * 100
             if overlap_percentage >= 85:
                 print(f"-> Spatial footprint has a best-fit of {overlap_percentage}\n\nChecking for digital dimension...")
-                self.check_coregistration(coreg_dim)
+                if self.check_coregistration(coreg_dim):
+                    return True
+                else:
+                    return False
             else:
                 if os.path.exists(self.cache_broken_path):
                     with open(self.cache_broken_path, "a") as cb_file:
                         cb_file.write(f"{master_dim[0:8]}_{coreg_dim}\n")
                         cb_file.close()
                 self.remove_poor_coreg(coreg_dim)
-                
+                return False
     def process(self):
         k = 0
         sorted_slavesplittedfolder = []
@@ -257,7 +263,8 @@ class CoregIFG:
 
                 if any(f in os.listdir(self.config["project_definition"]["coreg_folder"]) for f in check_outputname) or any(f in os.listdir(self.config["project_definition"]["ifg_folder"]) for f in check_outputname):
                     print(f"Slave {tail[0:8]} is coregistered and does have interferogram. Validating spatial coverage...\n")
-                    self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
+                    if self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim')):
+                        continue
                     # Check baseline and remove weak interferogram in terms of baseline
                     baseline = self.parse_baseline(os.path.join(self.config["project_definition"]["ifg_folder"], outputname+'.dim'))["perp_bs"]
                     if abs(baseline) >= self.max_perp:
