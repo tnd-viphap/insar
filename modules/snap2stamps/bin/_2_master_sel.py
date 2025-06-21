@@ -217,8 +217,8 @@ class MasterSelect:
                 print("Reselecting MASTER...") 
                 
                 master_folder = os.path.join(self.config["project_definition"]["master_folder"], selected_master[17:25] if master_in=="r" else selected_master)
-                output_name = f"{master_folder}/{selected_master}_M.dim" if self.plf == "Linux" else \
-                            master_folder + f"/{selected_master[17:25] if master_in=='r' else selected_master}_M.dim"
+                output_name = f"{master_folder}/{selected_master}_M.dim" if not ".zip" in selected_master else \
+                            master_folder + f"/{selected_master[17:25]}_M.dim"
 
                 # Move master file
                 if master_folder == os.path.split(self.config["project_definition"]["master"])[0].split("/")[-1]:

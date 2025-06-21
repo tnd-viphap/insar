@@ -70,9 +70,10 @@ class CoregIFG:
     
     def parse_bbox(self, dim_file):
         """Parses a .dim XML file and extracts necessary metadata"""
+        if ".zip" in dim_file:
+            dim_file = dim_file.split("master")[0] + "master/" + dim_file.split("master/")[-1][0:8] + "/" + dim_file.split("/")[-1].split(".zip")[0][17:25] +"_M.dim"
         tree = ET.parse(dim_file)
         root = tree.getroot()
-        
         # Extract bounding box coordinates
         bbox_params = {
             'first_near_lat': float(root.find(".//MDATTR[@name='first_near_lat']").text),
