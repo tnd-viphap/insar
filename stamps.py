@@ -391,7 +391,7 @@ class StaMPSEXE:
             )
             subprocess.run(matlab_cmd, shell=True)
         else:
-            os.system(f"sudo matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\' > {self.config['project_definition']['project_folder']}/STAMPS.log")
+            os.system(f"sudo matlab -nojvm -nosplash {self.display} -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config['project_definition']['project_folder']}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.config["processing_parameters"]["current_result"], f) for f in os.listdir(self.config["processing_parameters"]["current_result"]) if f.startswith('PATCH_')]
