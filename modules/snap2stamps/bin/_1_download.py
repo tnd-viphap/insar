@@ -14,6 +14,7 @@ import asf_search as asf
 from asf_search.exceptions import ASFSearch5xxError
 from tenacity import retry, stop_after_attempt, wait_exponential
 import platform
+from tqdm import tqdm
 
 from modules.snap2stamps.bin._2_master_sel import MasterSelect
 from modules.snap2stamps.bin._3_find_bursts import Burst
@@ -34,6 +35,7 @@ class Download:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
         self.download_on = download_on
+        self.successful_downloads = 0  # Counter for successful downloads
         
         # Handle date filtering based on download_on parameter
         if self.download_on[0] is not None or self.download_on[1] is not None:
@@ -84,29 +86,38 @@ class Download:
         return None
 
     def _resume_download(self, result, savepath):
-        """Resume an interrupted download using HTTP Range requests, showing progress."""
+        """Resume an interrupted download using HTTP Range requests, showing progress with tqdm."""
         file_id = str(result.properties['fileID'])
         file_name = file_id.split("-")[0] + ".zip"
         file_path = os.path.join(savepath, file_name)
+        temp_file_path = file_path + ".tmp"
         expected_size = self._get_expected_size(file_id)
 
         if expected_size is None:
-            with self.print_lock:
-                self.logger.info(f"Skipping {file_name}: Not found in datalake")
+            self.logger.info(f"Skipping {file_name}: Not found in datalake")
             return None
 
-        current_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        # Check both the main file and temporary file
+        current_size = 0
+        download_path = None
+        
+        if os.path.exists(file_path):
+            current_size = os.path.getsize(file_path)
+            download_path = file_path
+        elif os.path.exists(temp_file_path):
+            current_size = os.path.getsize(temp_file_path)
+            download_path = temp_file_path
+            
         if current_size == expected_size:
-            with self.print_lock:
-                self.logger.info(f"{file_name} already downloaded.")
+            # If temp file is complete, rename it
+            if download_path == temp_file_path:
+                os.rename(temp_file_path, file_path)
+            self.logger.info(f"{file_name} already downloaded.")
             return file_name
         
         if file_id[17:25] in self.processed_files:
-            print("-> Processed data detected. Skipping this product...")
+            self.logger.info("-> Processed data detected. Skipping this product...")
             return None
-
-        with self.print_lock:
-            print(f"Starting download: {file_name} ({current_size}/{expected_size} bytes)...")
 
         url = result.properties["url"]
         headers = {"Range": f"bytes={current_size}-"} if current_size > 0 else {}
@@ -114,50 +125,43 @@ class Download:
         try:
             with self.session.get(url, headers=headers, stream=True) as response:
                 response.raise_for_status()
-                mode = "ab" if "Range" in headers else "wb"
+                mode = "ab" if current_size > 0 else "wb"
                 
-                # Create a temporary file for the download
-                temp_file_path = file_path + ".tmp"
-                with open(temp_file_path, mode) as file:
-                    downloaded = current_size
-                    start_time = time.time()
-
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            file.write(chunk)
-                            downloaded += len(chunk)
-
-                            percent = (downloaded / expected_size) * 100
-                            elapsed_time = time.time() - start_time
-                            speed = downloaded / (elapsed_time + 1e-6)  # Bytes per second
-
-                            with self.print_lock:
-                                sys.stdout.write(f"\r[{file_name}] {percent:.2f}% ({downloaded}/{expected_size} bytes) | {speed / 1e6:.2f} MB/s")
-                                sys.stdout.flush()
+                # Use the existing temp file if it exists, otherwise create new
+                target_path = temp_file_path if not os.path.exists(file_path) else file_path
                 
-                # Only rename the file if download was successful
+                # Initialize tqdm progress bar
+                total_size = expected_size - current_size if current_size > 0 else expected_size
+                with tqdm(total=total_size, unit='B', unit_scale=True, ncols=150,
+                         bar_format='{desc:<45.45} |{bar:50}| {percentage:3.1f}% | {n_fmt}/{total_fmt} | {rate_fmt} | ETA: {remaining}',
+                         desc=f"{file_name} (Resuming from {current_size/1024/1024:.1f}MB)" if current_size > 0 else file_name) as pbar:
+                    with open(target_path, mode) as file:
+                        downloaded = current_size
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                file.write(chunk)
+                                downloaded += len(chunk)
+                                pbar.update(len(chunk))
+                
+                # Verify download completion
                 if downloaded == expected_size:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    os.rename(temp_file_path, file_path)
+                    # If we were downloading to temp file, rename it
+                    if target_path == temp_file_path:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                        os.rename(temp_file_path, file_path)
                     
                     # Update download cache
                     self._update_download_cache(file_id)
                     
-                    with self.print_lock:
-                        self.logger.info(f"\nDownloaded: {file_name}")
+                    self.logger.info(f"Successfully downloaded: {file_name}")
                     return file_name
                 else:
-                    # If download was incomplete, keep the temporary file
-                    with self.print_lock:
-                        self.logger.warning(f"\nIncomplete download: {file_name}")
+                    self.logger.warning(f"Incomplete download: {file_name} ({downloaded}/{expected_size} bytes)")
                     return None
                     
         except Exception as e:
-            with self.print_lock:
-                self.logger.error(f"Error downloading {file_name}: {str(e)}")
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+            self.logger.error(f"Error downloading {file_name}: {str(e)}")
             return None
 
     def _update_download_cache(self, file_id):
@@ -196,89 +200,113 @@ class Download:
             return percentage
 
     def download(self, savepath):
-        """
-        Download files in parallel, resuming if needed, 
-        with sequence trigger after 10 downloads and continuous disk space monitoring.
-        """
+        """Download files in parallel, properly resuming incomplete downloads."""
         os.makedirs(savepath, exist_ok=True)
         
-        def check_and_clean_disk_space():
-            """Internal function to check disk space and perform cleaning if needed."""
-            percentage = self._get_disk_space(self.config["project_definition"]["raw_data_folder"])
-            if percentage <= 30.0:
-                print("-> Disk space is about full. Performing data cleaning...")
-                incomplete_download = []
-                
-                # Identify and move incomplete downloads
-                for product in os.listdir(self.config["project_definition"]["raw_data_folder"]):
-                    product_path = os.path.join(self.config["project_definition"]["raw_data_folder"], product)
-                    if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
-                        incomplete_path = os.path.join(self.config["project_definition"]["data_folder"], product).replace("\\", "/")
-                        incomplete_download.append(incomplete_path)
-                        shutil.move(product_path, self.config["project_definition"]["data_folder"])
-                
-                # Cleaning sequence
-                time.sleep(2)
-                MasterSelect(self.config["processing_parameters"]["reeest_flag"], None, True, self.project_name).select_master()
-                time.sleep(2)
-                
-                # Move incomplete files back to RAWDATAFOLDER
-                for file in incomplete_download:
-                    shutil.move(file, self.config["project_definition"]["raw_data_folder"])
-                
-                time.sleep(2)
-                Burst(self.project_name).find_burst()
-                time.sleep(2)
-                MasterSplitter(self.project_name).process()
-                time.sleep(2)
-                SlavesSplitter(self.project_name).process()
-                time.sleep(2)
+        # Group files by their completion status
+        incomplete_downloads = []
+        new_downloads = []
         
-        # Download tracking
-        download_count = 0
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(self._resume_download, result, savepath): result for result in self.search_result}
+        for result in self.search_result:
+            file_id = str(result.properties['fileID'])
+            file_name = file_id.split("-")[0] + ".zip"
+            file_path = os.path.join(savepath, file_name)
+            temp_path = file_path + ".tmp"
             
-            for future in concurrent.futures.as_completed(futures):
-                file_name = future.result()
-                if file_name:
-                    self.logger.info(f"Downloaded: {file_name}")
-                    download_count += 1
-                    
-                    # Check disk space after each download
-                    check_and_clean_disk_space()
-                    
-                    # Trigger sequence after every 10 downloads
-                    if download_count % 10 == 0:
-                        print(f"-> Triggered processing sequence after {download_count} downloads")
-                        
-                        # Temporary move of current downloads
-                        incomplete_download = []
-                        for product in os.listdir(self.config["project_definition"]["raw_data_folder"]):
-                            product_path = os.path.join(self.config["project_definition"]["raw_data_folder"], product)
-                            if float(os.path.getsize(product_path)) / 1024**3 <= 3.8:
-                                incomplete_path = os.path.join(self.config["project_definition"]["data_folder"], product).replace("\\", "/")
-                                incomplete_download.append(incomplete_path)
-                                shutil.move(product_path, self.config["project_definition"]["data_folder"])
-                        
-                        # Run cleaning sequence
-                        time.sleep(2)
-                        MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
-                        
-                        # Move incomplete files back to RAWDATAFOLDER
-                        for file in incomplete_download:
-                            shutil.move(file, self.config["project_definition"]["raw_data_folder"])
-                        
-                        time.sleep(2)
-                        Burst(self.project_name).find_burst()
-                        time.sleep(2)
-                        MasterSplitter(self.project_name).process()
-                        time.sleep(2)
-                        SlavesSplitter(self.project_name).process()
-                        time.sleep(2)
-                        
-                        print("-> Continue downloading...")
+            # Check if file exists in any form
+            if os.path.exists(file_path) or os.path.exists(temp_path):
+                incomplete_downloads.append(result)
+            else:
+                new_downloads.append(result)
+        
+        # First handle incomplete downloads
+        if incomplete_downloads:
+            self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(self._resume_download, result, savepath): result 
+                          for result in incomplete_downloads}
+                for future in concurrent.futures.as_completed(futures):
+                    if future.result():  # If download was successful
+                        self.successful_downloads += 1
+                        # Check if we've reached 10 successful downloads
+                        if self.successful_downloads >= 10:
+                            self.logger.info("Reached 10 successful downloads, triggering processing...")
+                            self._process_downloaded_products()
+                            self.successful_downloads = 0  # Reset counter
+        
+        # Then handle new downloads
+        if new_downloads:
+            self.logger.info(f"Starting {len(new_downloads)} new downloads...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(self._resume_download, result, savepath): result 
+                          for result in new_downloads}
+                for future in concurrent.futures.as_completed(futures):
+                    if future.result():  # If download was successful
+                        self.successful_downloads += 1
+                        # Check if we've reached 10 successful downloads
+                        if self.successful_downloads >= 10:
+                            self.logger.info("Reached 10 successful downloads, triggering processing...")
+                            self._process_downloaded_products()
+                            self.successful_downloads = 0  # Reset counter
+        
+        # Process any remaining files if we have successful downloads but haven't reached 10
+        if self.successful_downloads > 0:
+            self.logger.info(f"Processing remaining {self.successful_downloads} successful downloads...")
+            self._process_downloaded_products()
+            self.successful_downloads = 0
+
+    def _process_downloaded_products(self):
+        """Process downloaded products."""
+        if not os.path.exists(self.config["project_definition"]["raw_data_folder"]):
+            return True
+
+        # Check if there are any complete downloads to process
+        complete_downloads = []
+        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+            if file.endswith('.zip'):
+                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
+                if not self._is_file_incomplete(file_path):
+                    complete_downloads.append(file)
+
+        if not complete_downloads:
+            return True
+
+        self.logger.info(f"Found {len(complete_downloads)} complete downloads to process")
+
+        # Move incomplete downloads temporarily
+        incomplete_downloads = []
+        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+            if file.endswith('.zip'):
+                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
+                if self._is_file_incomplete(file_path):
+                    temp_path = os.path.join(self.config["project_definition"]["data_folder"], file)
+                    shutil.move(file_path, temp_path)
+                    incomplete_downloads.append(temp_path)
+
+        try:
+            # Run processing sequence
+            time.sleep(2)
+            MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
+            time.sleep(2)
+            Burst(self.project_name).find_burst()
+            time.sleep(2)
+            MasterSplitter(self.project_name).process()
+            time.sleep(2)
+            SlavesSplitter(self.project_name).process()
+            time.sleep(2)
+
+            # Move incomplete downloads back
+            for file_path in incomplete_downloads:
+                shutil.move(file_path, os.path.join(self.config["project_definition"]["raw_data_folder"], os.path.basename(file_path)))
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Error during processing sequence: {str(e)}")
+            # Ensure incomplete downloads are moved back even if processing fails
+            for file_path in incomplete_downloads:
+                if os.path.exists(file_path):
+                    shutil.move(file_path, os.path.join(self.config["project_definition"]["raw_data_folder"], os.path.basename(file_path)))
+            return False
 
 class SLC_Search:
     def __init__(self, max_date=None, download_on: list = [None, None], project_name="default"):
@@ -423,6 +451,44 @@ class SLC_Search:
         """Check if a file is incomplete based on size."""
         return float(os.path.getsize(file_path)) / 1024**3 <= 3.8
 
+    def _handle_existing_raw_data(self):
+        """Handle existing data in raw folder, process complete ones and return incomplete ones."""
+        if not os.path.exists(self.config["project_definition"]["raw_data_folder"]):
+            return []
+
+        complete_downloads = []
+        incomplete_downloads = []
+        processed_dates = set()  # Track processed dates to avoid duplicates
+
+        # First, get all processed dates from master and slaves folders
+        if os.path.exists(self.config["project_definition"]["master_folder"]):
+            processed_dates.update(f[0:8] for f in os.listdir(self.config["project_definition"]["master_folder"]))
+        if os.path.exists(self.config["project_definition"]["slaves_folder"]):
+            processed_dates.update(f[0:8] for f in os.listdir(self.config["project_definition"]["slaves_folder"]))
+
+        # Categorize existing raw data
+        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+            if file.endswith('.zip'):
+                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
+                file_date = file[17:25] if len(file) > 25 else None
+
+                # Skip if already processed
+                if file_date in processed_dates:
+                    continue
+
+                if not self._is_file_incomplete(file_path):
+                    complete_downloads.append(file)
+                else:
+                    incomplete_downloads.append(file)
+
+        # Process complete downloads if any
+        if complete_downloads:
+            self.logger.info(f"Found {len(complete_downloads)} complete downloads to process")
+            self._process_downloaded_products()
+
+        # Return file IDs of incomplete downloads for resuming
+        return [f[0:32] for f in incomplete_downloads]  # Assuming standard Sentinel-1 file ID length
+
     def _filter_monthly_results(self, results):
         """Filter results based on existing data and max_date per month."""
         filtered_results = []
@@ -457,57 +523,103 @@ class SLC_Search:
             monthly_counts[month_key] += 1
         return filtered_results
 
-    def search(self):
-        """Perform a full search for Sentinel-1 data."""
-        # Load existing lake data or initialize an empty list
+    def _get_incomplete_products(self):
+        """Get list of incomplete products from raw data folder."""
+        incomplete_products = []
+        if not os.path.exists(self.config["project_definition"]["raw_data_folder"]):
+            return incomplete_products
+
+        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
+            if not file.endswith('.zip'):
+                continue
+                
+            file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
+            if self._is_file_incomplete(file_path):
+                # Get the full file ID from filename
+                file_id = file.split('.')[0]  # Remove .zip extension
+                incomplete_products.append({
+                    'file_id': file_id,
+                    'date': file_id[17:25] if len(file_id) >= 25 else None,
+                    'path': file_path
+                })
+        
+        self.logger.info(f"Found {len(incomplete_products)} incomplete products in raw data folder")
+        return incomplete_products
+
+    def _get_processed_products(self):
+        """Get list of already processed products from master and slaves folders."""
+        processed_products = set()
+        
+        # Check master folder
+        if os.path.exists(self.config["project_definition"]["master_folder"]):
+            processed_products.update(f[0:8] for f in os.listdir(self.config["project_definition"]["master_folder"]))
+            
+        # Check slaves folder
+        if os.path.exists(self.config["project_definition"]["slaves_folder"]):
+            processed_products.update(f[0:8] for f in os.listdir(self.config["project_definition"]["slaves_folder"]))
+            
+        self.logger.info(f"Found {len(processed_products)} processed products")
+        return processed_products
+
+    def _search_for_product(self, date):
+        """Search for a specific product by date."""
         try:
-            with open(self.config["search_parameters"]["datalake"], "r") as file:
-                lake_data = json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            lake_data = []
+            search_date = datetime.strptime(date, "%Y%m%d")
+            results = self._safe_search(
+                platform=["Sentinel-1A", "Sentinel-1C"],
+                processingLevel="SLC",
+                intersectsWith=self.AOI,
+                flightDirection=self.config["search_parameters"]["direction"],
+                frame=int(self.config["search_parameters"]["frame"]),
+                start=search_date - timedelta(days=1),
+                end=search_date + timedelta(days=1)
+            )
+            return self._determine_best_overlap(results)
+        except Exception as e:
+            self.logger.error(f"Error searching for date {date}: {str(e)}")
+            return []
 
-        scheduled_fileids = set()
-        # First, search for incomplete downloads
-        print("-> Checking for incomplete downloads...")
+    def search(self):
+        """
+        Perform search in steps:
+        1. Find incomplete products
+        2. Search for all products in time range
+        3. Filter results
+        4. Return final download list
+        """
+        # Step 1: Get incomplete products from raw folder
+        incomplete_products = self._get_incomplete_products()
+        incomplete_dates = set(p['date'] for p in incomplete_products if p['date'])
+        
+        # Step 2: Get already processed products
+        processed_dates = self._get_processed_products()
+        
+        # Step 3: Search for incomplete products first
         incomplete_results = []
-        for month_key, data in self.monthly_data.items():
-            for file in data['incomplete']:
-                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
-                if self._is_file_incomplete(file_path):
-                    file_date = datetime.strptime(file[17:25], "%Y%m%d")
-                    try:
-                        results = self._safe_search(
-                            platform=["Sentinel-1A", "Sentinel-1C"],
-                            processingLevel="SLC",
-                            intersectsWith=self.AOI,
-                            flightDirection=self.config["search_parameters"]["direction"],
-                            frame=int(self.config["search_parameters"]["frame"]),
-                            start=file_date - timedelta(days=1),
-                            end=file_date + timedelta(days=1)
-                        )
-                        # Find matching result for the incomplete file
-                        for result in results:
-                            fileid = result.properties['fileID']
-                            if fileid.split("-")[0] == file.split("-")[0] and fileid not in scheduled_fileids:
-                                incomplete_results.append(result)
-                                scheduled_fileids.add(fileid)
-                                if not result in lake_data:
-                                    lake_data.append(result.geojson())
-                                break
-                    except Exception as e:
-                        self.logger.error(f"Error searching for incomplete file {file}: {str(e)}")
-                        continue
-
-        print(f"-> Found {len(incomplete_results)} incomplete downloads")
-
-        # Proceed with regular search from latest date
-        print(f"-> Search for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
-        while self.current_date <= self.end_date:
-            start = datetime(self.current_date.year, self.current_date.month, 1)
-            next_month = self.current_date.month + 1 if self.current_date.month < 12 else 1
-            next_year = self.current_date.year if self.current_date.month < 12 else self.current_date.year + 1
+        for product in incomplete_products:
+            if not product['date']:
+                continue
+            results = self._search_for_product(product['date'])
+            for result in results:
+                if result.properties['fileID'].startswith(product['file_id']):
+                    incomplete_results.append(result)
+                    break
+        
+        self.logger.info(f"Found {len(incomplete_results)} matching products for incomplete downloads")
+        
+        # Step 4: Search for all products in time range
+        all_results = []
+        print(f"-> Searching for products from {self.start_date.strftime('%d/%m/%Y')} to {self.end_date.strftime('%d/%m/%Y')}")
+        
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            start = datetime(current_date.year, current_date.month, 1)
+            next_month = current_date.month + 1 if current_date.month < 12 else 1
+            next_year = current_date.year if current_date.month < 12 else current_date.year + 1
             end = datetime(next_year, next_month, 1) - timedelta(days=1)
+            
             self.logger.info(f"Searching data from {start.strftime('%d/%m/%Y')} to {end.strftime('%d/%m/%Y')}")
+            
             try:
                 results = self._safe_search(
                     platform=["Sentinel-1A", "Sentinel-1C"],
@@ -518,35 +630,82 @@ class SLC_Search:
                     start=start,
                     end=end
                 )
-                # Find the best overlapping footprint on AOI
                 results = self._determine_best_overlap(results)
-                # Filter results to respect max_date per month
-                results = self._filter_monthly_results(results)
-                for result in results:
-                    fileid = result.properties['fileID']
-                    if fileid not in scheduled_fileids:
-                        if not result in lake_data:
-                            lake_data.append(result.geojson())
-                        self.final_results.append(result)
-                        scheduled_fileids.add(fileid)
+                all_results.extend(results)
             except Exception as e:
                 self.logger.error(f"Error during monthly search: {str(e)}")
-                # Continue to next month even if current month fails
-                self.current_date += timedelta(days=30)
-                continue
-            # Move to the next month
-            self.current_date += timedelta(days=30)
-        # Add incomplete results to final results (if not already present)
+            
+            current_date += timedelta(days=30)
+            
+        self.logger.info(f"Found total {len(all_results)} products in date range")
+        
+        # Step 5: Filter results
+        scheduled_fileids = set()
+        final_results = []
+        
+        # First add incomplete products that need to be resumed
         for result in incomplete_results:
             fileid = result.properties['fileID']
             if fileid not in scheduled_fileids:
-                self.final_results.append(result)
+                final_results.append(result)
                 scheduled_fileids.add(fileid)
-        # Save updated lake data
+        
+        # Then add new products
+        for result in all_results:
+            fileid = result.properties['fileID']
+            date = fileid[17:25]
+            
+            # Skip if already scheduled or processed
+            if (fileid in scheduled_fileids or 
+                date in processed_dates or 
+                date in incomplete_dates):
+                continue
+                
+            # Apply monthly limit filter
+            month_key = date[0:6]
+            if month_key not in self.monthly_data:
+                self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
+            
+            if len(self.monthly_data[month_key]['processed']) + len(self.monthly_data[month_key]['incomplete']) < self.max_date:
+                final_results.append(result)
+                scheduled_fileids.add(fileid)
+                self.monthly_data[month_key]['incomplete'].append(date)
+        
+        # Step 6: Update lake data
+        try:
+            with open(self.config["search_parameters"]["datalake"], "r") as file:
+                lake_data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            lake_data = []
+            
+        for result in final_results:
+            if not result in lake_data:
+                lake_data.append(result.geojson())
+                
         with open(self.config["search_parameters"]["datalake"], 'w') as file:
-            json.dump(lake_data, file, indent=4) 
-        self.logger.info(f"Found {len(self.final_results)} images for download.")
-        return list(sorted(self.final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
+            json.dump(lake_data, file, indent=4)
+        
+        # Final summary
+        self.logger.info(f"""
+Search Results Summary:
+- Incomplete products found: {len(incomplete_products)}
+- Matching products for incomplete: {len(incomplete_results)}
+- Total products in date range: {len(all_results)}
+- Final products to download: {len(final_results)}
+  * Resume incomplete: {len(incomplete_results)}
+  * New downloads: {len(final_results) - len(incomplete_results)}
+""")
+        print(f"""
+Search Results Summary:
+- Incomplete products found: {len(incomplete_products)}
+- Matching products for incomplete: {len(incomplete_results)}
+- Total products in date range: {len(all_results)}
+- Final products to download: {len(final_results)}
+  * Resume incomplete: {len(incomplete_results)}
+  * New downloads: {len(final_results) - len(incomplete_results)}
+""")
+        
+        return list(sorted(final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
 if __name__ == "__main__":
     search = SLC_Search(2, ["20240101", None], "maychai")
