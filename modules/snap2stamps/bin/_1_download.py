@@ -35,6 +35,8 @@ class Download:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
         self.download_on = download_on
+        self.processing_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)  # Single worker for processing
+        self.processing_futures = []  # Track processing tasks
         self.successful_downloads = 0  # Counter for successful downloads
         
         # Handle date filtering based on download_on parameter
@@ -84,6 +86,47 @@ class Download:
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.logger.error(f"Error reading datalake: {str(e)}")
         return None
+
+    def _process_single_product(self, file_name):
+        """Process a single downloaded product."""
+        self.logger.info(f"Starting processing for {file_name}")
+        try:
+            # Move incomplete downloads temporarily
+            incomplete_downloads = []
+            raw_data_folder = self.config["project_definition"]["raw_data_folder"]
+            data_folder = self.config["project_definition"]["data_folder"]
+            
+            for file in os.listdir(raw_data_folder):
+                if file.endswith('.zip') and file != file_name:  # Don't move the file we're processing
+                    file_path = os.path.join(raw_data_folder, file)
+                    if self._is_file_incomplete(file_path):
+                        temp_path = os.path.join(data_folder, file)
+                        shutil.move(file_path, temp_path)
+                        incomplete_downloads.append(temp_path)
+
+            try:
+                # Run processing sequence
+                time.sleep(2)
+                MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
+                time.sleep(2)
+                Burst(self.project_name).find_burst()
+                time.sleep(2)
+                MasterSplitter(self.project_name).process()
+                time.sleep(2)
+                SlavesSplitter(self.project_name).process()
+                time.sleep(2)
+
+                self.logger.info(f"Successfully processed {file_name}")
+                return True
+            finally:
+                # Always move incomplete downloads back
+                for file_path in incomplete_downloads:
+                    if os.path.exists(file_path):
+                        shutil.move(file_path, os.path.join(raw_data_folder, os.path.basename(file_path)))
+
+        except Exception as e:
+            self.logger.error(f"Error processing {file_name}: {str(e)}")
+            return False
 
     def _resume_download(self, result, savepath):
         """Resume an interrupted download using HTTP Range requests, showing progress with tqdm."""
@@ -155,6 +198,11 @@ class Download:
                     self._update_download_cache(file_id)
                     
                     self.logger.info(f"Successfully downloaded: {file_name}")
+                    
+                    # Submit processing task to thread pool
+                    future = self.processing_pool.submit(self._process_single_product, file_name)
+                    self.processing_futures.append(future)
+                    
                     return file_name
                 else:
                     self.logger.warning(f"Incomplete download: {file_name} ({downloaded}/{expected_size} bytes)")
@@ -219,41 +267,32 @@ class Download:
             else:
                 new_downloads.append(result)
         
-        # First handle incomplete downloads
-        if incomplete_downloads:
-            self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {executor.submit(self._resume_download, result, savepath): result 
-                          for result in incomplete_downloads}
-                for future in concurrent.futures.as_completed(futures):
-                    if future.result():  # If download was successful
-                        self.successful_downloads += 1
-                        # Check if we've reached 10 successful downloads
-                        if self.successful_downloads >= 10:
-                            self.logger.info("Reached 10 successful downloads, triggering processing...")
-                            self._process_downloaded_products()
-                            self.successful_downloads = 0  # Reset counter
-        
-        # Then handle new downloads
-        if new_downloads:
-            self.logger.info(f"Starting {len(new_downloads)} new downloads...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {executor.submit(self._resume_download, result, savepath): result 
-                          for result in new_downloads}
-                for future in concurrent.futures.as_completed(futures):
-                    if future.result():  # If download was successful
-                        self.successful_downloads += 1
-                        # Check if we've reached 10 successful downloads
-                        if self.successful_downloads >= 10:
-                            self.logger.info("Reached 10 successful downloads, triggering processing...")
-                            self._process_downloaded_products()
-                            self.successful_downloads = 0  # Reset counter
-        
-        # Process any remaining files if we have successful downloads but haven't reached 10
-        if self.successful_downloads > 0:
-            self.logger.info(f"Processing remaining {self.successful_downloads} successful downloads...")
-            self._process_downloaded_products()
-            self.successful_downloads = 0
+        try:
+            # First handle incomplete downloads
+            if incomplete_downloads:
+                self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {executor.submit(self._resume_download, result, savepath): result 
+                             for result in incomplete_downloads}
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()  # Just to handle any exceptions
+            
+            # Then handle new downloads
+            if new_downloads:
+                self.logger.info(f"Starting {len(new_downloads)} new downloads...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {executor.submit(self._resume_download, result, savepath): result 
+                             for result in new_downloads}
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()  # Just to handle any exceptions
+            
+            # Wait for all processing tasks to complete
+            self.logger.info("Waiting for processing tasks to complete...")
+            concurrent.futures.wait(self.processing_futures)
+            
+        finally:
+            # Clean up processing pool
+            self.processing_pool.shutdown(wait=True)
 
     def _process_downloaded_products(self):
         """Process downloaded products."""
@@ -307,6 +346,10 @@ class Download:
                 if os.path.exists(file_path):
                     shutil.move(file_path, os.path.join(self.config["project_definition"]["raw_data_folder"], os.path.basename(file_path)))
             return False
+
+    def _is_file_incomplete(self, file_path):
+        """Check if a file is incomplete based on size."""
+        return float(os.path.getsize(file_path)) / 1024**3 <= 3.8
 
 class SLC_Search:
     def __init__(self, max_date=None, download_on: list = [None, None], project_name="default"):
