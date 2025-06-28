@@ -41,6 +41,7 @@ class Download:
         self.total_bytes = 0
         self.downloaded_bytes = 0
         self.progress_bar = None
+        self.download_status = {}  # Track download status for each file
         self.successful_downloads = 0  # Counter for successful downloads
         
         # Handle date filtering based on download_on parameter
@@ -142,6 +143,16 @@ class Download:
             self.logger.error(f"Error processing {file_name}: {str(e)}")
             return False
 
+    def _log_status(self, message):
+        """Log status without interfering with progress bar."""
+        if self.progress_bar:
+            with self.progress_lock:
+                self.progress_bar.clear()
+                print(message)
+                self.progress_bar.refresh()
+        else:
+            self.logger.info(message)
+
     def _resume_download(self, result, savepath):
         """Resume an interrupted download using HTTP Range requests, showing progress with tqdm."""
         file_id = str(result.properties['fileID'])
@@ -151,7 +162,7 @@ class Download:
         expected_size = self._get_expected_size(file_id)
 
         if expected_size is None:
-            self.logger.info(f"Skipping {file_name}: Not found in datalake")
+            self._log_status(f"Skipping {file_name}: Not found in datalake")
             return None
 
         # Check both the main file and temporary file
@@ -173,11 +184,12 @@ class Download:
                 self.downloaded_bytes += expected_size
                 if self.progress_bar:
                     self.progress_bar.update(expected_size)
-            self.logger.info(f"{file_name} already downloaded.")
+                    self.download_status[file_name] = "Complete"
+                    self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
             return file_name
         
         if file_id[17:25] in self.processed_files:
-            self.logger.info("-> Processed data detected. Skipping this product...")
+            self._log_status("-> Processed data detected. Skipping this product...")
             return None
 
         url = result.properties["url"]
@@ -212,7 +224,10 @@ class Download:
                     # Update download cache
                     self._update_download_cache(file_id)
                     
-                    self.logger.info(f"Successfully downloaded: {file_name}")
+                    with self.progress_lock:
+                        self.download_status[file_name] = "Complete"
+                        if self.progress_bar:
+                            self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
                     
                     # Submit processing task to thread pool
                     future = self.processing_pool.submit(self._process_single_product, file_name)
@@ -220,11 +235,11 @@ class Download:
                     
                     return file_name
                 else:
-                    self.logger.warning(f"Incomplete download: {file_name} ({downloaded}/{expected_size} bytes)")
+                    self._log_status(f"Incomplete download: {file_name} ({downloaded}/{expected_size} bytes)")
                     return None
                     
         except Exception as e:
-            self.logger.error(f"Error downloading {file_name}: {str(e)}")
+            self._log_status(f"Error downloading {file_name}: {str(e)}")
             return None
 
     def _update_download_cache(self, file_id):
@@ -278,6 +293,7 @@ class Download:
             file_name = file_id.split("-")[0] + ".zip"
             file_path = os.path.join(savepath, file_name)
             temp_path = file_path + ".tmp"
+            self.download_status[file_name] = "Pending"
             
             # Check if file exists in any form
             if os.path.exists(file_path) or os.path.exists(temp_path):
@@ -287,13 +303,13 @@ class Download:
         
         try:
             # Initialize single progress bar for all downloads
-            with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=150,
-                     bar_format='{desc:<45.45} |{bar:50}| {percentage:3.1f}% | {n_fmt}/{total_fmt} | {rate_fmt} | ETA: {remaining}',
-                     desc="Total Download Progress") as self.progress_bar:
+            with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=80,
+                     bar_format='{desc}: {percentage:3.1f}%|{bar:20}| {n_fmt}/{total_fmt}',
+                     desc=f"Downloaded: 0/{len(self.search_result)}", position=0, leave=True) as self.progress_bar:
                 
                 # First handle incomplete downloads
                 if incomplete_downloads:
-                    self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
+                    self._log_status(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
                     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                         futures = {executor.submit(self._resume_download, result, savepath): result 
                                  for result in incomplete_downloads}
@@ -302,15 +318,15 @@ class Download:
                 
                 # Then handle new downloads
                 if new_downloads:
-                    self.logger.info(f"Starting {len(new_downloads)} new downloads...")
+                    self._log_status(f"Starting {len(new_downloads)} new downloads...")
                     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                         futures = {executor.submit(self._resume_download, result, savepath): result 
                                  for result in new_downloads}
                         for future in concurrent.futures.as_completed(futures):
                             future.result()  # Just to handle any exceptions
             
-            # Wait for all processing tasks to complete
-            self.logger.info("Waiting for processing tasks to complete...")
+            print("\n")  # Add a newline after progress bar completes
+            self._log_status("Waiting for processing tasks to complete...")
             concurrent.futures.wait(self.processing_futures)
             
         finally:
