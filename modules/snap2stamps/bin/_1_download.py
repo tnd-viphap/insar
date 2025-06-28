@@ -37,6 +37,10 @@ class Download:
         self.download_on = download_on
         self.processing_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)  # Single worker for processing
         self.processing_futures = []  # Track processing tasks
+        self.progress_lock = threading.Lock()  # Lock for progress bar updates
+        self.total_bytes = 0
+        self.downloaded_bytes = 0
+        self.progress_bar = None
         self.successful_downloads = 0  # Counter for successful downloads
         
         # Handle date filtering based on download_on parameter
@@ -86,6 +90,16 @@ class Download:
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.logger.error(f"Error reading datalake: {str(e)}")
         return None
+
+    def _get_total_download_size(self):
+        """Calculate total download size for all files."""
+        total_size = 0
+        for result in self.search_result:
+            file_id = str(result.properties['fileID'])
+            expected_size = self._get_expected_size(file_id)
+            if expected_size:
+                total_size += expected_size
+        return total_size
 
     def _process_single_product(self, file_name):
         """Process a single downloaded product."""
@@ -155,6 +169,10 @@ class Download:
             # If temp file is complete, rename it
             if download_path == temp_file_path:
                 os.rename(temp_file_path, file_path)
+            with self.progress_lock:
+                self.downloaded_bytes += expected_size
+                if self.progress_bar:
+                    self.progress_bar.update(expected_size)
             self.logger.info(f"{file_name} already downloaded.")
             return file_name
         
@@ -173,18 +191,15 @@ class Download:
                 # Use the existing temp file if it exists, otherwise create new
                 target_path = temp_file_path if not os.path.exists(file_path) else file_path
                 
-                # Initialize tqdm progress bar
-                total_size = expected_size - current_size if current_size > 0 else expected_size
-                with tqdm(total=total_size, unit='B', unit_scale=True, ncols=150,
-                         bar_format='{desc:<45.45} |{bar:50}| {percentage:3.1f}% | {n_fmt}/{total_fmt} | {rate_fmt} | ETA: {remaining}',
-                         desc=f"{file_name} (Resuming from {current_size/1024/1024:.1f}MB)" if current_size > 0 else file_name) as pbar:
-                    with open(target_path, mode) as file:
-                        downloaded = current_size
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                file.write(chunk)
-                                downloaded += len(chunk)
-                                pbar.update(len(chunk))
+                with open(target_path, mode) as file:
+                    downloaded = current_size
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            file.write(chunk)
+                            downloaded += len(chunk)
+                            with self.progress_lock:
+                                if self.progress_bar:
+                                    self.progress_bar.update(len(chunk))
                 
                 # Verify download completion
                 if downloaded == expected_size:
@@ -251,6 +266,9 @@ class Download:
         """Download files in parallel, properly resuming incomplete downloads."""
         os.makedirs(savepath, exist_ok=True)
         
+        # Calculate total download size
+        self.total_bytes = self._get_total_download_size()
+        
         # Group files by their completion status
         incomplete_downloads = []
         new_downloads = []
@@ -268,23 +286,28 @@ class Download:
                 new_downloads.append(result)
         
         try:
-            # First handle incomplete downloads
-            if incomplete_downloads:
-                self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    futures = {executor.submit(self._resume_download, result, savepath): result 
-                             for result in incomplete_downloads}
-                    for future in concurrent.futures.as_completed(futures):
-                        future.result()  # Just to handle any exceptions
-            
-            # Then handle new downloads
-            if new_downloads:
-                self.logger.info(f"Starting {len(new_downloads)} new downloads...")
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    futures = {executor.submit(self._resume_download, result, savepath): result 
-                             for result in new_downloads}
-                    for future in concurrent.futures.as_completed(futures):
-                        future.result()  # Just to handle any exceptions
+            # Initialize single progress bar for all downloads
+            with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=150,
+                     bar_format='{desc:<45.45} |{bar:50}| {percentage:3.1f}% | {n_fmt}/{total_fmt} | {rate_fmt} | ETA: {remaining}',
+                     desc="Total Download Progress") as self.progress_bar:
+                
+                # First handle incomplete downloads
+                if incomplete_downloads:
+                    self.logger.info(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                        futures = {executor.submit(self._resume_download, result, savepath): result 
+                                 for result in incomplete_downloads}
+                        for future in concurrent.futures.as_completed(futures):
+                            future.result()  # Just to handle any exceptions
+                
+                # Then handle new downloads
+                if new_downloads:
+                    self.logger.info(f"Starting {len(new_downloads)} new downloads...")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                        futures = {executor.submit(self._resume_download, result, savepath): result 
+                                 for result in new_downloads}
+                        for future in concurrent.futures.as_completed(futures):
+                            future.result()  # Just to handle any exceptions
             
             # Wait for all processing tasks to complete
             self.logger.info("Waiting for processing tasks to complete...")
