@@ -97,7 +97,8 @@ class Manager:
         Initialize(self.bbox, self.direction, self.frame, self.max_perp, self.ptype, 
                   self.stack_size, self.uni, self.project_name)
         print("\n")
-        
+        time.sleep(2)
+
         # Do searching for data
         print(f"############## Running: Step 2: Download SLC Images ##############")
         print("-> Searching for new products...")
@@ -119,6 +120,7 @@ class Manager:
         print(f"############## Running: Step 3: Select MASTER ##############")
         selected_master = MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
         print("\n")
+        time.sleep(2)
 
         # Note: Burst finding, master splitting, and slave splitting are now handled 
         # during the download and processing phase in Step 2
@@ -143,17 +145,19 @@ class Manager:
         time.sleep(2)
         CoregIFG(self.max_perp, self.process_range, self.project_name).process()
         print('\n')
+        time.sleep(2)
 
         # StaMPS export
         print(f"############## Running: Step 5: StaMPS Export ##############")
         StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, None, self.project_name).process()
         print('\n')
-
+        time.sleep(2)
+        
         # StaMPS preparation
         print(f"############## Running: Step 6: StaMPS Preparation ##############")
         StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
         print('\n')
-        
+        time.sleep(2)
         return True
 
 if __name__ == "__main__":
