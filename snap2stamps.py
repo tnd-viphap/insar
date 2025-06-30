@@ -99,7 +99,10 @@ class Manager:
         downloader = Download(results, self.download_on, self.project_name)
         if results:
             print(f"-> Found {len(results)} products. Downloading...")
-            downloader.download(self.config['project_definition']['raw_data_folder'])
+            download_success = downloader.download(self.config['project_definition']['raw_data_folder'])
+            if not download_success:
+                print("ERROR: Download and processing stage failed! Stopping workflow.")
+                return False
             time.sleep(2)
         else:
             print("-> No new products. Skip downloading and processing!")
@@ -157,6 +160,7 @@ class Manager:
         StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
         print('\n')
         
+        return True
 
 if __name__ == "__main__":
     # Parameters
@@ -183,7 +187,14 @@ if __name__ == "__main__":
                       renew_flag=renew_flag,
                       process_range=process_range,
                       stamps_flag='TOMO', ptype=0,
-                      stack_size=ministack_size, uni=unified_flag, project_name="maychai").run_stages()
+                      stack_size=ministack_size, uni=unified_flag, project_name="maychai")
+    
+    success = session.run_stages()
+    if success:
+        print("Workflow completed successfully!")
+    else:
+        print("Workflow failed! Please check the logs for details.")
+        sys.exit(1)
     """
     try:
         Manager().run_stages()

@@ -35,7 +35,7 @@ class Download:
         self.session.auth_with_creds("tnd2000", "Nick0327#@!!")  # Replace with real credentials
         self.search_result = search_result
         self.download_on = download_on
-        self.processing_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)  # Single worker for processing
+        self.processing_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)  # Increased workers for processing
         self.processing_futures = []  # Track processing tasks
         self.progress_lock = threading.Lock()  # Lock for progress bar updates
         self.total_bytes = 0
@@ -43,6 +43,7 @@ class Download:
         self.progress_bar = None
         self.download_status = {}  # Track download status for each file
         self.successful_downloads = 0  # Counter for successful downloads
+        self.processing_complete = threading.Event()  # Event to signal processing completion
         
         # Handle date filtering based on download_on parameter
         if self.download_on[0] is not None or self.download_on[1] is not None:
@@ -275,6 +276,10 @@ class Download:
 
         if expected_size is None:
             self._log_status(f"Skipping {file_name}: Not found in datalake")
+            with self.progress_lock:
+                self.download_status[file_name] = "Skipped (Not in Datalake)"
+                if self.progress_bar:
+                    self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
             return None
 
         # Check both the main file and temporary file
@@ -302,7 +307,13 @@ class Download:
         
         if file_id[17:25] in self.processed_files:
             self._log_status("-> Processed data detected. Skipping this product...")
-            return None
+            with self.progress_lock:
+                self.downloaded_bytes += expected_size
+                if self.progress_bar:
+                    self.progress_bar.update(expected_size)
+                    self.download_status[file_name] = "Skipped (Already Processed)"
+                    self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
+            return file_name
 
         url = result.properties["url"]
         headers = {"Range": f"bytes={current_size}-"} if current_size > 0 else {}
@@ -358,7 +369,7 @@ class Download:
         """Update the download cache with the new file ID."""
         try:
             if os.path.exists(self.config["cache_files"]["download_cache"]):
-                with open(self.config["cache_file"]["download_cache"], "r") as cache:
+                with open(self.config["cache_files"]["download_cache"], "r") as cache:
                     lines = cache.readlines()
                     file_id = file_id + '\n'
                     if file_id not in lines:
@@ -413,6 +424,9 @@ class Download:
             else:
                 new_downloads.append(result)
         
+        download_success = True
+        processing_success = True
+        
         try:
             # Initialize single progress bar for all downloads
             with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=80,
@@ -430,8 +444,11 @@ class Download:
                                 file_name = future.result()
                                 if file_name:
                                     self._log_status(f"Successfully downloaded {file_name}")
+                                else:
+                                    download_success = False
                             except Exception as e:
                                 self._log_status(f"Error in download: {str(e)}")
+                                download_success = False
                 
                 # Then handle new downloads
                 if new_downloads:
@@ -444,39 +461,85 @@ class Download:
                                 file_name = future.result()
                                 if file_name:
                                     self._log_status(f"Successfully downloaded {file_name}")
+                                else:
+                                    download_success = False
                             except Exception as e:
                                 self._log_status(f"Error in download: {str(e)}")
+                                download_success = False
             
             print("\n")  # Add a newline after progress bar completes
             
             # Wait for processing tasks and show their status
             if self.processing_futures:
-                self._log_status("Waiting for processing tasks to complete...")
-                processing_results = []
-                for future in concurrent.futures.as_completed(self.processing_futures):
-                    try:
-                        result = future.result()
-                        processing_results.append(result)
-                        if result:
-                            self._log_status("Processing task completed successfully")
-                        else:
-                            self._log_status("Processing task failed")
-                    except Exception as e:
-                        self._log_status(f"Processing task error: {str(e)}")
-                        processing_results.append(False)
-                
-                # Summary of processing results
-                successful = len([r for r in processing_results if r])
-                failed = len(processing_results) - successful
-                self._log_status(f"Processing complete: {successful} successful, {failed} failed")
+                processing_success = self._wait_for_processing_completion()
+                if not processing_success:
+                    self._log_status("WARNING: Some processing tasks failed or timed out!")
             
         finally:
             # Clean up processing pool
             self.processing_pool.shutdown(wait=True)
+        
+        # Final status report
+        if download_success and processing_success:
+            self._log_status("All downloads and processing completed successfully!")
+        else:
+            if not download_success:
+                self._log_status("ERROR: Some downloads failed!")
+            if not processing_success:
+                self._log_status("ERROR: Some processing tasks failed!")
+        
+        return download_success and processing_success
 
     def _is_file_incomplete(self, file_path):
         """Check if a file is incomplete based on size."""
         return float(os.path.getsize(file_path)) / 1024**3 <= 3.8
+
+    def _wait_for_processing_completion(self, timeout=3600):
+        """Wait for all processing tasks to complete with timeout."""
+        if not self.processing_futures:
+            return True
+            
+        self._log_status(f"Waiting for {len(self.processing_futures)} processing tasks to complete...")
+        
+        try:
+            # Wait for all futures to complete with timeout
+            done, not_done = concurrent.futures.wait(
+                self.processing_futures, 
+                timeout=timeout,
+                return_when=concurrent.futures.ALL_COMPLETED
+            )
+            
+            if not_done:
+                self._log_status(f"WARNING: {len(not_done)} processing tasks did not complete within timeout")
+                # Cancel remaining tasks
+                for future in not_done:
+                    future.cancel()
+                return False
+            
+            # Check results
+            processing_results = []
+            for future in done:
+                try:
+                    result = future.result()
+                    processing_results.append(result)
+                    if result:
+                        self._log_status("Processing task completed successfully")
+                    else:
+                        self._log_status("Processing task failed")
+                except Exception as e:
+                    self._log_status(f"Processing task error: {str(e)}")
+                    processing_results.append(False)
+            
+            # Summary of processing results
+            successful = len([r for r in processing_results if r])
+            failed = len(processing_results) - successful
+            self._log_status(f"Processing complete: {successful} successful, {failed} failed")
+            
+            return failed == 0
+            
+        except Exception as e:
+            self._log_status(f"Error waiting for processing completion: {str(e)}")
+            return False
 
 class SLC_Search:
     def __init__(self, max_date=None, download_on: list = [None, None], project_name="default"):
