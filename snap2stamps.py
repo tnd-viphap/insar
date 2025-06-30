@@ -11,9 +11,6 @@ sys.path.append(project_path)
 from config.parser import ConfigParser, Initialize
 from modules.snap2stamps.bin._1_download import SLC_Search, Download
 from modules.snap2stamps.bin._2_master_sel import MasterSelect
-from modules.snap2stamps.bin._3_find_bursts import Burst
-from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
-from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 from modules.snap2stamps.bin._6_coreg_ifg_topsar import CoregIFG
 from modules.snap2stamps.bin._7_stamps_export import StaMPSExporter
 from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
@@ -51,9 +48,6 @@ class Manager:
         self.python_files = [
             "_1_download.py",
             "_2_master_sel.py",
-            "_3_find_bursts.py",
-            "_4_splitting_master.py",
-            "_5_splitting_slaves.py",
             "_6_coreg_ifg_topsar.py",
             "_7_stamps_export.py",
             "_9_0_stamps_prep.py",
@@ -77,7 +71,20 @@ class Manager:
 
         print("Running VINSAR:\n")
         for idx, file in enumerate(self.python_files):
-            print(f"------ Step {file.split('_')[1]}: {self.python_files[idx]}\n")
+            step_num = idx + 1
+            if step_num == 1:
+                step_name = "Download SLC Images"
+            elif step_num == 2:
+                step_name = "Select MASTER"
+            elif step_num == 3:
+                step_name = "Coregistration and Interferogram"
+            elif step_num == 4:
+                step_name = "StaMPS Export"
+            elif step_num == 5:
+                step_name = "StaMPS Preparation"
+            else:
+                step_name = file.split('_')[1]
+            print(f"------ Step {step_num}: {step_name} ------\n")
         print(f"Using configuration for project: {self.project_name}")
 
         self.failed_scripts = {}
@@ -99,6 +106,7 @@ class Manager:
         downloader = Download(results, self.download_on, self.project_name)
         if results:
             print(f"-> Found {len(results)} products. Downloading...")
+            print("-> Note: This step also includes burst finding and splitting for all products")
             download_success = downloader.download(self.config['project_definition']['raw_data_folder'])
             if not download_success:
                 print("ERROR: Download and processing stage failed! Stopping workflow.")
@@ -112,23 +120,9 @@ class Manager:
         selected_master = MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
         print("\n")
 
-        # Find master burst
-        print(f"############## Running: Step 4: Find MASTER burst ##############")
-        Burst(self.project_name).find_burst()
-        print("\n")
-
-        # Master split and slaves split
-        print(f"############## Running: Step 5: Split MASTER ##############")
-        MasterSplitter(self.project_name).process()
-        print("\n")
-        print(f"############## Running: Step 6: Split SLAVES ##############")
-        SlavesSplitter(self.project_name).process()
-        print("\n")
-
-        # Run coregistration and make interferogram
-        print(
-            f"############## Running: Step 7: Coregistration and Interferogram ##############"
-        )
+        # Note: Burst finding, master splitting, and slave splitting are now handled 
+        # during the download and processing phase in Step 2
+        print(f"############## Running: Step 4: Coregistration and Interferogram ##############")
         # self.config_parser._load_config()
         # self.config = self.config_parser.get_project_config(self.project_name)
         # if self.identity_master:
@@ -151,12 +145,12 @@ class Manager:
         print('\n')
 
         # StaMPS export
-        print(f"############## Running: Step 8: StaMPS Export ##############")
+        print(f"############## Running: Step 5: StaMPS Export ##############")
         StaMPSExporter(self.stamps_flag, self.result_folder, self.renew_flag, None, self.project_name).process()
         print('\n')
 
         # StaMPS preparation
-        print(f"############## Running: Step 9: StaMPS Preparation ##############")
+        print(f"############## Running: Step 6: StaMPS Preparation ##############")
         StaMPSPrep(self.stamps_flag, self.da_threshold, None, self.project_name).process()
         print('\n')
         
