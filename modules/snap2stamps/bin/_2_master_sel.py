@@ -92,7 +92,7 @@ class MasterSelect:
             shutil.move(src_dir, self.config["project_definition"]["master_folder"])
         
     def master_to_slave(self, om, cm):
-        print(f"Master to slave: {om}, {cm}")
+        print(f"Master to slave: {om} -> {cm}")
         if not os.path.exists(os.path.join(self.config["project_definition"]["slaves_folder"], om)):
             return
         new_slave = os.path.join(self.config["project_definition"]["slaves_folder"], om, om+"_M").replace("_M", f"_{self.config['processing_parameters']['iw1']}.dim")
@@ -122,7 +122,7 @@ class MasterSelect:
                 pass
             print("-> Converting DONE")
         
-    def slave_to_master(self, om, cm):
+    def slave_to_master(self, om, cm, master_folder):
         current_master = os.path.join(self.config["project_definition"]["master_folder"], os.listdir(self.config["project_definition"]["master_folder"])[0])
         current_master = [os.path.join(current_master, f) for f in os.listdir(current_master) if '.dim' in f]
         if current_master:
@@ -137,7 +137,7 @@ class MasterSelect:
             with open(self.graph2runsm, 'w') as file:
                 file.write(filedata)
                 
-            if (om in cm) or (os.path.split(current_master)[1].replace(f"{self.config['processing_parameters']['iw1']}", "M") in os.listdir(os.path.split(current_master)[0])):
+            if (om in cm) and (os.path.split(current_master)[1].replace(f"{self.config['processing_parameters']['iw1']}", "M") in os.listdir(os.path.split(current_master)[0])):
                 print("-> Converted S-M data detected. Skipping...")
             else:
                 print("-> Converting S-M...")
@@ -247,7 +247,7 @@ class MasterSelect:
                 if '.zip' in selected_master:
                     print("Raw data detected. Skipping reformatting MASTER file...") 
                 else:
-                    self.slave_to_master(om, cm)
+                    self.slave_to_master(om, cm, master_folder)
                     time.sleep(1)
                     self.master_to_slave(om, cm)
                     time.sleep(1)
