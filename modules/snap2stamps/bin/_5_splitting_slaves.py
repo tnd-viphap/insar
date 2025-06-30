@@ -29,6 +29,46 @@ class SlavesSplitter:
             if not os.path.exists(folder):
                 os.makedirs(folder)
     
+    def split_single_slave(self, slave_folder, input_file, output_name):
+        """Split a single slave file."""
+        if not os.path.exists(input_file):
+            raise FileNotFoundError(f"Input file not found: {input_file}")
+            
+        # Run PTA first
+        try:
+            # PTA(input_file, None, self.project_name).pta()
+            time.sleep(1)
+        except Exception as e:
+            print(f"Warning: PTA processing failed: {str(e)}")
+            
+        graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slave_split_applyorbit.xml')
+        with open(graphxml, 'r') as file:
+            filedata = file.read()
+            filedata = filedata.replace('INPUTFILE', input_file)
+            filedata = filedata.replace('IWs', self.config['processing_parameters']['iw1'])
+            filedata = filedata.replace('FIRST_BURST', str(self.config['processing_parameters']['first_burst']))
+            filedata = filedata.replace('LAST_BURST', str(self.config['processing_parameters']['last_burst']))
+            filedata = filedata.replace('OUTPUTFILE', output_name)
+
+        with open(self.graph2run, 'w') as file:
+            file.write(filedata)
+
+        args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
+        
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        timeStarted = time.time()
+        stdout, stderr = process.communicate()
+        process.wait()
+
+        if process.returncode != 0:
+            raise RuntimeError(f'Error splitting slave {input_file}\n{stderr.decode()}')
+            
+        # Delete raw data after successful processing
+        if os.path.exists(input_file):
+            os.remove(input_file)
+            
+        return True
+    
     def process(self):
         with open(self.outlog, 'a') as out_file:
             out_file.write(self.bar_message)
@@ -141,50 +181,16 @@ class SlavesSplitter:
                                 time.sleep(1)
                                 shutil.rmtree(folder_path)
                                 continue
-                        # Running PTA
-                        # PTA(files[0], None).pta()
-                    time.sleep(1)
-
-                    graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slave_split_applyorbit.xml') if len(files) == 1 else os.path.join(self.config["project_definition"]["graphs_folder"], 'slaves_assemble_split_applyorbit.xml')
-                    with open(graphxml, 'r') as file:
-                        filedata = file.read()
-                        filedata = filedata.replace('INPUTFILE', files[0])
-                        filedata = filedata.replace('IWs', self.config['processing_parameters']['iw1'])
-                        filedata = filedata.replace('FIRST_BURST', str(self.config['processing_parameters']['first_burst']))
-                        filedata = filedata.replace('LAST_BURST', str(self.config['processing_parameters']['last_burst']))
-                        filedata = filedata.replace('OUTPUTFILE', outputname)
-
-                    with open(self.graph2run, 'w') as file:
-                        file.write(filedata)
-
-                    args = [self.config["snap_gpt"]["gptbin_path"], self.graph2run, '-c', str(self.config["computing_resources"]["cache"]), '-q', str(self.config["computing_resources"]["cpu"])]
-                    print(args)
-                    out_file.write(str(args) + '\n')
-
-                    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    timeStarted = time.time()
-                    stdout, stderr = process.communicate()
-                    process.wait()
-
-                    print('SNAP STDOUT: ', stdout.decode())
-                    out_file.write(stdout.decode() + '\n')
-
-                    timeDelta = time.time() - timeStarted
-                    print(f'[{k}] Finished process in {timeDelta} seconds.')
-                    out_file.write(f'[{k}] Finished process in {timeDelta} seconds.\n')
-
-                    if process.returncode != 0:
-                        message = f'Error splitting slaves {files}\n{stderr.decode()}'
-                        print(message)
-                        out_file.write(message + '\n')
-                    else:
-                        message = f'Split slave {files} successfully completed.\n'
+                    
+                    try:
+                        self.split_single_slave(folder_path, files[0], outputname)
+                        message = f'Split slave {files[0]} successfully completed.\n'
                         print(message)
                         out_file.write(message)
-                    
-                    # Delete raw data
-                    if files[0].endswith(".zip"):
-                        os.remove(files[0])
+                    except Exception as e:
+                        message = f'Error splitting slaves {files[0]}\n{str(e)}'
+                        print(message)
+                        out_file.write(message + '\n')
                         
                     out_file.write(self.bar_message)
                 else:

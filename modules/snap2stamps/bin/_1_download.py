@@ -103,45 +103,157 @@ class Download:
         return total_size
 
     def _process_single_product(self, file_name):
-        """Process a single downloaded product."""
+        """Process a single downloaded product with complete checking and processing logic."""
         self.logger.info(f"Starting processing for {file_name}")
         try:
-            # Move incomplete downloads temporarily
-            incomplete_downloads = []
-            raw_data_folder = self.config["project_definition"]["raw_data_folder"]
-            data_folder = self.config["project_definition"]["data_folder"]
+            # Get the date from the file name
+            date_str = file_name[17:25]
+            slave_folder = os.path.join(self.config["project_definition"]["slaves_folder"], date_str)
+            os.makedirs(slave_folder, exist_ok=True)
             
-            for file in os.listdir(raw_data_folder):
-                if file.endswith('.zip') and file != file_name:  # Don't move the file we're processing
-                    file_path = os.path.join(raw_data_folder, file)
-                    if self._is_file_incomplete(file_path):
-                        temp_path = os.path.join(data_folder, file)
-                        shutil.move(file_path, temp_path)
-                        incomplete_downloads.append(temp_path)
-
-            try:
-                # Run processing sequence
-                time.sleep(2)
-                MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
-                time.sleep(2)
-                Burst(self.project_name).find_burst()
-                time.sleep(2)
-                MasterSplitter(self.project_name).process()
-                time.sleep(2)
-                SlavesSplitter(self.project_name).process()
-                time.sleep(2)
-
-                self.logger.info(f"Successfully processed {file_name}")
+            # Move the file to the slave folder
+            src_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file_name)
+            dst_path = os.path.join(slave_folder, file_name)
+            if os.path.exists(src_path):
+                shutil.move(src_path, dst_path)
+            
+            # Check if already processed
+            output_name = os.path.join(slave_folder, f"{date_str}_{self.config['processing_parameters']['iw1']}.dim")
+            if os.path.exists(output_name):
+                self.logger.info(f"Slave image {date_str} is already processed.")
+                if os.path.exists(dst_path):
+                    os.remove(dst_path)
                 return True
-            finally:
-                # Always move incomplete downloads back
-                for file_path in incomplete_downloads:
-                    if os.path.exists(file_path):
-                        shutil.move(file_path, os.path.join(raw_data_folder, os.path.basename(file_path)))
-
+                
+            # Check for orbit data renewal
+            try:
+                folder_date = datetime.strptime(date_str, "%Y%m%d")
+                last_modified_date = datetime.fromtimestamp(os.path.getmtime(slave_folder))
+                days_diff = int(abs((last_modified_date - folder_date).days))
+                
+                if days_diff <= 21 and datetime.now() >= folder_date + timedelta(days=21):
+                    self.logger.info(f"-> Image {date_str} has new orbit data. Renewing...")
+                    if os.path.exists(slave_folder):
+                        shutil.rmtree(slave_folder)
+                        os.makedirs(slave_folder)
+                        # Re-copy the file since we just deleted the folder
+                        if os.path.exists(src_path):
+                            shutil.copy2(src_path, dst_path)
+                        # Clean up coreg folder
+                        for file in os.listdir(self.config["project_definition"]["coreg_folder"]):
+                            if date_str in file:
+                                file_path = os.path.join(self.config["project_definition"]["coreg_folder"], file)
+                                if os.path.isfile(file_path):
+                                    os.remove(file_path)
+                                elif os.path.isdir(file_path):
+                                    shutil.rmtree(file_path)
+            except Exception as e:
+                self.logger.error(f"Error checking orbit data for {date_str}: {str(e)}")
+            
+            # If folder is empty (could happen after orbit renewal), try to re-download
+            if not os.path.exists(dst_path):
+                self.logger.info(f"-> Found no data. Re-downloading data for {date_str}...")
+                try:
+                    product_date = datetime.strptime(date_str, "%Y%m%d")
+                    start = product_date - timedelta(days=1)
+                    end = product_date + timedelta(days=1)
+                    instance = Search_Download(self.project_name)
+                    results = instance.search(start, end)
+                    if results:
+                        instance.download(results, slave_folder)
+                    time.sleep(1)
+                except Exception as e:
+                    self.logger.error(f"Error re-downloading {date_str}: {str(e)}")
+                    return False
+            
+            # Verify file exists after all checks
+            if not os.path.exists(dst_path):
+                self.logger.error(f"No valid file found for {date_str} after all checks")
+                return False
+            
+            # Find bursts
+            try:
+                self.logger.info(f"-> Raw data detected. Checking products & Finding bursts for {date_str}...")
+                
+                # First try to verify/repair the download
+                try:
+                    product_date = datetime.strptime(date_str, "%Y%m%d")
+                    start = product_date - timedelta(days=1)
+                    end = product_date + timedelta(days=1)
+                    
+                    time.sleep(1)
+                    results = Search_Download(self.project_name).search(start, end)
+                    if results:
+                        downloader = Downloader(results, self.project_name)
+                        downloader._resume_download(results[0], slave_folder)
+                except Exception as e:
+                    self.logger.warning(f"Error verifying download for {date_str}: {str(e)}")
+                
+                # Now try to find bursts
+                time.sleep(1)
+                found_burst = Burst(self.project_name).find_burst(slave_folder)
+                if not found_burst:
+                    self.logger.error(f"No valid bursts found for {date_str}")
+                    shutil.rmtree(slave_folder)
+                    self._remove_from_download_cache(date_str)
+                    return False
+                    
+            except Exception as e:
+                # If burst finding fails, try one more time with fresh download
+                self.logger.warning(f"First burst finding attempt failed for {date_str}: {str(e)}")
+                try:
+                    self.logger.info(f"-> Broken {date_str}. Re-downloading...")
+                    if os.path.exists(dst_path):
+                        os.remove(dst_path)
+                    time.sleep(1)
+                    product_date = datetime.strptime(date_str, "%Y%m%d")
+                    start = product_date - timedelta(days=1)
+                    end = product_date + timedelta(days=1)
+                    instance = Search_Download(self.project_name)
+                    results = instance.search(start, end)
+                    if results:
+                        instance.download(results, slave_folder)
+                    time.sleep(1)
+                    found_burst = Burst(self.project_name).find_burst(slave_folder)
+                    if not found_burst:
+                        raise Exception("No valid bursts found after re-download")
+                except Exception as e2:
+                    self.logger.error(f"Error in second burst finding attempt for {date_str}: {str(e2)}")
+                    if os.path.exists(slave_folder):
+                        shutil.rmtree(slave_folder)
+                    return False
+            
+            # Run splitting process
+            try:
+                splitter = SlavesSplitter(self.project_name)
+                splitter.split_single_slave(slave_folder, dst_path, output_name)
+                self.logger.info(f"Successfully processed {date_str}")
+                return True
+            except Exception as e:
+                self.logger.error(f"Error splitting {date_str}: {str(e)}")
+                return False
+                
         except Exception as e:
             self.logger.error(f"Error processing {file_name}: {str(e)}")
             return False
+
+    def _remove_from_download_cache(self, date_str):
+        """Remove a date from the download cache."""
+        try:
+            if os.path.exists(self.config["cache_files"]["download_cache"]):
+                with open(self.config["cache_files"]["download_cache"], "r") as cache:
+                    lines = cache.readlines()
+                    line_to_rm = None
+                    for line in lines:
+                        if date_str in line:
+                            line_to_rm = lines.index(line)
+                            break
+                    if line_to_rm is not None:
+                        del lines[line_to_rm]
+                with open(self.config["cache_files"]["download_cache"], "w") as write_cache:
+                    write_cache.writelines(lines)
+        except Exception as e:
+            self.logger.error(f"Error removing {date_str} from download cache: {str(e)}")
 
     def _log_status(self, message):
         """Log status without interfering with progress bar."""
@@ -314,7 +426,12 @@ class Download:
                         futures = {executor.submit(self._resume_download, result, savepath): result 
                                  for result in incomplete_downloads}
                         for future in concurrent.futures.as_completed(futures):
-                            future.result()  # Just to handle any exceptions
+                            try:
+                                file_name = future.result()
+                                if file_name:
+                                    self._log_status(f"Successfully downloaded {file_name}")
+                            except Exception as e:
+                                self._log_status(f"Error in download: {str(e)}")
                 
                 # Then handle new downloads
                 if new_downloads:
@@ -323,68 +440,39 @@ class Download:
                         futures = {executor.submit(self._resume_download, result, savepath): result 
                                  for result in new_downloads}
                         for future in concurrent.futures.as_completed(futures):
-                            future.result()  # Just to handle any exceptions
+                            try:
+                                file_name = future.result()
+                                if file_name:
+                                    self._log_status(f"Successfully downloaded {file_name}")
+                            except Exception as e:
+                                self._log_status(f"Error in download: {str(e)}")
             
             print("\n")  # Add a newline after progress bar completes
-            self._log_status("Waiting for processing tasks to complete...")
-            concurrent.futures.wait(self.processing_futures)
+            
+            # Wait for processing tasks and show their status
+            if self.processing_futures:
+                self._log_status("Waiting for processing tasks to complete...")
+                processing_results = []
+                for future in concurrent.futures.as_completed(self.processing_futures):
+                    try:
+                        result = future.result()
+                        processing_results.append(result)
+                        if result:
+                            self._log_status("Processing task completed successfully")
+                        else:
+                            self._log_status("Processing task failed")
+                    except Exception as e:
+                        self._log_status(f"Processing task error: {str(e)}")
+                        processing_results.append(False)
+                
+                # Summary of processing results
+                successful = len([r for r in processing_results if r])
+                failed = len(processing_results) - successful
+                self._log_status(f"Processing complete: {successful} successful, {failed} failed")
             
         finally:
             # Clean up processing pool
             self.processing_pool.shutdown(wait=True)
-
-    def _process_downloaded_products(self):
-        """Process downloaded products."""
-        if not os.path.exists(self.config["project_definition"]["raw_data_folder"]):
-            return True
-
-        # Check if there are any complete downloads to process
-        complete_downloads = []
-        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
-            if file.endswith('.zip'):
-                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
-                if not self._is_file_incomplete(file_path):
-                    complete_downloads.append(file)
-
-        if not complete_downloads:
-            return True
-
-        self.logger.info(f"Found {len(complete_downloads)} complete downloads to process")
-
-        # Move incomplete downloads temporarily
-        incomplete_downloads = []
-        for file in os.listdir(self.config["project_definition"]["raw_data_folder"]):
-            if file.endswith('.zip'):
-                file_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file)
-                if self._is_file_incomplete(file_path):
-                    temp_path = os.path.join(self.config["project_definition"]["data_folder"], file)
-                    shutil.move(file_path, temp_path)
-                    incomplete_downloads.append(temp_path)
-
-        try:
-            # Run processing sequence
-            time.sleep(2)
-            MasterSelect(self.config["processing_parameters"]["reest_flag"], None, True, self.project_name).select_master()
-            time.sleep(2)
-            Burst(self.project_name).find_burst()
-            time.sleep(2)
-            MasterSplitter(self.project_name).process()
-            time.sleep(2)
-            SlavesSplitter(self.project_name).process()
-            time.sleep(2)
-
-            # Move incomplete downloads back
-            for file_path in incomplete_downloads:
-                shutil.move(file_path, os.path.join(self.config["project_definition"]["raw_data_folder"], os.path.basename(file_path)))
-
-            return True
-        except Exception as e:
-            self.logger.error(f"Error during processing sequence: {str(e)}")
-            # Ensure incomplete downloads are moved back even if processing fails
-            for file_path in incomplete_downloads:
-                if os.path.exists(file_path):
-                    shutil.move(file_path, os.path.join(self.config["project_definition"]["raw_data_folder"], os.path.basename(file_path)))
-            return False
 
     def _is_file_incomplete(self, file_path):
         """Check if a file is incomplete based on size."""
@@ -453,7 +541,7 @@ class SLC_Search:
         return logger
 
     def _determine_date_range(self):
-        """Determine the search date range based on existing data and download_on parameter."""
+        """Determine the search date range."""
         time.sleep(1)
         
         # If download_on is specified, use those dates
@@ -475,31 +563,12 @@ class SLC_Search:
             self.logger.info(f"-> Using specified date range: {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}")
             return start_date, end_date
             
-        # If no download_on specified, use existing logic
-        if os.listdir(self.config["project_definition"]["master_folder"]) or os.listdir(self.config["project_definition"]["slaves_folder"]):
-            if os.path.exists(self.config["cache_files"]["download_cache"]):
-                with open(self.config["cache_files"]["download_cache"], "r") as file:
-                    lines = file.readlines()
-                    if lines:
-                        latest_product = lines[-1].strip()
-                        latest_date = datetime.strptime(latest_product[17:25], "%Y%m%d") + timedelta(1)
-                    else:
-                        latest_date = datetime.strptime("20141001", "%Y%m%d")
-                self.logger.info(f"-> Resuming from latest available data: {latest_date}")
-                return latest_date, datetime.now()
-            else:
-                images = os.listdir(self.config["project_definition"]["master_folder"]) + os.listdir(self.config["project_definition"]["slaves_folder"])
-                latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
-                return latest_date, datetime.now()
-        else:
-            images = [f[17:25] for f in os.listdir(self.config["project_definition"]["raw_data_folder"])]
-            if images:
-                latest_date = datetime.strptime(list(sorted(images))[-1], "%Y%m%d")
-                return latest_date, datetime.now()
-                
-        self.logger.info("-> No data found in master/slaves, downloading from beginning.")
-        return datetime(2014, 10, 1), datetime.now()
-    
+        # If no download_on specified, always search from beginning
+        start_date = datetime(2014, 10, 1)
+        end_date = datetime.now()
+        self.logger.info(f"-> Searching full date range: {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}")
+        return start_date, end_date
+
     def _determine_best_overlap(self, results):
         best = []
         for result in results:
@@ -681,6 +750,11 @@ class SLC_Search:
         for product in incomplete_products:
             if not product['date']:
                 continue
+            # Only include incomplete products within the download_on range if specified
+            if self.download_on[0] is not None and product['date'] < self.download_on[0]:
+                continue
+            if self.download_on[1] is not None and product['date'] > self.download_on[1]:
+                continue
             results = self._search_for_product(product['date'])
             for result in results:
                 if result.properties['fileID'].startswith(product['file_id']):
@@ -732,26 +806,30 @@ class SLC_Search:
                 final_results.append(result)
                 scheduled_fileids.add(fileid)
         
-        # Then add new products
+        # Then add all products that haven't been processed yet
         for result in all_results:
             fileid = result.properties['fileID']
             date = fileid[17:25]
             
-            # Skip if already scheduled or processed
-            if (fileid in scheduled_fileids or 
-                date in processed_dates or 
-                date in incomplete_dates):
+            # Skip if already scheduled for download
+            if fileid in scheduled_fileids:
                 continue
                 
-            # Apply monthly limit filter
+            # Skip if already processed successfully
+            if date in processed_dates:
+                continue
+                
+            # Apply monthly limit filter only for dates that we already have some data for
             month_key = date[0:6]
+            if month_key in self.monthly_data:
+                if len(self.monthly_data[month_key]['processed']) + len(self.monthly_data[month_key]['incomplete']) >= self.max_date:
+                    continue
+            
+            final_results.append(result)
+            scheduled_fileids.add(fileid)
             if month_key not in self.monthly_data:
                 self.monthly_data[month_key] = {'processed': [], 'incomplete': []}
-            
-            if len(self.monthly_data[month_key]['processed']) + len(self.monthly_data[month_key]['incomplete']) < self.max_date:
-                final_results.append(result)
-                scheduled_fileids.add(fileid)
-                self.monthly_data[month_key]['incomplete'].append(date)
+            self.monthly_data[month_key]['incomplete'].append(date)
         
         # Step 6: Update lake data
         try:
@@ -768,24 +846,21 @@ class SLC_Search:
             json.dump(lake_data, file, indent=4)
         
         # Final summary
-        self.logger.info(f"""
-Search Results Summary:
+        missing_products = len([r for r in final_results if r not in incomplete_results])
+        search_range_str = "full date range" if self.download_on[0] is None and self.download_on[1] is None else f"specified range {self.start_date.strftime('%Y%m%d')} to {self.end_date.strftime('%Y%m%d')}"
+        summary = f"""
+Search Results Summary ({search_range_str}):
 - Incomplete products found: {len(incomplete_products)}
 - Matching products for incomplete: {len(incomplete_results)}
 - Total products in date range: {len(all_results)}
+- Missing products found: {missing_products}
 - Final products to download: {len(final_results)}
   * Resume incomplete: {len(incomplete_results)}
   * New downloads: {len(final_results) - len(incomplete_results)}
-""")
-        print(f"""
-Search Results Summary:
-- Incomplete products found: {len(incomplete_products)}
-- Matching products for incomplete: {len(incomplete_results)}
-- Total products in date range: {len(all_results)}
-- Final products to download: {len(final_results)}
-  * Resume incomplete: {len(incomplete_results)}
-  * New downloads: {len(final_results) - len(incomplete_results)}
-""")
+"""
+        print(summary)
+        self.logger.info(summary)
+        print(summary)
         
         return list(sorted(final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
