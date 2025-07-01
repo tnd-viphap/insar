@@ -153,6 +153,28 @@ class Download:
         """Process a single downloaded product with complete checking and processing logic."""
         self.logger.info(f"Starting processing for {file_name}")
         try:
+            # Check if file is a complete .zip before processing
+            src_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file_name)
+            expected_size = None
+            # Try to get file_id from file_name
+            if file_name.endswith('.zip'):
+                file_id = file_name.split(".")[0]
+                # Try to find the matching file_id in datalake
+                try:
+                    with open(self.config["search_parameters"]["datalake"], "r") as file:
+                        data = json.load(file)
+                        for entry in data:
+                            if isinstance(entry, dict) and "properties" in entry:
+                                properties = entry["properties"]
+                                if isinstance(properties, dict) and properties.get("fileID", "").startswith(file_id):
+                                    expected_size = properties.get("bytes")
+                                    break
+                except Exception:
+                    pass
+            if expected_size is not None and os.path.exists(src_path) and os.path.getsize(src_path) != expected_size:
+                self.logger.warning(f"Skipping {file_name}: not a complete .zip file (size mismatch)")
+                return False
+            
             # Get the date from the file name
             date_str = file_name[17:25]
             slave_folder = os.path.join(self.config["project_definition"]["slaves_folder"], date_str)
@@ -331,7 +353,6 @@ class Download:
         file_path = os.path.join(savepath, file_name)
         temp_file_path = file_path + ".tmp"
         expected_size = self._get_expected_size(file_id)
-
         if expected_size is None:
             self._log_status(f"Skipping {file_name}: Not found in datalake")
             with self.progress_lock:
@@ -339,18 +360,16 @@ class Download:
                 if self.progress_bar:
                     self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
             return None
-
         # Check both the main file and temporary file
         current_size = 0
         download_path = None
-        
         if os.path.exists(file_path):
             current_size = os.path.getsize(file_path)
             download_path = file_path
         elif os.path.exists(temp_file_path):
             current_size = os.path.getsize(temp_file_path)
             download_path = temp_file_path
-            
+        # If file is already complete, do not process here (processing is handled in download())
         if current_size == expected_size:
             # If temp file is complete, rename it
             if download_path == temp_file_path:
@@ -362,7 +381,6 @@ class Download:
                     self.download_status[file_name] = "Complete"
                     self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
             return file_name
-        
         if file_id[17:25] in self.processed_files:
             self._log_status("-> Processed data detected. Skipping this product...")
             with self.progress_lock:
@@ -372,18 +390,14 @@ class Download:
                     self.download_status[file_name] = "Skipped (Already Processed)"
                     self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
             return file_name
-
         url = result.properties["url"]
         headers = {"Range": f"bytes={current_size}-"} if current_size > 0 else {}
-
         try:
             with self.session.get(url, headers=headers, stream=True) as response:
                 response.raise_for_status()
                 mode = "ab" if current_size > 0 else "wb"
-                
                 # Use the existing temp file if it exists, otherwise create new
                 target_path = temp_file_path if not os.path.exists(file_path) else file_path
-                
                 with open(target_path, mode) as file:
                     downloaded = current_size
                     for chunk in response.iter_content(chunk_size=8192):
@@ -393,7 +407,6 @@ class Download:
                             with self.progress_lock:
                                 if self.progress_bar:
                                     self.progress_bar.update(len(chunk))
-                
                 # Verify download completion
                 if downloaded == expected_size:
                     # If we were downloading to temp file, rename it
@@ -401,24 +414,16 @@ class Download:
                         if os.path.exists(file_path):
                             os.remove(file_path)
                         os.rename(temp_file_path, file_path)
-                    
                     # Update download cache
                     self._update_download_cache(file_id)
-                    
                     with self.progress_lock:
                         self.download_status[file_name] = "Complete"
                         if self.progress_bar:
                             self.progress_bar.set_description(f"Downloaded: {len([s for s in self.download_status.values() if s == 'Complete'])}/{len(self.search_result)}")
-                    
-                    # Submit processing task to thread pool
-                    future = self.processing_pool.submit(self._process_single_product, file_name)
-                    self.processing_futures.append(future)
-                    
                     return file_name
                 else:
                     self._log_status(f"Incomplete download: {file_name} ({downloaded}/{expected_size} bytes)")
                     return None
-                    
         except Exception as e:
             self._log_status(f"Error downloading {file_name}: {str(e)}")
             return None
@@ -468,6 +473,7 @@ class Download:
         # Group files by their completion status
         incomplete_downloads = []
         new_downloads = []
+        processable_files = []
         
         for result in self.search_result:
             file_id = str(result.properties['fileID'])
@@ -475,9 +481,12 @@ class Download:
             file_path = os.path.join(savepath, file_name)
             temp_path = file_path + ".tmp"
             self.download_status[file_name] = "Pending"
-            
-            # Check if file exists in any form
-            if os.path.exists(file_path) or os.path.exists(temp_path):
+            expected_size = self._get_expected_size(file_id)
+            # Only process .zip files that are complete
+            if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
+                processable_files.append((result, file_name))
+            # Resume if .zip.tmp exists or .zip is incomplete
+            elif (os.path.exists(temp_path)) or (os.path.exists(file_path) and expected_size and os.path.getsize(file_path) < expected_size):
                 incomplete_downloads.append(result)
             else:
                 new_downloads.append(result)
@@ -490,7 +499,6 @@ class Download:
             with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=80,
                      bar_format='{desc}: {percentage:3.1f}%|{bar:20}| {n_fmt}/{total_fmt}',
                      desc=f"Downloaded: 0/{len(self.search_result)}", position=0, leave=True) as self.progress_bar:
-                
                 # First handle incomplete downloads
                 if incomplete_downloads:
                     self._log_status(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
@@ -502,12 +510,17 @@ class Download:
                                 file_name = future.result()
                                 if file_name:
                                     self._log_status(f"Successfully downloaded {file_name}")
+                                    # After download, check if file is now complete and add to processable
+                                    file_id = str(futures[future].properties['fileID'])
+                                    file_path = os.path.join(savepath, file_id.split("-")[0] + ".zip")
+                                    expected_size = self._get_expected_size(file_id)
+                                    if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
+                                        processable_files.append((futures[future], file_name))
                                 else:
                                     download_success = False
                             except Exception as e:
                                 self._log_status(f"Error in download: {str(e)}")
                                 download_success = False
-                
                 # Then handle new downloads
                 if new_downloads:
                     self._log_status(f"Starting {len(new_downloads)} new downloads...")
@@ -519,24 +532,35 @@ class Download:
                                 file_name = future.result()
                                 if file_name:
                                     self._log_status(f"Successfully downloaded {file_name}")
+                                    file_id = str(futures[future].properties['fileID'])
+                                    file_path = os.path.join(savepath, file_id.split("-")[0] + ".zip")
+                                    expected_size = self._get_expected_size(file_id)
+                                    if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
+                                        processable_files.append((futures[future], file_name))
                                 else:
                                     download_success = False
                             except Exception as e:
                                 self._log_status(f"Error in download: {str(e)}")
                                 download_success = False
-            
             print("\n")  # Add a newline after progress bar completes
-            
-            # Wait for processing tasks and show their status
-            if self.processing_futures:
-                processing_success = self._wait_for_processing_completion()
-                if not processing_success:
-                    self._log_status("WARNING: Some processing tasks failed or timed out!")
-            
+            # Now process only complete .zip files
+            if processable_files:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = {executor.submit(self._process_single_product, file_name): file_name for _, file_name in processable_files}
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            result = future.result()
+                            if result:
+                                self._log_status(f"Processing task for {futures[future]} completed successfully")
+                            else:
+                                self._log_status(f"Processing task for {futures[future]} failed")
+                                processing_success = False
+                        except Exception as e:
+                            self._log_status(f"Processing task error: {str(e)}")
+                            processing_success = False
         finally:
             # Clean up processing pool
             self.processing_pool.shutdown(wait=True)
-        
         # Final status report
         if download_success and processing_success:
             self._log_status("All downloads and processing completed successfully!")
@@ -545,7 +569,6 @@ class Download:
                 self._log_status("ERROR: Some downloads failed!")
             if not processing_success:
                 self._log_status("ERROR: Some processing tasks failed!")
-        
         return download_success and processing_success
 
     def _is_file_incomplete(self, file_path):
