@@ -272,11 +272,11 @@ class CoregIFG:
                     master_burst_count = self.get_burst_count_from_dim(master_dim)
                     slave_burst_count = self.get_burst_count_from_dim(slave_dim)
                     if master_burst_count < slave_burst_count:
-                        print(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
+                        print(f"-> Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
                         self.out_file.write(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
                         continue
                 except Exception as e:
-                    print(f"Burst count check failed for {tail}: {e}\n")
+                    print(f"-> Burst count check failed for {tail}: {e}\n")
                     self.out_file.write(f"Burst count check failed for {tail}: {e}\n")
                 # --- End burst count check ---
                 message = f"[{k}] Processing slave file : {tail}\n"
@@ -341,6 +341,8 @@ class CoregIFG:
                 if process.returncode != 0:
                     message = 'Error computing coregistration and interferogram generation of splitted slave ' + str(dimfile)
                     self.err_file.write(message + '\n')
+                    print(message)
+                    continue
                 else:
                     message = 'Coregistration and Interferogram computation for data ' + str(tail) + ' successfully completed.\n'
                     print(message)
