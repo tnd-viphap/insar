@@ -20,6 +20,7 @@ from modules.snap2stamps.bin._2_master_sel import MasterSelect
 from modules.snap2stamps.bin._3_find_bursts import Burst
 from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
 from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
+from modules.utils.single_search_download import Search_Download, Downloader
 
 project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
