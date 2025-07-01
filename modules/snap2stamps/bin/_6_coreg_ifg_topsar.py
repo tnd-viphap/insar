@@ -229,13 +229,13 @@ class CoregIFG:
                 self.remove_poor_coreg(coreg_dim)
                 return False
     def get_burst_count_from_dim(self, dim_file):
-        """Parse the .dim XML file and return the number of bursts from burstList's count attribute."""
+        """Parse the .dim XML file and return the number of bursts from burstList's count attribute (MDATTR)."""
         tree = ET.parse(dim_file)
         root = tree.getroot()
-        burst_list_elem = root.find(".//burstList")
-        if burst_list_elem is not None and 'count' in burst_list_elem.attrib:
+        count_elem = root.find('.//MDElem[@name="burstList"]/MDATTR[@name="count"]')
+        if count_elem is not None and count_elem.text is not None:
             try:
-                return int(burst_list_elem.attrib['count'])
+                return int(count_elem.text)
             except Exception:
                 pass
         # Fallback: If not found, return 0
