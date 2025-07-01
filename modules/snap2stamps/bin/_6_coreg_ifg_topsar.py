@@ -15,6 +15,7 @@ from shapely.io import from_wkt
 project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
+from modules.snap2stamps.bin._3_find_bursts import Burst
 
 warnings.simplefilter("ignore", rasterio.errors.NotGeoreferencedWarning)
 
@@ -227,6 +228,18 @@ class CoregIFG:
                         cb_file.close()
                 self.remove_poor_coreg(coreg_dim)
                 return False
+    def get_burst_count_from_dim(self, dim_file):
+        """Parse the .dim XML file and return the number of bursts from burstList's count attribute."""
+        tree = ET.parse(dim_file)
+        root = tree.getroot()
+        burst_list_elem = root.find(".//burstList")
+        if burst_list_elem is not None and 'count' in burst_list_elem.attrib:
+            try:
+                return int(burst_list_elem.attrib['count'])
+            except Exception:
+                pass
+        # Fallback: If not found, return 0
+        return 0
     def process(self):
         k = 0
         sorted_slavesplittedfolder = []
@@ -252,6 +265,20 @@ class CoregIFG:
             k += 1
             _, tail = os.path.split(os.path.join(self.config["project_definition"]["slaves_folder"], dimfile))
             if tail[0:8] != tailm:
+                # --- Burst count check using .dim file parsing ---
+                master_dim = self.config["project_definition"]["master"]
+                slave_dim = dimfile
+                try:
+                    master_burst_count = self.get_burst_count_from_dim(master_dim)
+                    slave_burst_count = self.get_burst_count_from_dim(slave_dim)
+                    if master_burst_count < slave_burst_count:
+                        print(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
+                        self.out_file.write(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
+                        continue
+                except Exception as e:
+                    print(f"Burst count check failed for {tail}: {e}\n")
+                    self.out_file.write(f"Burst count check failed for {tail}: {e}\n")
+                # --- End burst count check ---
                 message = f"[{k}] Processing slave file : {tail}\n"
                 print(message)
                 self.out_file.write(message)

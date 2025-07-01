@@ -11,6 +11,9 @@ sys.path.append(project_path)
 from config.parser import ConfigParser, Initialize
 from modules.snap2stamps.bin._1_download import SLC_Search, Download
 from modules.snap2stamps.bin._2_master_sel import MasterSelect
+from modules.snap2stamps.bin._3_find_bursts import Burst
+from modules.snap2stamps.bin._4_splitting_master import MasterSplitter
+from modules.snap2stamps.bin._5_splitting_slaves import SlavesSplitter
 from modules.snap2stamps.bin._6_coreg_ifg_topsar import CoregIFG
 from modules.snap2stamps.bin._7_stamps_export import StaMPSExporter
 from modules.snap2stamps.bin._9_0_stamps_prep import StaMPSPrep
@@ -115,11 +118,26 @@ class Manager:
             time.sleep(2)
         else:
             print("-> No new products. Skip downloading and processing!")
+        if len(os.listdir(self.config['project_definition']['raw_data_folder'])) > 0:
+            results = SLC_Search(self.max_date, self.download_on, self.project_name).search()
+            time.sleep(2)
+            downloader = Download(results, self.download_on, self.project_name)
+            if results:
+                print("-> Downloading remaining products...")
+                download_success = downloader.download(self.config['project_definition']['raw_data_folder'])
+                if not download_success:
+                    print("ERROR: Download and processing stage failed! Stopping workflow.")
+                    return False
+                time.sleep(2)
             
         # Select master
         print(f"############## Running: Step 3: Select MASTER ##############")
-        selected_master = MasterSelect(self.reest_flag, self.identity_master, None, self.project_name).select_master()
+        selected_master = MasterSelect(self.reest_flag, self.identity_master, False, self.project_name).select_master()
         print("\n")
+        time.sleep(2)
+        MasterSplitter(self.project_name).process()
+        time.sleep(2)
+        SlavesSplitter(self.project_name).process()
         time.sleep(2)
 
         # Note: Burst finding, master splitting, and slave splitting are now handled 
@@ -166,14 +184,14 @@ if __name__ == "__main__":
     bbox = [106.691059, 20.837039, 106.776203, 20.899435]
     direction = 'DESCENDING'
     frame_no = 522
-    max_date = 2
-    download_range = ["20240101", None] # ["20220901", None] means downloading from 01/09/2022 until now
+    max_date = 4
+    download_range = [None, None] # ["20220901", None] means downloading from 01/09/2022 until now
     reest_flag = 1
-    process_range = ["20241001", None]
-    identity_master = "20250323"
+    process_range = [None, None]
+    identity_master = None
     max_perp = 150.0
     da_threshold = 0.4
-    renew_flag = 0
+    renew_flag = 1
     unified_flag = 0
     ministack_size = 5 
     ## Phase 2: STAMPS

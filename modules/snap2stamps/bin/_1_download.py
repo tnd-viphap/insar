@@ -44,6 +44,7 @@ class Download:
         self.download_status = {}  # Track download status for each file
         self.successful_downloads = 0  # Counter for successful downloads
         self.processing_complete = threading.Event()  # Event to signal processing completion
+        self.successful_dates = []  # Track dates of successful downloads
         
         # Handle date filtering based on download_on parameter
         if self.download_on[0] is not None or self.download_on[1] is not None:
@@ -102,6 +103,51 @@ class Download:
             if expected_size:
                 total_size += expected_size
         return total_size
+
+    def _get_master_burst_range(self):
+        """Get the burst range for the current master image."""
+        master_folder = self.config["project_definition"]["master_folder"]
+        if not os.listdir(master_folder):
+            return None
+        master_date = os.listdir(master_folder)[0]
+        master_path = os.path.join(master_folder, master_date)
+        # Use Burst to get burst info
+        burst_info = Burst(self.project_name)
+        burst_found = burst_info.find_burst(master_path)
+        if not burst_found:
+            return None
+        config = self.config_parser.get_project_config(self.project_name)
+        return (config["processing_parameters"].get("first_burst"), config["processing_parameters"].get("last_burst"))
+
+    def _get_slave_burst_range(self, slave_folder):
+        """Get the burst range for a slave image."""
+        burst_info = Burst(self.project_name)
+        burst_found = burst_info.find_burst(slave_folder)
+        if not burst_found:
+            return None
+        config = self.config_parser.get_project_config(self.project_name)
+        return (config["processing_parameters"].get("first_burst"), config["processing_parameters"].get("last_burst"))
+
+    def _bursts_overlap(self, master_range, slave_range):
+        if not master_range or not slave_range:
+            return False
+        m_first, m_last = master_range
+        s_first, s_last = slave_range
+        # Check if there is any overlap
+        return not (s_last < m_first or s_first > m_last)
+
+    def _trigger_master_and_splitters(self):
+        self.logger.info("Triggering master selection and splitting after 10 successful downloads...")
+        # 1. Master selection
+        master_selector = MasterSelect(1, None, False, self.project_name)
+        master_selector.select_master()
+        # 2. Master splitting
+        master_splitter = MasterSplitter(self.project_name)
+        master_splitter.process()
+        # 3. Slaves splitting
+        slaves_splitter = SlavesSplitter(self.project_name)
+        slaves_splitter.process()
+        self.logger.info("Master selection and splitting completed.")
 
     def _process_single_product(self, file_name):
         """Process a single downloaded product with complete checking and processing logic."""
@@ -198,7 +244,14 @@ class Download:
                     shutil.rmtree(slave_folder)
                     self._remove_from_download_cache(date_str)
                     return False
-                    
+                # Burst overlap check
+                master_burst_range = self._get_master_burst_range()
+                slave_burst_range = self._get_slave_burst_range(slave_folder)
+                if not self._bursts_overlap(master_burst_range, slave_burst_range):
+                    self.logger.warning(f"Burst mismatch: Slave {date_str} bursts {slave_burst_range} do not overlap with master bursts {master_burst_range}. Skipping.")
+                    shutil.rmtree(slave_folder)
+                    self._remove_from_download_cache(date_str)
+                    return False
             except Exception as e:
                 # If burst finding fails, try one more time with fresh download
                 self.logger.warning(f"First burst finding attempt failed for {date_str}: {str(e)}")
@@ -229,6 +282,11 @@ class Download:
                 splitter = SlavesSplitter(self.project_name)
                 splitter.split_single_slave(slave_folder, dst_path, output_name)
                 self.logger.info(f"Successfully processed {date_str}")
+                # Track successful downloads
+                self.successful_dates.append(date_str)
+                # Trigger master/slave splitting after every 10
+                if len(self.successful_dates) % 10 == 0:
+                    self._trigger_master_and_splitters()
                 return True
             except Exception as e:
                 self.logger.error(f"Error splitting {date_str}: {str(e)}")
