@@ -118,20 +118,9 @@ class Manager:
             time.sleep(2)
         else:
             print("-> No new products. Skip downloading and processing!")
-        if len(os.listdir(self.config['project_definition']['raw_data_folder'])) > 0:
-            results = SLC_Search(self.max_date, self.download_on, self.project_name).search()
-            time.sleep(2)
-            downloader = Download(results, self.download_on, self.project_name)
-            if results:
-                print("-> Downloading remaining products...")
-                download_success = downloader.download(self.config['project_definition']['raw_data_folder'])
-                if not download_success:
-                    print("ERROR: Download and processing stage failed! Stopping workflow.")
-                    return False
-                time.sleep(2)
             
         # Select master
-        print(f"############## Running: Step 3: Select MASTER ##############")
+        print(f"############## Running: Step 3: Select MASTER and Splitting products ##############")
         selected_master = MasterSelect(self.reest_flag, self.identity_master, False, self.project_name).select_master()
         print("\n")
         time.sleep(2)

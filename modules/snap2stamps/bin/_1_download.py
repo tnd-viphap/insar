@@ -150,175 +150,6 @@ class Download:
         slaves_splitter.process()
         self.logger.info("Master selection and splitting completed.")
 
-    def _process_single_product(self, file_name):
-        """Process a single downloaded product with complete checking and processing logic."""
-        self.logger.info(f"Starting processing for {file_name}")
-        try:
-            # Check if file is a complete .zip before processing
-            src_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file_name)
-            expected_size = None
-            # Try to get file_id from file_name
-            if file_name.endswith('.zip'):
-                file_id = file_name.split(".")[0]
-                # Try to find the matching file_id in datalake
-                try:
-                    with open(self.config["search_parameters"]["datalake"], "r") as file:
-                        data = json.load(file)
-                        for entry in data:
-                            if isinstance(entry, dict) and "properties" in entry:
-                                properties = entry["properties"]
-                                if isinstance(properties, dict) and properties.get("fileID", "").startswith(file_id):
-                                    expected_size = properties.get("bytes")
-                                    break
-                except Exception:
-                    pass
-            if expected_size is not None and os.path.exists(src_path) and os.path.getsize(src_path) != expected_size:
-                self.logger.warning(f"Skipping {file_name}: not a complete .zip file (size mismatch)")
-                return False
-            
-            # Get the date from the file name
-            date_str = file_name[17:25]
-            slave_folder = os.path.join(self.config["project_definition"]["slaves_folder"], date_str)
-            os.makedirs(slave_folder, exist_ok=True)
-            
-            # Move the file to the slave folder
-            src_path = os.path.join(self.config["project_definition"]["raw_data_folder"], file_name)
-            dst_path = os.path.join(slave_folder, file_name)
-            if os.path.exists(src_path):
-                shutil.move(src_path, dst_path)
-            
-            # Check if already processed
-            output_name = os.path.join(slave_folder, f"{date_str}_{self.config['processing_parameters']['iw1']}.dim")
-            if os.path.exists(output_name):
-                self.logger.info(f"Slave image {date_str} is already processed.")
-                if os.path.exists(dst_path):
-                    os.remove(dst_path)
-                return True
-                
-            # Check for orbit data renewal
-            try:
-                folder_date = datetime.strptime(date_str, "%Y%m%d")
-                last_modified_date = datetime.fromtimestamp(os.path.getmtime(slave_folder))
-                days_diff = int(abs((last_modified_date - folder_date).days))
-                
-                if days_diff <= 21 and datetime.now() >= folder_date + timedelta(days=21):
-                    self.logger.info(f"-> Image {date_str} has new orbit data. Renewing...")
-                    if os.path.exists(slave_folder):
-                        shutil.rmtree(slave_folder)
-                        os.makedirs(slave_folder)
-                        # Re-copy the file since we just deleted the folder
-                        if os.path.exists(src_path):
-                            shutil.copy2(src_path, dst_path)
-                        # Clean up coreg folder
-                        for file in os.listdir(self.config["project_definition"]["coreg_folder"]):
-                            if date_str in file:
-                                file_path = os.path.join(self.config["project_definition"]["coreg_folder"], file)
-                                if os.path.isfile(file_path):
-                                    os.remove(file_path)
-                                elif os.path.isdir(file_path):
-                                    shutil.rmtree(file_path)
-            except Exception as e:
-                self.logger.error(f"Error checking orbit data for {date_str}: {str(e)}")
-            
-            # If folder is empty (could happen after orbit renewal), try to re-download
-            if not os.path.exists(dst_path):
-                self.logger.info(f"-> Found no data. Re-downloading data for {date_str}...")
-                try:
-                    product_date = datetime.strptime(date_str, "%Y%m%d")
-                    start = product_date - timedelta(days=1)
-                    end = product_date + timedelta(days=1)
-                    instance = Search_Download(self.project_name)
-                    results = instance.search(start, end)
-                    if results:
-                        instance.download(results, slave_folder)
-                    time.sleep(1)
-                except Exception as e:
-                    self.logger.error(f"Error re-downloading {date_str}: {str(e)}")
-                    return False
-            
-            # Verify file exists after all checks
-            if not os.path.exists(dst_path):
-                self.logger.error(f"No valid file found for {date_str} after all checks")
-                return False
-            
-            # Find bursts
-            try:
-                self.logger.info(f"-> Raw data detected. Checking products & Finding bursts for {date_str}...")
-                
-                # First try to verify/repair the download
-                try:
-                    product_date = datetime.strptime(date_str, "%Y%m%d")
-                    start = product_date - timedelta(days=1)
-                    end = product_date + timedelta(days=1)
-                    
-                    time.sleep(1)
-                    results = Search_Download(self.project_name).search(start, end)
-                    if results:
-                        downloader = Downloader(results, self.project_name)
-                        downloader._resume_download(results[0], slave_folder)
-                except Exception as e:
-                    self.logger.warning(f"Error verifying download for {date_str}: {str(e)}")
-                
-                # Now try to find bursts
-                time.sleep(1)
-                found_burst = Burst(self.project_name).find_burst(slave_folder)
-                if not found_burst:
-                    self.logger.error(f"No valid bursts found for {date_str}")
-                    shutil.rmtree(slave_folder)
-                    self._remove_from_download_cache(date_str)
-                    return False
-                # Burst overlap check
-                master_burst_range = self._get_master_burst_range()
-                slave_burst_range = self._get_slave_burst_range(slave_folder)
-                if not self._bursts_overlap(master_burst_range, slave_burst_range):
-                    self.logger.warning(f"Burst mismatch: Slave {date_str} bursts {slave_burst_range} do not overlap with master bursts {master_burst_range}. Skipping.")
-                    shutil.rmtree(slave_folder)
-                    self._remove_from_download_cache(date_str)
-                    return False
-            except Exception as e:
-                # If burst finding fails, try one more time with fresh download
-                self.logger.warning(f"First burst finding attempt failed for {date_str}: {str(e)}")
-                try:
-                    self.logger.info(f"-> Broken {date_str}. Re-downloading...")
-                    if os.path.exists(dst_path):
-                        os.remove(dst_path)
-                    time.sleep(1)
-                    product_date = datetime.strptime(date_str, "%Y%m%d")
-                    start = product_date - timedelta(days=1)
-                    end = product_date + timedelta(days=1)
-                    instance = Search_Download(self.project_name)
-                    results = instance.search(start, end)
-                    if results:
-                        instance.download(results, slave_folder)
-                    time.sleep(1)
-                    found_burst = Burst(self.project_name).find_burst(slave_folder)
-                    if not found_burst:
-                        raise Exception("No valid bursts found after re-download")
-                except Exception as e2:
-                    self.logger.error(f"Error in second burst finding attempt for {date_str}: {str(e2)}")
-                    if os.path.exists(slave_folder):
-                        shutil.rmtree(slave_folder)
-                    return False
-            
-            # Run splitting process
-            try:
-                splitter = SlavesSplitter(self.project_name)
-                splitter.split_single_slave(slave_folder, dst_path, output_name)
-                self.logger.info(f"Successfully processed {date_str}")
-                # Track successful downloads
-                self.successful_dates.append(date_str)
-                # Trigger master/slave splitting after every 10
-                if len(self.successful_dates) % 10 == 0:
-                    self._trigger_master_and_splitters()
-                return True
-            except Exception as e:
-                self.logger.error(f"Error splitting {date_str}: {str(e)}")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"Error processing {file_name}: {str(e)}")
-            return False
-
     def _remove_from_download_cache(self, date_str):
         """Remove a date from the download cache."""
         try:
@@ -464,6 +295,51 @@ class Download:
             percentage = float(free) / float(total) * 100
             return percentage
 
+    def _process_batch(self, batch_files, savepath):
+        """Process a batch of downloaded files together."""
+        try:
+            # Move files to slave folders
+            for file_name in batch_files:
+                date_str = file_name[17:25]
+                slave_folder = os.path.join(self.config["project_definition"]["slaves_folder"], date_str)
+                os.makedirs(slave_folder, exist_ok=True)
+                
+                src_path = os.path.join(savepath, file_name)
+                dst_path = os.path.join(slave_folder, file_name)
+                if os.path.exists(src_path):
+                    shutil.move(src_path, dst_path)
+
+            # Run master selection first
+            self.logger.info("Running master selection...")
+            master_selector = MasterSelect(1, None, False, self.project_name)
+            master_selector.select_master()
+
+            # Now find bursts for master
+            self.logger.info("Finding bursts for master...")
+            burst_finder = Burst(self.project_name)
+            master_folder = os.path.join(self.config["project_definition"]["master_folder"])
+            if os.path.exists(master_folder) and os.listdir(master_folder):
+                master_date = os.listdir(master_folder)[0]
+                master_path = os.path.join(master_folder, master_date)
+                if not burst_finder.find_burst(master_path):
+                    self.logger.error("No valid bursts found for master")
+                    return False
+
+            # Run master splitting
+            self.logger.info("Running master splitting...")
+            master_splitter = MasterSplitter(self.project_name)
+            master_splitter.process()
+
+            # Run slaves splitting
+            self.logger.info("Running slaves splitting...")
+            slaves_splitter = SlavesSplitter(self.project_name)
+            slaves_splitter.process()
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Error processing batch: {str(e)}")
+            return False
+
     def download(self, savepath):
         """Download files in parallel, properly resuming incomplete downloads."""
         os.makedirs(savepath, exist_ok=True)
@@ -474,7 +350,6 @@ class Download:
         # Group files by their completion status
         incomplete_downloads = []
         new_downloads = []
-        processable_files = []
         
         for result in self.search_result:
             file_id = str(result.properties['fileID'])
@@ -483,10 +358,10 @@ class Download:
             temp_path = file_path + ".tmp"
             self.download_status[file_name] = "Pending"
             expected_size = self._get_expected_size(file_id)
-            # Only process .zip files that are complete
+            
+            # Check if file needs to be downloaded/resumed
             if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
-                processable_files.append((result, file_name))
-            # Resume if .zip.tmp exists or .zip is incomplete
+                continue  # Skip if already complete
             elif (os.path.exists(temp_path)) or (os.path.exists(file_path) and expected_size and os.path.getsize(file_path) < expected_size):
                 incomplete_downloads.append(result)
             else:
@@ -500,68 +375,52 @@ class Download:
             with tqdm(total=self.total_bytes, unit='B', unit_scale=True, ncols=80,
                      bar_format='{desc}: {percentage:3.1f}%|{bar:20}| {n_fmt}/{total_fmt}',
                      desc=f"Downloaded: 0/{len(self.search_result)}", position=0, leave=True) as self.progress_bar:
-                # First handle incomplete downloads
-                if incomplete_downloads:
-                    self._log_status(f"Resuming {len(incomplete_downloads)} incomplete downloads...")
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                        futures = {executor.submit(self._resume_download, result, savepath): result 
-                                 for result in incomplete_downloads}
-                        for future in concurrent.futures.as_completed(futures):
-                            try:
-                                file_name = future.result()
-                                if file_name:
-                                    self._log_status(f"Successfully downloaded {file_name}")
-                                    # After download, check if file is now complete and add to processable
-                                    file_id = str(futures[future].properties['fileID'])
-                                    file_path = os.path.join(savepath, file_id.split("-")[0] + ".zip")
-                                    expected_size = self._get_expected_size(file_id)
-                                    if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
-                                        processable_files.append((futures[future], file_name))
-                                else:
+                
+                # Process all downloads in batches of 10
+                all_downloads = incomplete_downloads + new_downloads
+                batch_size = 10
+                current_batch = []
+                current_batch_files = []
+                
+                for i, result in enumerate(all_downloads, 1):
+                    current_batch.append(result)
+                    
+                    # When we have a full batch or it's the last item, process the batch
+                    if len(current_batch) == batch_size or i == len(all_downloads):
+                        self._log_status(f"Processing batch of {len(current_batch)} downloads...")
+                        
+                        # Download current batch
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                            futures = {executor.submit(self._resume_download, result, savepath): result 
+                                     for result in current_batch}
+                            for future in concurrent.futures.as_completed(futures):
+                                try:
+                                    file_name = future.result()
+                                    if file_name:
+                                        self._log_status(f"Successfully downloaded {file_name}")
+                                        current_batch_files.append(file_name)
+                                    else:
+                                        download_success = False
+                                except Exception as e:
+                                    self._log_status(f"Error in download: {str(e)}")
                                     download_success = False
-                            except Exception as e:
-                                self._log_status(f"Error in download: {str(e)}")
-                                download_success = False
-                # Then handle new downloads
-                if new_downloads:
-                    self._log_status(f"Starting {len(new_downloads)} new downloads...")
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                        futures = {executor.submit(self._resume_download, result, savepath): result 
-                                 for result in new_downloads}
-                        for future in concurrent.futures.as_completed(futures):
-                            try:
-                                file_name = future.result()
-                                if file_name:
-                                    self._log_status(f"Successfully downloaded {file_name}")
-                                    file_id = str(futures[future].properties['fileID'])
-                                    file_path = os.path.join(savepath, file_id.split("-")[0] + ".zip")
-                                    expected_size = self._get_expected_size(file_id)
-                                    if os.path.exists(file_path) and expected_size and os.path.getsize(file_path) == expected_size:
-                                        processable_files.append((futures[future], file_name))
-                                else:
-                                    download_success = False
-                            except Exception as e:
-                                self._log_status(f"Error in download: {str(e)}")
-                                download_success = False
-            print("\n")  # Add a newline after progress bar completes
-            # Now process only complete .zip files
-            if processable_files:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    futures = {executor.submit(self._process_single_product, file_name): file_name for _, file_name in processable_files}
-                    for future in concurrent.futures.as_completed(futures):
-                        try:
-                            result = future.result()
-                            if result:
-                                self._log_status(f"Processing task for {futures[future]} completed successfully")
-                            else:
-                                self._log_status(f"Processing task for {futures[future]} failed")
+                        
+                        # Process the batch if we have any successful downloads
+                        if current_batch_files:
+                            self._log_status(f"Processing batch of {len(current_batch_files)} files...")
+                            if not self._process_batch(current_batch_files, savepath):
                                 processing_success = False
-                        except Exception as e:
-                            self._log_status(f"Processing task error: {str(e)}")
-                            processing_success = False
+                        
+                        # Clear batch data for next iteration
+                        current_batch = []
+                        current_batch_files = []
+            
+            print("\n")  # Add a newline after progress bar completes
+            
         finally:
             # Clean up processing pool
             self.processing_pool.shutdown(wait=True)
+            
         # Final status report
         if download_success and processing_success:
             self._log_status("All downloads and processing completed successfully!")
@@ -570,6 +429,7 @@ class Download:
                 self._log_status("ERROR: Some downloads failed!")
             if not processing_success:
                 self._log_status("ERROR: Some processing tasks failed!")
+        
         return download_success and processing_success
 
     def _is_file_incomplete(self, file_path):
