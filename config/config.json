@@ -127,7 +127,7 @@
         "log_folder": "/home/viphap/insar_maychai/insar/logs/",
         "data_folder": "/home/viphap/insar_maychai/insar/data/",
         "master_folder": "/home/viphap/insar_maychai/insar/data/master/",
-        "master": "/home/viphap/insar_maychai/insar/data/master/20250122/20250122_M.dim",
+        "master": "/home/viphap/insar_maychai/insar/data/master/20250215/20250215_M.dim",
         "slaves_folder": "/home/viphap/insar_maychai/insar/data/slaves/",
         "raw_data_folder": "/home/viphap/insar_maychai/insar/data/raw/",
         "coreg_folder": "/home/viphap/insar_maychai/insar/process/coreg/",
@@ -147,16 +147,16 @@
       },
       "processing_parameters": {
         "iw1": "IW1",
-        "first_burst": "5",
-        "last_burst": "5",
-        "old_master": "",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20250215",
         "max_perp": 150.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "/home/viphap/insar_maychai/insar/results/INSAR_20250323_PSDS_v1",
+        "current_result": "/home/viphap/insar_maychai/insar/results/INSAR_20250215_PSDS_v3",
         "ministack": 5,
         "unified": 0,
-        "ptype": 1
+        "ptype": 0
       },
       "aoi_bbox": {
         "lon_min": 106.691059,

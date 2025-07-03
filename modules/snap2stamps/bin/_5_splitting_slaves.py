@@ -40,10 +40,18 @@ class SlavesSplitter:
             time.sleep(1)
         except Exception as e:
             print(f"Warning: PTA processing failed: {str(e)}")
-        if len(os.listdir(self.config["project_definition"]["master_folder"]).append(os.listdir(self.config["project_definition"]["slaves_folder"]))) > 2:
-            graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slaves_assemble_split_applyorbit.xml')
-        else:
-            graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slave_split_applyorbit.xml')
+        # if len(os.listdir(self.config["project_definition"]["master_folder"]) + os.listdir(self.config["project_definition"]["slaves_folder"])) > 2:
+        #     graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slaves_assemble_split_applyorbit.xml')
+        #     with open(graphxml, 'r') as file:
+        #         filedata = file.read()
+        #         filedata = filedata.replace('INPUTFILE1', self.config["project_definition"]["master"])
+        #         filedata = filedata.replace('INPUTFILE2', input_file)
+        #         filedata = filedata.replace('IWs', self.config['processing_parameters']['iw1'])
+        #         filedata = filedata.replace('FIRST_BURST', str(self.config['processing_parameters']['first_burst']))
+        #         filedata = filedata.replace('LAST_BURST', str(self.config['processing_parameters']['last_burst']))
+        #         filedata = filedata.replace('OUTPUTFILE', output_name)
+        # else:
+        graphxml = os.path.join(self.config["project_definition"]["graphs_folder"], 'slave_split_applyorbit.xml')
         with open(graphxml, 'r') as file:
             filedata = file.read()
             filedata = filedata.replace('INPUTFILE', input_file)

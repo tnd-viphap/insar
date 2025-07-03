@@ -321,9 +321,12 @@ class Download:
             if os.path.exists(master_folder) and os.listdir(master_folder):
                 master_date = os.listdir(master_folder)[0]
                 master_path = os.path.join(master_folder, master_date)
-                if not burst_finder.find_burst(master_path):
-                    self.logger.error("No valid bursts found for master")
-                    return False
+                if ".zip" in os.listdir(master_path)[0]:
+                    if not burst_finder.find_burst(master_path):
+                        self.logger.error("No valid bursts found for master")
+                        return False
+                else:
+                    pass
 
             # Run master splitting
             self.logger.info("Running master splitting...")

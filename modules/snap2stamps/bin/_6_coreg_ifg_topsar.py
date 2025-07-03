@@ -178,7 +178,6 @@ class CoregIFG:
                     with open(self.cache_broken_path, "a") as cb_file:
                         cb_file.write(f"{os.path.split(dim_file)[1]}\n")
                         cb_file.close()
-                self.remove_poor_coreg(dim_file)
                 return False
             elif overlap_percentage < threshold:
                 print(f"-> {os.path.basename(slv_file)}: Poor coregistration detected (Low overlap: {overlap_percentage:.2f}%)\n")
@@ -186,7 +185,6 @@ class CoregIFG:
                     with open(self.cache_broken_path, "a") as cb_file:
                         cb_file.write(f"{os.path.split(dim_file)[1]}\n")
                         cb_file.close()
-                self.remove_poor_coreg(dim_file)
                 return False
             else:
                 print(f"-> {os.path.basename(slv_file)}: Good coregistration detected (Overlap: {overlap_percentage:.2f}% in pixels)\n")
@@ -217,7 +215,8 @@ class CoregIFG:
             overlap_percentage = (intersection / ref_area) * 100
             if overlap_percentage >= 85:
                 print(f"-> Spatial footprint has a best-fit of {overlap_percentage}\n\nChecking for digital dimension...")
-                if self.check_coregistration(coreg_dim):
+                check_coreg = self.check_coregistration(coreg_dim)
+                if check_coreg:
                     return True
                 else:
                     return False
@@ -226,7 +225,6 @@ class CoregIFG:
                     with open(self.cache_broken_path, "a") as cb_file:
                         cb_file.write(f"{master_dim[0:8]}_{coreg_dim}\n")
                         cb_file.close()
-                self.remove_poor_coreg(coreg_dim)
                 return False
     def get_burst_count_from_dim(self, dim_file):
         """Parse the .dim XML file and return the number of bursts from burstList's count attribute (MDATTR)."""
@@ -265,20 +263,20 @@ class CoregIFG:
             k += 1
             _, tail = os.path.split(os.path.join(self.config["project_definition"]["slaves_folder"], dimfile))
             if tail[0:8] != tailm:
-                # --- Burst count check using .dim file parsing ---
-                master_dim = self.config["project_definition"]["master"]
-                slave_dim = dimfile
-                try:
-                    master_burst_count = self.get_burst_count_from_dim(master_dim)
-                    slave_burst_count = self.get_burst_count_from_dim(slave_dim)
-                    if master_burst_count < slave_burst_count:
-                        print(f"-> Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
-                        self.out_file.write(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
-                        continue
-                except Exception as e:
-                    print(f"-> Burst count check failed for {tail}: {e}\n")
-                    self.out_file.write(f"Burst count check failed for {tail}: {e}\n")
-                # --- End burst count check ---
+                # # --- Burst count check using .dim file parsing ---
+                # master_dim = self.config["project_definition"]["master"]
+                # slave_dim = dimfile
+                # try:
+                #     master_burst_count = self.get_burst_count_from_dim(master_dim)
+                #     slave_burst_count = self.get_burst_count_from_dim(slave_dim)
+                #     if master_burst_count < slave_burst_count:
+                #         print(f"-> Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
+                #         self.out_file.write(f"Skipping {tail}: Master bursts ({master_burst_count}) < Slave bursts ({slave_burst_count})\n")
+                #         continue
+                # except Exception as e:
+                #     print(f"-> Burst count check failed for {tail}: {e}\n")
+                #     self.out_file.write(f"Burst count check failed for {tail}: {e}\n")
+                # # --- End burst count check ---
                 message = f"[{k}] Processing slave file : {tail}\n"
                 print(message)
                 self.out_file.write(message)
@@ -290,7 +288,8 @@ class CoregIFG:
 
                 if any(f in os.listdir(self.config["project_definition"]["coreg_folder"]) for f in check_outputname) or any(f in os.listdir(self.config["project_definition"]["ifg_folder"]) for f in check_outputname):
                     print(f"Slave {tail[0:8]} is coregistered and does have interferogram. Validating spatial coverage...\n")
-                    if self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim')):
+                    done_overlap = self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
+                    if not done_overlap:
                         continue
                     # Check baseline and remove weak interferogram in terms of baseline
                     baseline = self.parse_baseline(os.path.join(self.config["project_definition"]["ifg_folder"], outputname+'.dim'))["perp_bs"]
@@ -349,7 +348,10 @@ class CoregIFG:
                     self.out_file.write(message)
 
                 # Check overlapping then perform pixel check to ensure we have valid coreg data
-                self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
+                done_overlap = self.check_overlapping(self.config["project_definition"]["master"], os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
+                if not done_overlap:
+                    self.remove_poor_coreg(os.path.join(self.config["project_definition"]["coreg_folder"], outputname+'.dim'))
+                    continue
                 
                 # Check baseline and remove weak interferogram in terms of baseline
                 baseline = self.parse_baseline(os.path.join(self.config["project_definition"]["ifg_folder"], outputname+'.dim'))["perp_bs"]

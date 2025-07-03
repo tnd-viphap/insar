@@ -124,9 +124,13 @@ class Manager:
         selected_master = MasterSelect(self.reest_flag, self.identity_master, False, self.project_name).select_master()
         print("\n")
         time.sleep(2)
+        print(f"-> Splitting master: {selected_master}")
         MasterSplitter(self.project_name).process()
+        print("\n")
         time.sleep(2)
+        print(f"-> Splitting slaves:")
         SlavesSplitter(self.project_name).process()
+        print("\n")
         time.sleep(2)
 
         # Note: Burst finding, master splitting, and slave splitting are now handled 
