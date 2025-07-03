@@ -854,18 +854,17 @@ class SLC_Search:
         missing_products = len([r for r in final_results if r not in incomplete_results])
         search_range_str = "full date range" if self.download_on[0] is None and self.download_on[1] is None else f"specified range {self.start_date.strftime('%Y%m%d')} to {self.end_date.strftime('%Y%m%d')}"
         summary = f"""
-Search Results Summary ({search_range_str}):
-- Incomplete products found: {len(incomplete_products)}
-- Matching products for incomplete: {len(incomplete_results)}
-- Total products in date range: {len(all_results)}
-- Missing products found: {missing_products}
-- Final products to download: {len(final_results)}
-  * Resume incomplete: {len(incomplete_results)}
-  * New downloads: {len(final_results) - len(incomplete_results)}
-"""
+            Search Results Summary ({search_range_str}):
+            - Incomplete products found: {len(incomplete_products)}
+            - Matching products for incomplete: {len(incomplete_results)}
+            - Total products in date range: {len(all_results)}
+            - Missing products found: {missing_products}
+            - Final products to download: {len(final_results)}
+            * Resume incomplete: {len(incomplete_results)}
+            * New downloads: {len(final_results) - len(incomplete_results)}
+            """
         print(summary)
         self.logger.info(summary)
-        print(summary)
         
         return list(sorted(final_results, key=lambda x: int(x.geojson()["properties"]["fileID"][17:25])))
 
