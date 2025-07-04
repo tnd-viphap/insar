@@ -409,4 +409,4 @@ class StaMPSEXE:
         return self.csv_files
 
 if __name__ == "__main__":
-    StaMPSEXE(project_name="default").run()
+    StaMPSEXE(project_name="maychai").run()
