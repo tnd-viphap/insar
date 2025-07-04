@@ -14,7 +14,7 @@ from sct.configuration.sct_configuration import SCTConfiguration
 from config.parser import ConfigParser
 from modules.utils.compute_cr_ea import gps2ecef_pyproj, shift_target_point
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 sys.path.append(project_path)
 
 class PTA:
@@ -25,7 +25,7 @@ class PTA:
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(self.project_name)
         
-        self.config = SCTConfiguration.from_toml("modules/pta/pta.toml")
+        self.sct_config = SCTConfiguration.from_toml("modules/pta/pta.toml")
         self.prod = prod
         self.eof = eof
         
@@ -85,7 +85,7 @@ class PTA:
                     product_path=self.extract_folder_name,
                     external_target_source=target_file,
                     external_orbit_path=self.eof,
-                    config=self.config.point_target_analysis,
+                    config=self.sct_config.point_target_analysis,
                 )
                 results_df = results_df.loc[results_df["polarization"] == "V/V"]
                 result_columns = results_df.columns
@@ -175,7 +175,7 @@ class PTA:
 
 
 if __name__ == "__main__":
-    prod = "dev/S1A_IW_SLC__1SDV_20250301T223610_20250301T223640_058117_072D83_9435.zip"
+    prod = "dev/pta/S1A_IW_SLC__1SDV_20250603T225106_20250603T225134_059488_076286_7706.zip"
     #eof = "dev/S1A_OPER_AUX_POEORB_OPOD_20250322T070533_V20250301T225942_20250303T005942.EOF"
     pta = PTA(prod, None)
     pta.pta()
