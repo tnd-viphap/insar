@@ -70,5 +70,4 @@ class StaMPSPrep:
         print(f'-> Finished process in {timeDelta} seconds.')
             
 if __name__ == "__main__":
-    StaMPSPrep('TOMO', 0.4, None, "maychai").process()
-    
+    StaMPSPrep('TOMO', 0.3, None, "maychai").process()
