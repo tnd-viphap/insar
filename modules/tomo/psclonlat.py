@@ -96,9 +96,31 @@ class PSLonLat:
             if has_header_lat:
                 lat_data = lat_data[8:]  # Skip 32 bytes (8 float32 values)
             
+            # Calculate dimensions
+            total_pixels_lon = len(lon_data)
+            total_pixels_lat = len(lat_data)
+            
+            # Verify both files have same number of pixels
+            if total_pixels_lon != total_pixels_lat:
+                raise ValueError(f"Lon and lat files have different sizes: {total_pixels_lon} vs {total_pixels_lat}")
+            
+            # Calculate height - add one line if there's a remainder
+            height = total_pixels_lon // self.width
+            if total_pixels_lon % self.width != 0:
+                height += 1
+                self._log(f"Info: Adding one line to accommodate {total_pixels_lon % self.width} remaining pixels")
+            
+            # Pad with NaN to match the new height
+            new_size = height * self.width
+            if new_size > total_pixels_lon:
+                lon_pad = np.full(new_size - total_pixels_lon, np.nan, dtype=lon_data.dtype)
+                lat_pad = np.full(new_size - total_pixels_lon, np.nan, dtype=lat_data.dtype)
+                lon_data = np.concatenate([lon_data, lon_pad])
+                lat_data = np.concatenate([lat_data, lat_pad])
+            
             # Reshape to 2D arrays based on width
-            lon_data = lon_data.reshape(-1, self.width)
-            lat_data = lat_data.reshape(-1, self.width)
+            lon_data = lon_data.reshape(height, self.width)
+            lat_data = lat_data.reshape(height, self.width)
             
             return lon_data, lat_data
         except Exception as e:
