@@ -84,7 +84,6 @@ function process_patch_folders(current_result)
             aps_linear();
             fprintf("Step 7: Phase unwrapping correction\n");
             setparm('scla_deramp', 'y');
-            stamps(7,7, 'y');
             stamps(6, 6, 'y');
             stamps(7, 7, 'y');
             fprintf('\n');
