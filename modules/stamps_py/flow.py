@@ -2668,106 +2668,6 @@ class StaMPSStep:
         plt.close()
         
     ########## Unwraping phase ##########
-
-    # def _sb_identify_good_pixels(self):
-    #     """Identify good pixels by performing closure tests.
-        
-    #     This method identifies pixels that are likely unwrapped properly by checking
-    #     closure residuals in interferogram loops. A pixel is considered good if its
-    #     closure residual is between -1 and 1 radians.
-    #     """
-    #     print("-> Identifying good pixels...")
-
-    #     # Load necessary files
-    #     psname = os.path.join(self.config["processing_parameters"]["current_result"], f'ps{self.psver}.mat')
-    #     phuwname = os.path.join(self.config['processing_parameters']['current_result'], f'phuw_sb{self.psver}.mat')
-    #     loopname = os.path.join(self.config['processing_parameters']['current_result'], f'phuw_loops{self.psver}.mat')
-    #     self.goodname = os.path.join(self.config['processing_parameters']['current_result'], f'phuw_good{self.psver}.mat')
-
-    #     # Make closure loops
-    #     self._sb_make_closure_loops()
-
-    #     # Load data
-    #     ps = sio.loadmat(psname)
-    #     loops = sio.loadmat(loopname)
-    #     uw = sio.loadmat(phuwname)
-    #     ph_uw = uw['ph_uw']
-
-    #     # Initialize good pixels array
-    #     good_pixels = np.zeros((ps['n_ps'][0][0], ps['n_ifg'][0][0]), dtype=bool)
-
-    #     # Process each loop
-    #     for m in range(loops['intfg_loops'].shape[0]):
-    #         # Sum positive interferograms in each loop
-    #         positive = np.where(loops['intfg_loops'][m, :] == 1)[0]
-    #         positive_ints = np.zeros((ph_uw.shape[0], 1))
-    #         for p in range(len(positive)):
-    #             positive_ints += ph_uw[:, positive[p]:positive[p]+1]
-
-    #         # Sum negative interferograms in each loop
-    #         negative = np.where(loops['intfg_loops'][m, :] == -1)[0]
-    #         negative_ints = np.zeros((ph_uw.shape[0], 1))
-    #         for p in range(len(negative)):
-    #             negative_ints += ph_uw[:, negative[p]:negative[p]+1]
-
-    #         ints_used = np.concatenate([positive, negative])
-
-    #         # Remove the average residual (closest 2*pi value) to ensure each int is in the same reference
-    #         average_resid = np.nanmean(positive_ints - negative_ints)
-    #         average_resid = 2 * np.pi * np.round(average_resid / (2 * np.pi))
-
-    #         phase_resid = positive_ints - negative_ints - average_resid
-
-    #         # Index each interferogram with the pixels that are good=1 and bad=0
-    #         # A good pixel is good if: -1 < closure residual < 1
-    #         good_mask = (phase_resid <= 1) & (phase_resid >= -1)
-    #         good_pixels[good_mask.flatten(), ints_used] = True
-
-    #     # Save results
-    #     sio.savemat(self.goodname, {'good_pixels': good_pixels})
-
-    # def _sb_make_closure_loops(self):
-    #     """Create closure loops for small baseline interferograms.
-        
-    #     This method creates a matrix of closure loops for small baseline interferograms.
-    #     Each row represents a loop, with 1 for positive interferograms and -1 for negative ones.
-    #     """
-    #     psname = os.path.join(self.config['processing_parameters']['current_result'], f'ps{self.psver}.mat')
-    #     loopname = os.path.join(self.config['processing_parameters']['current_result'], f'phuw_loops{self.psver}.mat')
-
-    #     # Load PS data
-    #     ps = sio.loadmat(psname)
-    #     ifgday_ix = ps['ifgday_ix']
-    #     n_ifg = ps['n_ifg'][0][0]
-
-    #     # Create incidence matrix
-    #     incidence = np.zeros((n_ifg, n_ifg))
-    #     for i in range(n_ifg):
-    #         incidence[ifgday_ix[i, 0]-1, ifgday_ix[i, 1]-1] = 1
-
-    #     # Find all possible loops
-    #     loops = []
-    #     for i in range(n_ifg):
-    #         for j in range(i+1, n_ifg):
-    #             for k in range(j+1, n_ifg):
-    #                 # Check if these three interferograms form a loop
-    #                 if (incidence[ifgday_ix[i, 0]-1, ifgday_ix[i, 1]-1] and
-    #                     incidence[ifgday_ix[j, 0]-1, ifgday_ix[j, 1]-1] and
-    #                     incidence[ifgday_ix[k, 0]-1, ifgday_ix[k, 1]-1]):
-                        
-    #                     # Create a loop vector
-    #                     loop = np.zeros(n_ifg)
-    #                     loop[i] = 1
-    #                     loop[j] = 1
-    #                     loop[k] = -1
-    #                     loops.append(loop)
-
-    #     # Convert loops to matrix
-    #     intfg_loops = np.array(loops)
-
-    #     # Save results
-    #     sio.savemat(loopname, {'intfg_loops': intfg_loops})
-    
     def _ps_plot_tca(self, aps, aps_flag):
         """Process and return the selected APS correction and a string describing the correction.
         
@@ -3006,309 +2906,6 @@ class StaMPSStep:
             raise ValueError('not a valid APS option')
 
         return aps_corr, fig_name_tca, aps_flag
-    
-    def _uw_triangulate(self, ph, xy, day):
-        print('      -> Triangulating...')
-
-        n_ps, n_ifg = ph.shape
-        print(f'         Number of interferograms: {n_ifg}')
-        print(f'         Number of points per ifg: {n_ps}')
-
-        xy = xy.astype(float)
-        tri = Delaunay(xy[:, 1:3])
-        ele = tri.simplices  # 0-based indexing
-
-        # Get unique edges from triangles
-        edges_set = set()
-        for t in ele:
-            edges_set.update([(min(t[i], t[j]), max(t[i], t[j])) for i, j in [(0, 1), (1, 2), (2, 0)]])
-
-        edgs = np.array(list(edges_set))
-        n_edge = edgs.shape[0]
-        edgs = np.hstack((np.arange(n_edge).reshape(-1, 1), edgs))  # 0-based indexing
-
-        ele = np.hstack((np.arange(ele.shape[0]).reshape(-1, 1), ele))
-        eledix = np.zeros((ele.shape[0], 4), dtype=int)
-        eledix[:, 0] = np.arange(ele.shape[0])
-
-        # Create sparse matrix with edge ids
-        max_node = edgs[:, 1:].max()
-        edgeix = csr_matrix((max_node + 1, max_node + 1), dtype=int)
-        for row in edgs:
-            idx, n1, n2 = row
-            edgeix[n1, n2] = idx + 1  # avoid zero so we can detect presence
-
-        for i in tqdm(range(ele.shape[0]), desc='         -> Looking up edge IDs', unit='triangles'):
-            _, n1, n2, n3 = ele[i]
-            e1 = edgeix[n1, n2] - edgeix[n2, n1]
-            e2 = edgeix[n2, n3] - edgeix[n3, n2]
-            e3 = edgeix[n3, n1] - edgeix[n1, n3]
-            eledix[i, 1:4] = [e1, e2, e3]
-
-        keep_ele_ix = np.all(eledix[:, 1:4] != 0, axis=1)
-        ele = ele[keep_ele_ix]
-        ele[:, 0] = np.arange(ele.shape[0])
-        eledix = eledix[keep_ele_ix]
-        eledix[:, 0] = np.arange(eledix.shape[0])
-
-        # Inverse index (edges to triangles)
-        eeixele = np.repeat(eledix[:, 0].reshape(-1, 1), 3, axis=1)
-        eeixedge = eledix[:, 1:4]
-        eeixele = (eeixele * np.sign(eeixedge)).flatten()
-        eeixedge = np.abs(eeixedge).flatten()
-        eeixall = np.vstack((eeixedge, eeixele)).T
-        eeixall = eeixall[np.argsort(eeixall[:, 0])]
-
-        edelix = []
-        prev_edge = -1
-        tmp = []
-        print("         -> Mapping edges and nodes...")
-        for edge_id, tri_id in eeixall:
-            if edge_id != prev_edge:
-                if tmp:
-                    if len(tmp) == 1:
-                        tmp.append(tmp[0])
-                    edelix.append([prev_edge - 1, tmp[0], tmp[1]])
-                tmp = [tri_id]
-                prev_edge = edge_id
-            else:
-                tmp.append(tri_id)
-        if tmp:
-            if len(tmp) == 1:
-                tmp.append(tmp[0])
-            edelix.append([prev_edge - 1, tmp[0], tmp[1]])
-
-        edelix = np.array(edelix, dtype=int)
-        if edelix.shape[0] < n_edge:
-            raise ValueError("There are orphaned edges - increase max_outer_len or fix data quality.")
-
-        # ndelix: for each node, list of connected edge indices
-        edge_nodes = edgs[:, 1:3].flatten()
-        edge_edge = np.repeat(np.arange(n_edge), 2)
-        sort_ix = np.argsort(edge_nodes)
-        sort_node = edge_nodes[sort_ix]
-        sort_edge = edge_edge[sort_ix]
-
-        ndelix = {}
-        save_node = sort_node[0]
-        i2_save = 0
-        for i2 in range(1, len(sort_node)):
-            if sort_node[i2] != save_node:
-                ndelix[save_node] = sort_edge[i2_save:i2].tolist()
-                save_node = sort_node[i2]
-                i2_save = i2
-        ndelix[save_node] = sort_edge[i2_save:].tolist()
-
-        data_to_save = {
-            'ph': ph,
-            'xy': xy,
-            'edgs': edgs,
-            'ele': ele,
-            'eledix': eledix,
-            'edelix': edelix,
-            'ndelix': ndelix,
-            'n_ps': n_ps,
-            'n_ifg': n_ifg,
-            'n_ele': ele.shape[0],
-            'n_edge': edgs.shape[0],
-            'day': day
-        }
-        sio.savemat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_triangulate.mat'), data_to_save)
-
-    def _uw_unwrap_time(self, alpha, master_day=0):
-        """
-        Smooth and unwrap phase differences in time between neighboring points.
-
-        Parameters:
-        alpha : float
-            Width parameter for Gaussian smoothing window.
-        master_day : int, optional
-            Master day value for time referencing. Default is 0.
-        """
-
-        uw = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_phase.mat'), simplify_cells=True)
-
-        ph = uw['ph']
-        edgs = uw['edgs']
-        day = np.array(uw['day']).flatten()
-        n_edge = int(uw['n_edge'])
-        n_ifg = int(uw['n_ifg'])
-
-        day_pos_ix = np.where(day > 0)[0]
-        I = np.argmin(day[day_pos_ix])
-        close_master_ix = day_pos_ix[I]
-
-        if close_master_ix > 0:
-            close_master_ix = np.array([close_master_ix-1, close_master_ix])
-        else:
-            close_master_ix = np.array([close_master_ix])
-
-        dph_space = np.zeros((n_edge, n_ifg), dtype=complex)
-        dph_space_uw = np.zeros((n_edge, n_ifg))
-        dph_noise = np.zeros((n_edge, n_ifg))
-
-        n_pad = 2 ** int(np.ceil(np.log2(n_ifg * 2)))
-        dph_padded = np.zeros((1, n_pad), dtype=complex)
-        smooth_win = gaussian(n_pad, std=alpha).T
-        dph_smooth = np.zeros((1, n_ifg), dtype=complex)
-        dph_smooth_uw = np.zeros((1, n_edge), dtype=complex)
-
-        for i in tqdm(range(n_edge), desc='   -> Unwrapping in time', unit='edges'):
-            idx1 = int(edgs[i, 2])
-            idx2 = int(edgs[i, 1])
-
-            dph_raw = ph[idx1, :] * np.conj(ph[idx2, :])
-            dph_space[i, :] = dph_raw
-
-            dph_padded = np.zeros(n_pad, dtype=complex)
-            dph_padded[:n_ifg] = dph_raw
-
-            dph_fft = fftshift(fft(dph_padded))
-            dph_smooth = ifft(ifftshift(dph_fft * smooth_win))
-
-            # Unwrap smoothed phase time series using cumulative sum of phase differences
-            dph_smooth_uw = np.cumsum(np.angle(dph_smooth[:n_ifg] * np.conj(np.r_[1, dph_smooth[:n_ifg - 1]])))
-
-            # Align to close master
-            dph_close_master = np.mean(dph_smooth_uw[close_master_ix])
-            dph_smooth_uw -= (dph_close_master - np.angle(np.exp(1j * dph_close_master)))
-
-            # Final adjustment using raw phase
-            correction = np.angle(dph_raw * np.conj(np.exp(1j * dph_smooth_uw)))
-            dph_space_uw[i, :] = dph_smooth_uw + correction
-
-            # Noise estimate
-            dph_noise[i, :] = np.angle(dph_raw * np.conj(dph_smooth[:n_ifg]))
-
-        # If master_day is defined, print noise estimates
-        if master_day != 0:
-            print('      -> ESTIMATES OF DIFF PHASE NOISE STD DEV')
-            print('      -> =====================================')
-            for i in range(n_ifg):
-                std_deg = np.std(dph_noise[:, i]) * 180 / np.pi
-                date_str = (datetime.fromordinal(master_day + int(day[i]))).strftime('%d-%b-%Y')
-                print(f'         {date_str}  {std_deg:4.1f} deg')
-
-        # Save to .mat file
-        sio.savemat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_unwrap_time.mat'), {
-            'dph_space': dph_space,
-            'dph_space_uw': dph_space_uw,
-            'close_master_ix': close_master_ix,
-            'dph_noise': dph_noise
-        })
-
-    def _uw_unwrap_space(self, max_rm_fraction=0.001):
-        bad_std_thresh = 10
-        res_tol = 1e-3
-        ref_ix = 0  # Python index, MATLAB ref_ix=1
-
-        uw = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_phase.mat'), simplify_cells=True)
-        ut = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_unwrap_time.mat'), simplify_cells=True)
-
-        n_edge = uw['n_edge']
-        n_ps = uw['n_ps']
-        n_ifg = uw['n_ifg']
-        edgs = uw['edgs']
-        ph = uw['ph']
-        dph_space_uw = ut['dph_space_uw']
-        dph_noise = ut['dph_noise']
-
-        A = lil_matrix((n_edge, n_ps), dtype=float)
-        for i in range(n_edge):
-            A[i, edgs[i, 1]] = -1
-            A[i, edgs[i, 2]] = 1
-        if ref_ix > 0:
-            A = np.hstack([A[:, :ref_ix], A[:, ref_ix + 1:]])
-        else:
-            A = A[:, 1:]
-        A_unweighted = A
-        defo_std = np.std(ut['dph_noise'], axis=1, ddof=0)  # axis=1 for row-wise std like MATLAB's dim=2
-        mask = defo_std > 1.3
-        defo_std[mask] += np.exp(defo_std[mask] - 1.3) * 4
-        good_ix = defo_std < bad_std_thresh
-        ix = good_ix.copy()
-
-        ph_uw_ifg = np.zeros((n_ps-1, 1))
-        ph_uw = np.zeros((n_ps, n_ifg))
-
-        for i in tqdm(range(n_ifg), desc='      -> Unwrapping in space'):
-            ifg_std = np.exp(2 * np.abs(dph_noise[:, i]))
-            weighting = 1.0 / ifg_std
-
-            A = spdiags(weighting, 0, n_edge, n_edge) @ A_unweighted
-            dph_use = dph_space_uw[:, i] * weighting
-            weighting_use = weighting.copy()
-
-            dph_use = dph_use[ix]
-            edges_use = edgs[ix]
-            weighting_use = weighting_use[ix]
-            A = A[ix, :]
-
-            success_flag = 0
-            A_save = A.copy()
-            dph_save = dph_use.copy()
-            edges_save = edges_use.copy()
-            weighting_save = weighting_use.copy()
-            n_dph = dph_use.shape[0]
-            n_bad = int(np.ceil(len(dph_use) * max_rm_fraction))
-
-            @staticmethod
-            def sprank_estimate(A, tol=1e-10):
-                """Estimate sparse matrix rank using singular values."""
-                k = min(A.shape) - 1
-                try:
-                    _, s, _ = svds(A, k=k)
-                    return np.sum(s > tol)
-                except Exception as e:
-                    print(f"Rank estimation failed: {e}")
-                    return 0
-
-            while success_flag == 0:
-                if sprank_estimate(A) >= A.shape[1]:
-                    # Least squares inversion using sparse solver
-                    ph_uw_ifg = lsqr(A, dph_use)[0]  # returns (solution, istop, itn, normr, etc.)
-                    
-                    A_save = A.copy()
-                    edges_save = edges_use.copy()
-                    weighting_save = weighting_use.copy()
-                    dph_save = dph_use.copy()
-                    n_dph_save = n_dph
-                    dph_hat = A_save @ ph_uw_ifg
-                    r = dph_save - dph_hat
-                    
-                    print(f"IFG {i + 1}: n_dph = {n_dph_save}, residual std = {np.std(r)}")
-                else:
-                    ph_uw_ifg = lsqr(A_save, dph_save)[0]
-                    n_bad = int(np.ceil(n_bad / 10))
-                    print(f"IFG {i + 1}: sprank too low, backing up (n_dph = {n_dph})")
-
-                if hasattr(self, 'r') and np.all(np.abs(r) < res_tol):
-                    success_flag = True
-                else:
-                    r_sort_ix = np.argsort(np.abs(r))[::-1]
-                    good_ix = np.ones((n_dph_save, 1), dtype=bool)
-                    ps_edge_dropped = np.zeros((n_ps, 1), dtype=bool)
-
-                    for ix_drop in r_sort_ix[:n_bad]:
-                        ps1, ps2 = edges_save[ix_drop, 1:3]
-                        if not ps_edge_dropped[ps1] and not ps_edge_dropped[ps2]:
-                            good_ix[ix_drop] = False
-                            ps_edge_dropped[ps1] = True
-                            ps_edge_dropped[ps2] = True
-
-                    edges_use = edges_save[good_ix]
-                    weighting_use = weighting_save[good_ix]
-                    dph_use = dph_save[good_ix]
-                    A = A_save[good_ix]
-                    n_dph_save = dph_use.shape[0]
-
-            full_ph = np.insert(ph_uw_ifg, ref_ix, 0)
-            ph_uw[:, i] = full_ph
-
-        ref_ph = np.angle(ph[ref_ix, :])
-        ph_uw += ref_ph[np.newaxis, :]
-
-        sio.savemat(os.path.join(self.config["processing_parameters"]["current_result"], f'uw_phaseuw.mat'), {'ph_uw': ph_uw})
     
     def _wrap_filt(self, ph, n_win, alpha, n_pad=[], low_flag='n'):
         """
@@ -3627,6 +3224,45 @@ class StaMPSStep:
         plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"], 
                                 self.patch_dir, 'ph_plots.png'), dpi=300, transparent=True)
         plt.close()
+
+    def _plot_test(self, save_path, phuw, after_unwrap=False):
+        # Load data
+        psver = 2
+        ps = sio.loadmat(os.path.join(save_path, f'ps{psver}.mat'))
+        uw = sio.loadmat(os.path.join(save_path, f'uw_grid.mat'))
+        lonlat = ps['lonlat']
+
+        # Get valid pixel locations using np.where
+        valid_indices = np.where(uw['nzix'].flatten() == True)[0]
+
+        # Make sure valid_indices doesn't exceed lonlat size and ph size
+        valid_indices = valid_indices[valid_indices < min(len(lonlat), phuw.shape[0])]
+
+        # Use the indices to get valid lonlat points
+        valid_lonlat = lonlat[valid_indices]
+
+        # Get number of interferograms
+        n_ifg = phuw.shape[1]
+
+        # Create subplot grid
+        n_rows = int(np.ceil(np.sqrt(n_ifg)))
+        n_cols = int(np.ceil(n_ifg / n_rows))
+
+        plt.figure(figsize=(10*n_cols, 6*n_rows))
+
+        # Plot phase for each interferogram
+        for i in range(n_ifg):
+            plt.subplot(n_rows, n_cols, i+1)
+            plt.scatter(valid_lonlat[:, 0], valid_lonlat[:, 1],
+                    c=np.angle(phuw[valid_indices, i]) if after_unwrap == False else phuw[valid_indices, i],
+                    cmap='hsv', vmin=-np.pi, vmax=np.pi, s=1)
+            plt.colorbar(label='Phase (rad)')
+            plt.xlabel('Longitude')
+            plt.ylabel('Latitude')
+            plt.title(f'Interferogram {i+1}')
+
+        plt.tight_layout()
+        plt.show()
 
     def _uw_interp(self):
         print('      -> Interpolating grid...')
@@ -4388,26 +4024,6 @@ class StaMPSStep:
                 shaky_ix = np.array([])
                 
             sio.savemat(f'{self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/uw_space_time.mat', {'dph_space_uw': dph_space_uw, 'dph_noise': dph_noise, 'G': G, 'spread': spread, 'ifreq_ij': ifreq_ij, 'jfreq_ij': jfreq_ij, 'shaky_ix': shaky_ix, 'predef_ix': predef_ix})
-            # Plot dph_space_uw
-            print(f"         -> Plotting dph_space_uw (elapsed time={round(time.time() - start_time)}s)")
-            
-            # Find valid points where G is not 0
-            valid_ifgs = np.any(G != 0, axis=1)
-            
-            # Create figure
-            plt.figure(figsize=(10, 6))
-            
-            # Plot dph_space_uw
-            im = plt.imshow(dph_space_uw[:, valid_ifgs].T, aspect='auto', cmap='jet')
-            plt.title('Unwrapped Phase Differences (dph_space_uw)')
-            plt.xlabel('Edge Index')
-            plt.ylabel('Interferogram Index')
-            plt.colorbar(im, label='Phase (rad)')
-            
-            plt.tight_layout()
-            plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"], 
-                                   self.patch_dir, 'uw_space_time_phase.png'), dpi=300)
-            plt.close()
 
     def _writecpx(self, filename, data, precision='float32', endian='native'):
         interleaved = np.empty(data.shape + (2,), dtype=precision)
@@ -4516,8 +4132,8 @@ class StaMPSStep:
 
         sigsq[sigsq < 1] = 1
 
-        rowcost = np.zeros(((nrow - 1), ncol * 4), dtype=np.int16)
-        colcost = np.zeros((nrow, (ncol - 1) * 4), dtype=np.int16)
+        rowcost = np.zeros(((nrow-1), ncol * 4), dtype=np.int16)
+        colcost = np.zeros((nrow, (ncol-1) * 4), dtype=np.int16)
 
         nzrowix = np.abs(rowix) > 0
         nzcolix = np.abs(colix) > 0
@@ -4574,6 +4190,37 @@ class StaMPSStep:
                 fid.write(colcost.astype(np.int16).tobytes())
 
             ifgw = ph[Z, i1].reshape(nrow, ncol)
+            
+            def small_plot(ifgw):
+                # Plot the wrapped phase for this interferogram
+                ps2 = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], 
+                                            self.patch_dir, 'ps2.mat'))
+                lonlat = ps2['lonlat']
+                
+                # Get valid pixel locations using nzix
+                valid_indices = np.where(uw['nzix'].flatten() == True)[0]
+                
+                # Make sure valid_indices doesn't exceed lonlat size
+                valid_indices = valid_indices[valid_indices < len(lonlat)]
+                
+                # Use the indices to get valid lonlat points
+                valid_lonlat = lonlat[valid_indices]
+                
+                plt.figure(figsize=(10, 6))
+                plt.scatter(valid_lonlat[:, 0], valid_lonlat[:, 1],
+                        c=np.angle(ifgw.flatten()[valid_indices]),
+                        cmap='hsv', vmin=-np.pi, vmax=np.pi, s=1)
+                plt.colorbar(label='Phase (rad)')
+                plt.xlabel('Longitude')
+                plt.ylabel('Latitude')
+                plt.title(f'Wrapped Phase - Interferogram {i1+1}')
+                plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"],
+                                        self.patch_dir, f'wrapped_phase_ifg_{i1+1}.png'), 
+                        dpi=300, bbox_inches='tight')
+                plt.close()
+
+            small_plot(ifgw)
+
             self._writecpx(f'{self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/snaphu.in', ifgw)
             os.chdir(f'{self.config["project_definition"]["project_folder"]}/modules/snaphu-1.4.2/bin/')
             cmdstr = f'snaphu -d -f {self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/snaphu.conf {ncol} > {self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/snaphu.log'
@@ -4582,14 +4229,39 @@ class StaMPSStep:
 
             with open(f'{self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/snaphu.out', 'rb') as fid:
                 ifguw = np.fromfile(fid, dtype=np.float32).reshape((nrow, ncol))
-            ifg_diff1 = ifguw[:-1, :] - ifguw[1:, :]
-            ifg_diff1 = ifg_diff1[ifg_diff1 != 0]
-            ifg_diff2 = ifguw[:, :-1] - ifguw[:, 1:]
-            ifg_diff2 = ifg_diff2[ifg_diff2 != 0]
-            
-            msd[i1] = (np.sum(ifg_diff1**2) + np.sum(ifg_diff2**2)) / (len(ifg_diff1) + len(ifg_diff2))
-            ifguw = ifguw.ravel()
-            ph_uw[:, i1] = ifguw[np.where(uw['nzix']==True)[0]]
+
+                # Load ps2 and uw_grid files
+                uw = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], 
+                                            self.patch_dir, 'uw_grid.mat'))
+
+                # Get dimensions from uw_grid
+                nrow, ncol = uw['nzix'].shape
+                nzix = uw['nzix'].astype(bool)
+                
+                # Create a masked array for plotting
+                masked_ifguw = np.ma.masked_array(ifguw, mask=~nzix)
+                
+                # Create a 2D plot
+                plt.figure(figsize=(10,8))
+                plt.imshow(masked_ifguw, cmap='jet', origin='lower')
+                plt.colorbar(label='Unwrapped Phase')
+                plt.title('Unwrapped Phase')
+                plt.xlabel('Range')
+                plt.ylabel('Azimuth')
+                
+                plt.tight_layout()
+                plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"],
+                                        self.patch_dir, f'unwrapped_phase_ifg_{i1+1}.png'), 
+                        dpi=300, bbox_inches='tight')
+                plt.close()
+
+                ifg_diff1 = ifguw[:-1, :] - ifguw[1:, :]
+                ifg_diff1 = ifg_diff1[ifg_diff1 != 0]
+                ifg_diff2 = ifguw[:, :-1] - ifguw[:, 1:]
+                ifg_diff2 = ifg_diff2[ifg_diff2 != 0]
+                
+                msd[i1] = (np.sum(ifg_diff1**2) + np.sum(ifg_diff2**2)) / (len(ifg_diff1) + len(ifg_diff2))
+                ph_uw[:, i1] = masked_ifguw[np.where(nzix == True)].ravel()
 
         sio.savemat(f'{self.config["processing_parameters"]["current_result"]}/{self.patch_dir}/uw_phaseuw.mat', {'ph_uw': ph_uw, 'msd': msd})
     
@@ -4714,60 +4386,53 @@ class StaMPSStep:
             else:
                 options['lowfilt_flag'] = 'y'
 
-        # # Plot wrapped phase values for each interferogram
-        # n_ifgs = ph_w.shape[1]
-        
-        # # Calculate grid points based on options['grid_size']
-        # x_min, x_max = np.min(xy[:,1]), np.max(xy[:,1])
-        # y_min, y_max = np.min(xy[:,2]), np.max(xy[:,2])
-        # x_grid = np.arange(x_min, x_max, options['grid_size'])
-        # y_grid = np.arange(y_min, y_max, options['grid_size'])
-        # x_mesh, y_mesh = np.meshgrid(x_grid, y_grid)
+        # Plot wrapped phase values for each interferogram
+        n_ifgs = ph_w.shape[1]
 
-        # # Calculate number of rows and columns for subplots
-        # n_rows = int(np.ceil(np.sqrt(n_ifgs)))
-        # n_cols = int(np.ceil(n_ifgs / n_rows))
+        # Calculate number of rows and columns for subplots
+        n_rows = int(np.ceil(np.sqrt(n_ifgs)))
+        n_cols = int(np.ceil(n_ifgs / n_rows))
         
-        # # Create figure with subplots
-        # fig, axes = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
-        # axes = axes.flatten()
+        # Create figure with subplots
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
+        axes = axes.flatten()
         
-        # for i in range(n_ifgs):
-        #     # Get phase values for this interferogram
-        #     ph = np.angle(ph_w[:,i])
+        for i in range(n_ifgs):
+            # Get phase values for this interferogram
+            ph = np.angle(ph_w[:,i])
             
-        #     # Plot on white background
-        #     axes[i].set_facecolor('white')
+            # Plot on white background
+            axes[i].set_facecolor('white')
             
-        #     # Scatter plot of phase values with smaller points
-        #     scatter = axes[i].scatter(xy[:,1], xy[:,2], c=ph, cmap='jet', s=0.1)
+            # Scatter plot of phase values with smaller points
+            scatter = axes[i].scatter(xy[:,1], xy[:,2], c=ph, cmap='jet', s=0.1)
             
-        #     # Add colorbar
-        #     plt.colorbar(scatter, ax=axes[i], label='Phase (rad)')
+            # Add colorbar
+            plt.colorbar(scatter, ax=axes[i], label='Phase (rad)')
             
-        #     axes[i].set_title(f'IFG {i+1}')
-        #     axes[i].set_xlabel('X coordinate')
-        #     axes[i].set_ylabel('Y coordinate')
-        #     axes[i].axis('equal')
+            axes[i].set_title(f'IFG {i+1}')
+            axes[i].set_xlabel('X coordinate')
+            axes[i].set_ylabel('Y coordinate')
+            axes[i].axis('equal')
         
-        # # Remove empty subplots
-        # for i in range(n_ifgs, len(axes)):
-        #     fig.delaxes(axes[i])
+        # Remove empty subplots
+        for i in range(n_ifgs, len(axes)):
+            fig.delaxes(axes[i])
             
-        # plt.suptitle('Wrapped Phase Values and Unwrapping Grid')
-        # plt.tight_layout()
+        plt.suptitle('Wrapped Phase Values and Unwrapping Grid')
+        plt.tight_layout()
         
-        # # Save figure with high DPI for better clarity
-        # plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"],
-        #                         self.patch_dir, 'unwrap_grid_phase_all.png'), 
-        #             dpi=300)
-        # plt.close()
+        # Save figure with high DPI for better clarity
+        plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"],
+                                self.patch_dir, 'unwrap_grid_phase_all.png'), 
+                    dpi=300)
+        plt.close()
 
-        self._uw_grid_wrapped(ph_w, xy, options)
+        # self._uw_grid_wrapped(ph_w, xy, options)
         # del ph_w
         # self._uw_interp()
         # self._uw_sb_unwrap_space_time(day, ifgday_ix, bperp, options)
-        # self._uw_stat_costs(options['unwrap_method'], options['variance'], None)
+        self._uw_stat_costs(options['unwrap_method'], options['variance'], None)
         # ph_uw, msd = self._uw_unwrap_from_grid(xy, options['grid_size'])
         # return ph_uw, msd
     
@@ -4845,8 +4510,8 @@ class StaMPSStep:
         ph_w[ix] = ph_w[ix] / np.abs(ph_w[ix])
 
         # Initialize flags
-        scla_subtracted_sw = False
-        ramp_subtracted_sw = False
+        self.scla_subtracted_sw = False
+        self.ramp_subtracted_sw = False
 
         # Handle good values
         options = {'master_day': ps['master_day'][0][0]}
@@ -4868,28 +4533,28 @@ class StaMPSStep:
         #     del good
 
         # Handle SCLA subtraction
-        if small_baseline_flag != 'y' and os.path.exists(f'{sclaname}.mat'):
-            print('-> Subtracting scla and master aoe...')
-            scla = sio.loadmat(f'{sclaname}.mat')
+        if small_baseline_flag != 'y' and os.path.exists(f'{os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, sclaname)}.mat'):
+            print('      -> Subtracting SCLA and Master AOE...')
+            scla = sio.loadmat(f'{os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, sclaname)}.mat')
             if scla['K_ps_uw'].shape[0] == ps['n_ps'][0][0]:
-                scla_subtracted_sw = True
+                self.scla_subtracted_sw = True
                 ph_w = ph_w * np.exp(-1j * (np.tile(scla['K_ps_uw'], (1, ps['n_ifg'][0][0])) * bperp_mat))
                 ph_w = ph_w * np.tile(np.exp(-1j * scla['C_ps_uw']), (1, ps['n_ifg'][0][0]))
                 if scla_deramp == 'y' and 'ph_ramp' in scla and scla['ph_ramp'].shape[0] == ps['n_ps'][0][0]:
-                    ramp_subtracted_sw = True
+                    self.ramp_subtracted_sw = True
                     ph_w = ph_w * np.exp(-1j * scla['ph_ramp'])
             else:
-                print('      -> Wrong number of PS in scla - subtraction skipped...')
-                os.remove(f'{sclaname}.mat')
+                print('      -> Wrong number of PS in SCLA - subtraction skipped...')
+                os.remove(f'{os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, sclaname)}.mat')
 
         # Handle APS subtraction
-        if os.path.exists(f'{apsname}.mat') and subtr_tropo == 'y':
-            print('      -> Subtracting slave aps...')
-            aps = sio.loadmat(f'{apsname}.mat')
-            aps_corr, fig_name_tca, aps_flag = self._ps_plot_tca(aps, aps_name)
+        if os.path.exists(f'{os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, apsname)}.mat') and subtr_tropo == 'y':
+            print('      -> Subtracting Slave APS...')
+            aps = sio.loadmat(f'{os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, apsname)}.mat')
+            aps_corr = self._ps_plot_tca(aps, aps_name)[0]
             ph_w = ph_w * np.exp(-1j * aps_corr)
-            if unwrap_hold_good_values == 'y':
-                options['ph_uw_predef'] = options['ph_uw_predef'] - aps_corr
+            # if unwrap_hold_good_values == 'y':
+            #     options['ph_uw_predef'] = options['ph_uw_predef'] - aps_corr
 
         # Set unwrapping options
         options.update({
@@ -4934,7 +4599,7 @@ class StaMPSStep:
         if unwrap_hold_good_values == 'y':
             options['ph_uw_predef'] = options['ph_uw_predef'][:, unwrap_ifg_index]
 
-        # Perform unwrapping
+        # # Perform unwrapping
         # ph_uw_some, msd_some = self._uw_3d(ph_w[:, unwrap_ifg_index], ps['xy'], day,
         #                                     ifgday_ix[unwrap_ifg_index, :],
         #                                     ps['bperp'][:, unwrap_ifg_index][0], options)
@@ -4950,19 +4615,19 @@ class StaMPSStep:
         #     msd[unwrap_ifg_index] = msd_some
 
         # # Add back SCLA and master AOE if subtracted
-        # if scla_subtracted_sw and small_baseline_flag != 'y':
+        # if self.scla_subtracted_sw and small_baseline_flag != 'y':
         #     print('      -> Adding back SCLA and master AOE...')
         #     scla = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], f'{sclaname}.mat'))
         #     ph_uw = ph_uw + (np.tile(scla['K_ps_uw'], (1, ps['n_ifg'][0][0])) * bperp_mat)
         #     ph_uw = ph_uw + np.tile(scla['C_ps_uw'], (1, ps['n_ifg'][0][0]))
-        #     if ramp_subtracted_sw:
+        #     if self.ramp_subtracted_sw:
         #         ph_uw = ph_uw + scla['ph_ramp']
 
         # # Add back APS if subtracted
         # if os.path.exists(os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, f'{apsname}.mat')) and subtr_tropo == 'y':
         #     print('      -> Adding back slave APS...')
         #     aps = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, f'{apsname}.mat'))
-        #     aps_corr, fig_name_tca, aps_flag = self._ps_plot_tca(aps, aps_name)
+        #     aps_corr = self._ps_plot_tca(aps, aps_name)[0]
         #     ph_uw = ph_uw + aps_corr
 
         # # Handle patch phase
@@ -5418,32 +5083,12 @@ class StaMPSStep:
 
         print(f"      -> Number of points per ifg: {n_ps}")
 
-        use_triangle = False
-        if use_triangle:
-            nodename = 'scla.1.node'
-            with open(nodename, 'w') as f:
-                f.write(f'{n_ps} 2 0 0\n')
-                ps_xy = ps['xy'].copy()
-                ps_xy[:,0] = np.arange(1, n_ps+1)
-                np.savetxt(f, ps_xy, fmt='%d %f %f')
-
-            subprocess.run(['triangle', '-e', 'scla.1.node'], stdout=subprocess.PIPE)
-
-            with open('scla.2.edge', 'r') as f:
-                header = list(map(int, f.readline().split()))
-                N = header[0]
-                edgs = np.loadtxt(f, dtype=int)
-                edgs = edgs[:,1:3]
-                n_edge = edgs.shape[0]
-                if n_edge != N:
-                    raise ValueError('missing lines in scla.2.edge')
-        else:
-            xy = ps['xy'].astype('float64')
-            tri = Delaunay(xy[:,1:3]).simplices
-            edgs = np.unique(np.sort(np.vstack((tri[:,[0,1]], 
-                                              tri[:,[1,2]], 
-                                              tri[:,[2,0]])), axis=1), axis=0)
-            n_edge = edgs.shape[0]
+        xy = ps['xy'].astype('float64')
+        tri = Delaunay(xy[:,1:3]).simplices
+        edgs = np.unique(np.sort(np.vstack((tri[:,[0,1]], 
+                                            tri[:,[1,2]], 
+                                            tri[:,[2,0]])), axis=1), axis=0)
+        n_edge = edgs.shape[0]
 
         print(f"      -> Number of arcs per ifg: {n_edge}")
 
@@ -5551,7 +5196,7 @@ class StaMPSStep:
         ph_ramp = np.zeros((n_ps, len(deramp_ifg)))
 
         if len(deramp_ifg) > 0:
-            print('   deramping selected ifgs...')
+            print('      -> Deramping selected ifgs...')
             G = np.column_stack((np.ones(n_ps), ps['xy'][:,1:3]))
 
             for i in range(len(deramp_ifg)):
@@ -5849,17 +5494,32 @@ class StaMPSStep:
         
         # Deramp interferograms
         ph_uw, ph_ramp = self._ps_deramp(ps, ph_uw)
+        ph_uw = np.nan_to_num(ph_uw, nan=0)
+        # Plot unwrapped phase after deramping
+        n_ifgs = ph_uw.shape[1]
+        n_rows = int(np.ceil(np.sqrt(n_ifgs)))
+        n_cols = int(np.ceil(n_ifgs / n_rows))
+        
+        plt.figure(figsize=(15, 15))
+        for i in range(n_ifgs):
+            plt.subplot(n_rows, n_cols, i+1)
+            plt.imshow(ph_uw[:, i].reshape(-1, 1), aspect='auto', cmap='jet')
+            plt.colorbar(label='Phase (rad)')
+            plt.title(f'Ifg {i+1}')
+            plt.xlabel('PS Point')
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.config["processing_parameters"]["current_result"], 
+                                self.patch_dir, f'before_vlos.png'))
+        plt.close()
 
         if ts_flag:
             ph_uw = ph_uw - np.tile(scla['C_ps_uw'].astype('float32'), (ph_uw.shape[1], 1)).T
         ph_all = np.zeros((ps['n_ps'][0][0], 1))
         ref_ps = self._ps_setref(ps)
         unwrap_ifg_index = np.setdiff1d(np.arange(ps['n_ifg'][0][0]), ps['master_ix'][0])
-        ph_uw = ph_uw[:,unwrap_ifg_index]
+        ph_uw = ph_uw[:, unwrap_ifg_index]
         day = ps['day'][0][unwrap_ifg_index]
         ph_uw = ph_uw - np.tile(np.nanmean(ph_uw[ref_ps,:],1), (ph_uw.shape[1], 1)).T
-        ifgstd = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], self.patch_dir, f'ifgstd{psver}.mat'))
-        ifgvar = (ifgstd['ifg_std']*np.pi/181)**2
         G = np.column_stack((np.ones((len(day),1)), day-ps['master_day'][0]))
         lambda_ = self.parms['lambda']
         m = np.linalg.lstsq(G, ph_uw.astype('float64').T, rcond=None)[0]
@@ -5869,10 +5529,7 @@ class StaMPSStep:
 
     def _stamps_8(self):
         if self.start_step <= 8 and self.end_step >= 8:
-            if self.scn_kriging_flag == 'y':
-                self._ps_scn_filt_krig()
-            else:
-                self._ps_scn_filt()
+            self._ps_scn_filt()
 
     def run(self, start_step=None, end_step=None, patches_flag=False, plot_flag=False):
         if start_step is None:
@@ -6022,6 +5679,7 @@ if __name__ == "__main__":
     # stamps_step.run(5, 5, True)
     stamps_step.run(6, 6, True)
     # stamps_step._aps_linear()
+    # stamps_step.run(7, 7, True)
     # stamps_step.run(6, 6, True)
     # stamps_step.run(7, 7, True)
     # stamps_step.run(8, 8, True)
