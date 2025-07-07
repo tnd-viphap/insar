@@ -195,7 +195,7 @@ class MasterSelect:
             if '.zip' in selected_master:
                 print("Raw data detected. Skipping reformatting MASTER file...") 
             else:
-                self.slave_to_master(om, cm)
+                self.slave_to_master(om, cm, self.config["project_definition"]["master_folder"])
                 time.sleep(1)
                 self.master_to_slave(om, cm)
                 time.sleep(1)
