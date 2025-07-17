@@ -21,7 +21,6 @@ project_folder = os.path.split(os.path.abspath(__file__))[0].replace("\\", "/")
 sys.path.append(project_folder)
 
 from config.parser import ConfigParser
-from modules.tomo.ps_parms import Parms
 
 
 class StaMPSEXE:

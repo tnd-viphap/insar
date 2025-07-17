@@ -1,18 +1,10 @@
 # type: ignore
 import os
 import platform
-import shutil
 import sys
 import time
-import subprocess
 
 sys.path.append(os.path.join(os.path.abspath(__file__), "../../../.."))
-
-from modules.tomo.tomo import TomoSARControl
-from modules.tomo.psds_prep import PSDS_Prep
-from modules.tomo.stamps_prep import StampsPrep
-from modules.tomo.comsar_prep import ComSAR_Prep
-
 project_path = os.path.abspath(os.path.join(__file__, '../../../..')).replace("/config", "")
 sys.path.append(project_path)
 from config.parser import ConfigParser
