@@ -34,7 +34,6 @@ class StaMPSPrep:
         
     def process(self):
         timeStarted = time.time()
-        # os.chdir(self.CURRENT_RESULT)
         with open(os.path.join(project_path, "config", "project.conf"), "w") as f:
             f.write(f"COMSAR={self.config['api_flags']['comsar']}" + "\n")
             f.write(f"UNIFIED={self.config['processing_parameters']['unified']}" + "\n")
@@ -43,28 +42,15 @@ class StaMPSPrep:
             f.write(f"MAX_PERP={self.config['processing_parameters']['max_perp']}")
             f.close()
         if self.stamps_flag == 'NORMAL':
-            StampsPrep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
+            os.system(f"mt_prep_snap {self.master_date} {self.config['processing_parameters']['current_result']} {self.threshold} {self.patch_info[0]} {self.patch_info[1]} {self.patch_info[2]} {self.patch_info[-1]}")
         else:
             flag = 'comsar' if self.config["api_flags"]["comsar"] == "1" else 'psds'
-            # Python-based PSDS_main.m
-            # TomoSARControl(project_name=self.project_name).run()
-            if platform.system() == 'Windows':
-                matlab_cmd = (
-                    f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash -nodesktop "
-                    f"-r \"run('{os.path.split(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))[0].replace(os.sep, '/')}/modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" "
-                    f"> \"{self.config['processing_parameters']['current_result'].replace(os.sep, '/')}/{flag.upper()}.log\""
-                )
-                subprocess.run(matlab_cmd, shell=True)
-            else:
-                os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{self.config['project_definition']['project_folder']}/modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" > {self.config['processing_parameters']['current_result']}/{flag.upper()}.log")
-            # Python-based mt_prep_snap_psds.m
+            os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{self.config['project_definition']['project_folder']}/modules/TomoSAR/Tomography/scripts/PSDS_main.m'); exit;\" > {self.config['processing_parameters']['current_result']}/{flag.upper()}.log")
             print(f"-> Preparing {flag} patches...")
             os.chdir(self.config["processing_parameters"]["current_result"])
             if flag == 'comsar':
-                # ComSAR_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
                 os.system(f"mt_prep_snap_comsar {self.master_date} {self.config['processing_parameters']['current_result']} {self.threshold} {self.patch_info[0]} {self.patch_info[1]} {self.patch_info[2]} {self.patch_info[-1]}")
             else:
-                # PSDS_Prep(self.master_date, self.config["processing_parameters"]["current_result"], self.threshold, self.patch_info[0], self.patch_info[1], self.patch_info[2], self.patch_info[-1], None, self.project_name).run()
                 os.system(f"mt_prep_snap_psds {self.master_date} {self.config['processing_parameters']['current_result']} {self.threshold} {self.patch_info[0]} {self.patch_info[1]} {self.patch_info[2]} {self.patch_info[-1]}")
         timeDelta = time.time() - timeStarted
         print(f'-> Finished process in {timeDelta} seconds.')
