@@ -391,7 +391,6 @@ class StaMPSEXE:
         for path, identity in zip(patch_paths, patch_identifier):
             csv_filename = os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}_cr.csv")
             self.csv_files.append(csv_filename)
-            shutil.copy(os.path.join(self.config["processing_parameters"]["current_result"], 'parms.json'), path)
             os.chdir(path)
             dem_err = self.ps_dem_err()
             self.ps_lonlat_err(dem_err)
