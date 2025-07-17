@@ -86,9 +86,7 @@ class PSLonLat:
             
             # Read lon/lat files as binary
             lon_data = np.fromfile(self.lon_file, dtype=">f4")
-            lon_data = lon_data[~np.isnan(lon_data)]
             lat_data = np.fromfile(self.lat_file, dtype=">f4")
-            lat_data = lat_data[~np.isnan(lat_data)]
             
             # Skip header if present
             if has_header_lon:
@@ -99,6 +97,10 @@ class PSLonLat:
             # Reshape to 2D arrays based on width
             lon_data = lon_data.reshape(-1, self.width)
             lat_data = lat_data.reshape(-1, self.width)
+            
+            # # Remove NaN values after reshaping
+            # lon_data = lon_data[~np.isnan(lon_data).any(axis=1)]
+            # lat_data = lat_data[~np.isnan(lat_data).any(axis=1)]
             
             return lon_data, lat_data
         except Exception as e:
@@ -123,8 +125,8 @@ class PSLonLat:
         lonlat_values = []
         for pscid, y, x in ps_data:
             # Convert to 0-based indexing
-            y_idx = y - 1
-            x_idx = x - 1
+            y_idx = y
+            x_idx = x
             
             # Get lon/lat values
             lon = lon_data[y_idx, x_idx]
