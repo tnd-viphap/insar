@@ -52,17 +52,17 @@ class MTExtractCands:
         
         # Set the executable path
         if platform.system() == "Linux":
-            self.selsbc_path = Path(os.path.join(project_path, "modules/StaMPS/bin/selsbc_patch"))
-            self.selpsc_path = Path(os.path.join(project_path, "modules/StaMPS/bin/selpsc_patch"))
-            self.psclonlat = Path(os.path.join(project_path, "modules/StaMPS/bin/psclonlat"))
-            self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/bin/pscdem"))
-            self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/bin/pscphase"))
+            self.selsbc_path = Path(os.path.join(project_path, "modules/tomo/selsbc_patch"))
+            self.selpsc_path = Path(os.path.join(project_path, "modules/tomo/selpsc_patch"))
+            self.psclonlat = Path(os.path.join(project_path, "modules/tomo/psclonlat"))
+            self.pscdem = Path(os.path.join(project_path, "modules/tomo/pscdem"))
+            self.pscphase = Path(os.path.join(project_path, "modules/tomo/pscphase"))
         else:
-            self.selsbc_path = Path(os.path.join(project_path, "modules/StaMPS/src/selsbc_patch.exe"))
-            self.selpsc_path = Path(os.path.join(project_path, "modules/StaMPS/src/selpsc_patch.exe"))
-            self.psclonlat = Path(os.path.join(project_path, "modules/StaMPS/src/psclonlat.exe"))
-            self.pscdem = Path(os.path.join(project_path, "modules/StaMPS/src/pscdem.exe"))
-            self.pscphase = Path(os.path.join(project_path, "modules/StaMPS/src/pscphase.exe"))
+            self.selsbc_path = Path(os.path.join(project_path, "modules/tomo/selsbc_patch.exe"))
+            self.selpsc_path = Path(os.path.join(project_path, "modules/tomo/selpsc_patch.exe"))
+            self.psclonlat = Path(os.path.join(project_path, "modules/tomo/psclonlat.exe"))
+            self.pscdem = Path(os.path.join(project_path, "modules/tomo/pscdem.exe"))
+            self.pscphase = Path(os.path.join(project_path, "modules/tomo/pscphase.exe"))
         
     def _setup_logger(self):
         """Setup logging configuration"""

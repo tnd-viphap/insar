@@ -35,9 +35,9 @@ class PSDS_Prep:
         self.config_parser = ConfigParser(os.path.join(project_path, "config", "config.json"))
         self.config = self.config_parser.get_project_config(self.project_name)
         if platform.system() == "Linux":
-            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/bin/calamp"))
+            self.calamp_path = Path(os.path.join(project_path, "modules/tomo/calamp"))
         else:
-            self.calamp_path = Path(os.path.join(project_path, "modules/StaMPS/src/calamp.exe"))
+            self.calamp_path = Path(os.path.join(project_path, "modules/tomo/calamp.exe"))
 
         self.master_date = master_date
         self.data_dir = Path(data_dir.replace('\\', '/'))
