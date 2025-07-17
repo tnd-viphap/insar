@@ -26,6 +26,7 @@ class StaMPSPrep:
         
     def process(self):
         timeStarted = time.time()
+        os.chdir(self.config["processing_parameters"]["current_result"])
         with open(os.path.join(project_path, "config", "project.conf"), "w") as f:
             f.write(f"COMSAR={self.config['api_flags']['comsar']}" + "\n")
             f.write(f"UNIFIED={self.config['processing_parameters']['unified']}" + "\n")
