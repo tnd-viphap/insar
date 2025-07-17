@@ -58,36 +58,33 @@ class StaMPSEXE:
                 data.to_file(os.path.join(self.config['project_definition']['data_folder'], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{folder}.shp"))
 
     def _load_rslcpar(self):
-        parms = Parms(self.project_name)
-        parms.load()
         master_date = self.config['processing_parameters']['current_result'].split('/')[-1].split('_')[1]
         with open(os.path.join(self.config['processing_parameters']['current_result'], f'rslc/{master_date}.rslc.par'), 'r') as file:
             for line in file.readlines():
                 line = line.strip().split('\t')
                 if line[0].startswith('range_pixel_spacing'):
-                    parms.set('range_pixel_spacing', float(line[1]))
+                    self.range_pixel_spacing = float(line[1])
                 elif line[0].startswith('near_range_slc'):
-                    parms.set('near_range_slc', float(line[1]))
+                    self.near_range_slc = float(line[1])
                 elif line[0].startswith('sar_to_earth_center'):
-                    parms.set('sar_to_earth_center', float(line[1]))
+                    self.sar_to_earth_center = float(line[1])
                 elif line[0].startswith('earth_radius_below_sensor'):
-                    parms.set('earth_radius_below_sensor', float(line[1]))
+                    self.earth_radius_below_sensor = float(line[1])
                 elif line[0].startswith('center_range_slc'):
-                    parms.set('center_range_slc', float(line[1]))
+                    self.center_range_slc = float(line[1])
                 elif line[0].startswith('azimuth_lines'):
-                    parms.set('azimuth_lines', float(line[1]))
+                    self.azimuth_lines = float(line[1])
                 elif line[0].startswith('prf'):
-                    parms.set('prf', float(line[1]))
+                    self.prf = float(line[1])
                 elif line[0].startswith('heading'):
-                    parms.set('heading', float(line[1]))
+                    self.heading = float(line[1])
                 elif line[0].startswith('radar_frequency'):
-                    parms.set('lambda', 299792458 / float(line[1]))
+                    self.lambda_val = 299792458 / float(line[1])
                 elif line[0].startswith('sensor'):
                     if 'ASAR' in line[1]:
-                        parms.set('platform', 'ENVISAT')
+                        self.platform = 'ENVISAT'
                     else:
-                        parms.set('platform', line[1])
-        parms.save()
+                        self.platform = line[1]
 
     def rasterize_preserve_and_stack(self, points_gdf, 
                                     columns, 
@@ -183,13 +180,11 @@ class StaMPSEXE:
         return gdf
     
     def ps_dem_err(self):
-        parms = Parms(self.project_name)
-        parms.load()
-        slant_range = parms.get('range_pixel_spacing')
-        near_range = parms.get('near_range_slc')
-        re = parms.get('earth_radius_below_sensor')
-        rs = parms.get('sar_to_earth_center')
-        lambda_val = parms.get('lambda')
+        slant_range = self.range_pixel_spacing
+        near_range = self.near_range_slc
+        re = self.earth_radius_below_sensor
+        rs = self.sar_to_earth_center
+        lambda_val = self.lambda_val
         
         ij = sio.loadmat("ps2.mat")['ij']
         K_ps_uw = sio.loadmat("scla2.mat")['K_ps_uw']
@@ -207,11 +202,9 @@ class StaMPSEXE:
         return dem_err
         
     def ps_lonlat_err(self, dem_err):
-        parms = Parms(self.project_name)
-        parms.load()
         la = sio.loadmat("la2.mat")['la']
-        heading = parms.get('heading')
-        re = parms.get('earth_radius_below_sensor')
+        heading = self.heading
+        re = self.earth_radius_below_sensor
         theta = (180 - heading) * np.pi / 180
         Dx = dem_err * (1 / np.tan(la)) * np.cos(theta)
         Dy = dem_err * (1 / np.tan(la)) * np.sin(theta)
