@@ -76,7 +76,7 @@ function process_patch_folders(current_result)
             fprintf('\n');
             fprintf('Step 6: Phase unwrapping');
             setparm('unwrap_time_win', 24);
-            setparm('unwrap_gold_n_win', 32);
+            setparm('unwrap_gold_n_win', 8);
             setparm('unwrap_grid_size', 10);
             stamps(6,6, 'y');
             fprintf('\n');
