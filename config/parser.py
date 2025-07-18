@@ -4,6 +4,7 @@ import os
 import psutil
 import platform
 from typing import Optional, Dict, Any, List, Union
+import distro
 
 class ConfigParser:
     def __init__(self, config_path: str):
@@ -111,7 +112,11 @@ class Initialize:
         if plf == "Windows":
             gpt = "C:/Program Files/snap/bin/gpt.exe"
         elif plf == "Linux":
-            gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap/bin/gpt'
+            ubuntu_version = distro.version()
+            if ubuntu_version.startswith("18."):
+                gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap/bin/gpt'
+            else:
+                gpt = "/usr/local/snap/bin/gpt"
         
         # Update configuration
         config_data = {

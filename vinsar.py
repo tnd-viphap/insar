@@ -3,40 +3,31 @@ from snap2stamps import Manager
 from stamps import StaMPSEXE
 from crlink import CRLink
 import time
+import json
 
 if __name__ == "__main__":
+    with open("in.json", "r") as config_file:
+        config = json.load(config_file)
 
-    # Load inputs
-    inputs = {}
-    with open(".in", "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue  # skip empty lines and comments
-            if "=" not in line:
-                raise ValueError(f"Malformed line: {line}")
-            key, value = line.split("=", 1)
-            inputs[key.strip()] = value.strip()
-
-    # Now assign variables from the dictionary
-    project_name = inputs.get("PROJECT_NAME")
-    bbox = inputs.get("BBOX")
-    direction = inputs.get("DIRECTION")
-    frame_no = int(inputs.get("FRAME"))
-    max_date = int(inputs.get("MAX_DATE"))
-    download_range = inputs.get("DOWNLOAD_RANGE")
-    reest_flag = int(inputs.get("REEST"))
-    identity_master = inputs.get("MASTER")
-    max_perp = float(inputs.get("MAX_PERP", 150.0))
-    da_threshold = float(inputs.get("DA", 0.4))
-    renew_flag = int(inputs.get("RENEW"))
-    process_range = inputs.get("PROCESS_RANGE")
-    stamps_flag = inputs.get("STAMPS")
-    ptype = int(inputs.get("TOMO_TYPE"))
-    unified_flag = int(inputs.get("UNIFIED"))
-    ministack_size = int(inputs.get("MSIZE"))
-    oobj = inputs.get("OOBJ")
-    n_rovers = int(inputs.get("NROVERS"))
+    # Now assign variables from the validated config
+    project_name = str(config["PROJECT_NAME"])
+    bbox = list(config["BBOX"])
+    direction = str(config["DIRECTION"])
+    frame_no = int(config["FRAME"])
+    max_date = int(config["MAX_DATE"])
+    download_range = list(config["DOWNLOAD_RANGE"])
+    reest_flag = int(config["REEST"])
+    identity_master = str(config["MASTER"]) if isinstance(config["MASTER"], str) else None
+    max_perp = float(config["MAX_PERP"])
+    da_threshold = float(config["DA"])
+    renew_flag = int(config["RENEW"])
+    process_range = list(config["PROCESS_RANGE"])
+    stamps_flag = str(config["STAMPS"])
+    ptype = int(config["TOMO_TYPE"])
+    unified_flag = int(config["UNIFIED"])
+    ministack_size = int(config["MSIZE"])
+    oobj = str(config["OOBJ"])
+    n_rovers = int(config["NROVERS"])
 
     #########################################################
     # Running phases
@@ -50,5 +41,3 @@ if __name__ == "__main__":
 
     time.sleep(1)
     crlink = CRLink(ps_results, n_rovers).run()
-
-

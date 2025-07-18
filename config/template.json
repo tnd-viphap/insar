@@ -1,0 +1,20 @@
+{
+    "PROJECT_NAME": "my_insar_project",
+    "BBOX": [],
+    "DIRECTION": "DESCENDING",
+    "FRAME": null,
+    "MAX_DATE": null,
+    "DOWNLOAD_RANGE": [null, null],
+    "REEST": 1,
+    "MASTER": null,
+    "MAX_PERP": 150.0,
+    "DA": 0.4,
+    "RENEW": 0,
+    "PROCESS_RANGE": [null, null],
+    "STAMPS": null,
+    "TOMO_TYPE": 0,
+    "UNIFIED": 0,
+    "MSIZE": 5,
+    "OOBJ": null,
+    "NROVERS": 2
+} 
