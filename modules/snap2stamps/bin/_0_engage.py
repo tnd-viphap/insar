@@ -82,7 +82,12 @@ class Initialize:
         if plf == "Windows":
             gpt = "C:/Program Files/snap/bin/gpt.exe"
         else:
-            gpt = "/home/viphap/snap9/bin/gpt"
+            # Check Ubuntu version to determine SNAP path
+            ubuntu_version = platform.linux_distribution()[1]
+            if ubuntu_version.startswith("18."):
+                gpt = "/home/viphap/snap/bin/gpt"
+            else:
+                gpt = "/usr/local/snap/bin/gpt"
 
         # Update config dictionary
         config_update = {
