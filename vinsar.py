@@ -3,40 +3,48 @@ from snap2stamps import Manager
 from stamps import StaMPSEXE
 from crlink import CRLink
 import time
+import json
 
 if __name__ == "__main__":
+    with open("in.json", "r") as config_file:
+        config = json.load(config_file)
 
-    # Load inputs
-    inputs = {}
-    with open(".in", "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue  # skip empty lines and comments
-            if "=" not in line:
-                raise ValueError(f"Malformed line: {line}")
-            key, value = line.split("=", 1)
-            inputs[key.strip()] = value.strip()
+    # Validate required fields and types
+    for key, spec in schema.items():
+        if spec.get("required", False) and key not in config:
+            raise ValueError(f"Missing required parameter: {key}")
+        
+        value = config.get(key, spec.get("default"))
+        if value is None:
+            raise ValueError(f"No value or default provided for: {key}")
 
-    # Now assign variables from the dictionary
-    project_name = inputs.get("PROJECT_NAME")
-    bbox = inputs.get("BBOX")
-    direction = inputs.get("DIRECTION")
-    frame_no = int(inputs.get("FRAME"))
-    max_date = int(inputs.get("MAX_DATE"))
-    download_range = inputs.get("DOWNLOAD_RANGE")
-    reest_flag = int(inputs.get("REEST"))
-    identity_master = inputs.get("MASTER")
-    max_perp = float(inputs.get("MAX_PERP", 150.0))
-    da_threshold = float(inputs.get("DA", 0.4))
-    renew_flag = int(inputs.get("RENEW"))
-    process_range = inputs.get("PROCESS_RANGE")
-    stamps_flag = inputs.get("STAMPS")
-    ptype = int(inputs.get("TOMO_TYPE"))
-    unified_flag = int(inputs.get("UNIFIED"))
-    ministack_size = int(inputs.get("MSIZE"))
-    oobj = inputs.get("OOBJ")
-    n_rovers = int(inputs.get("NROVERS"))
+        # Type validation
+        if spec["type"] == "integer":
+            config[key] = int(value)
+        elif spec["type"] == "number":
+            config[key] = float(value)
+        elif spec["type"] == "string":
+            config[key] = str(value)
+
+    # Now assign variables from the validated config
+    project_name = config["PROJECT_NAME"]
+    bbox = config["BBOX"]
+    direction = config["DIRECTION"]
+    frame_no = config["FRAME"]
+    max_date = config["MAX_DATE"]
+    download_range = config["DOWNLOAD_RANGE"]
+    reest_flag = config["REEST"]
+    identity_master = config["MASTER"]
+    max_perp = config["MAX_PERP"]
+    da_threshold = config["DA"]
+    renew_flag = config["RENEW"]
+    process_range = config["PROCESS_RANGE"]
+    stamps_flag = config["STAMPS"]
+    ptype = config["TOMO_TYPE"]
+    unified_flag = config["UNIFIED"]
+    ministack_size = config["MSIZE"]
+    oobj = config["OOBJ"]
+    n_rovers = config["NROVERS"]
 
     #########################################################
     # Running phases
