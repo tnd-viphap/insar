@@ -9,42 +9,25 @@ if __name__ == "__main__":
     with open("in.json", "r") as config_file:
         config = json.load(config_file)
 
-    # Validate required fields and types
-    for key, spec in schema.items():
-        if spec.get("required", False) and key not in config:
-            raise ValueError(f"Missing required parameter: {key}")
-        
-        value = config.get(key, spec.get("default"))
-        if value is None:
-            raise ValueError(f"No value or default provided for: {key}")
-
-        # Type validation
-        if spec["type"] == "integer":
-            config[key] = int(value)
-        elif spec["type"] == "number":
-            config[key] = float(value)
-        elif spec["type"] == "string":
-            config[key] = str(value)
-
     # Now assign variables from the validated config
-    project_name = config["PROJECT_NAME"]
-    bbox = config["BBOX"]
-    direction = config["DIRECTION"]
-    frame_no = config["FRAME"]
-    max_date = config["MAX_DATE"]
-    download_range = config["DOWNLOAD_RANGE"]
-    reest_flag = config["REEST"]
-    identity_master = config["MASTER"]
-    max_perp = config["MAX_PERP"]
-    da_threshold = config["DA"]
-    renew_flag = config["RENEW"]
-    process_range = config["PROCESS_RANGE"]
-    stamps_flag = config["STAMPS"]
-    ptype = config["TOMO_TYPE"]
-    unified_flag = config["UNIFIED"]
-    ministack_size = config["MSIZE"]
-    oobj = config["OOBJ"]
-    n_rovers = config["NROVERS"]
+    project_name = str(config["PROJECT_NAME"])
+    bbox = list(config["BBOX"])
+    direction = str(config["DIRECTION"])
+    frame_no = int(config["FRAME"])
+    max_date = int(config["MAX_DATE"])
+    download_range = list(config["DOWNLOAD_RANGE"])
+    reest_flag = int(config["REEST"])
+    identity_master = str(config["MASTER"])
+    max_perp = float(config["MAX_PERP"])
+    da_threshold = float(config["DA"])
+    renew_flag = int(config["RENEW"])
+    process_range = list(config["PROCESS_RANGE"])
+    stamps_flag = str(config["STAMPS"])
+    ptype = int(config["TOMO_TYPE"])
+    unified_flag = int(config["UNIFIED"])
+    ministack_size = int(config["MSIZE"])
+    oobj = str(config["OOBJ"])
+    n_rovers = int(config["NROVERS"])
 
     #########################################################
     # Running phases
