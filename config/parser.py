@@ -112,7 +112,7 @@ class Initialize:
         if plf == "Windows":
             gpt = "C:/Program Files/snap/bin/gpt.exe"
         elif plf == "Linux":
-            ubuntu_version = distro.linux_distribution()[1]
+            ubuntu_version = distro.version()
             if ubuntu_version.startswith("18."):
                 gpt = os.path.split(os.path.abspath(__file__))[0].split('insar')[0] + 'snap/bin/gpt'
             else:
