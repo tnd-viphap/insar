@@ -127,7 +127,7 @@
         "log_folder": "/home/viphap/insar_maychai/insar/logs/",
         "data_folder": "/home/viphap/insar_maychai/insar/data/",
         "master_folder": "/home/viphap/insar_maychai/insar/data/master/",
-        "master": "/home/viphap/insar_maychai/insar/data/master/20250522/20250522_M.dim",
+        "master": "/home/viphap/insar_maychai/insar/data/master/20250428/20250428_M.dim",
         "slaves_folder": "/home/viphap/insar_maychai/insar/data/slaves/",
         "raw_data_folder": "/home/viphap/insar_maychai/insar/data/raw/",
         "coreg_folder": "/home/viphap/insar_maychai/insar/process/coreg/",
@@ -147,13 +147,13 @@
       },
       "processing_parameters": {
         "iw1": "IW1",
-        "first_burst": "5",
-        "last_burst": "5",
-        "old_master": "20250215",
+        "first_burst": 5,
+        "last_burst": 5,
+        "old_master": "20250428",
         "max_perp": 150.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "/home/viphap/insar_maychai/insar/results/INSAR_20250522_PSDS_v4",
+        "current_result": "",
         "ministack": 5,
         "unified": 0,
         "ptype": 0
@@ -165,7 +165,7 @@
         "lat_max": 20.899435
       },
       "snap_gpt": {
-        "gptbin_path": "/home/viphap/snap/bin/gpt"
+        "gptbin_path": "/usr/local/snap/bin/gpt"
       },
       "api_flags": {
         "comsar": 0

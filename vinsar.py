@@ -17,7 +17,7 @@ if __name__ == "__main__":
     max_date = int(config["MAX_DATE"])
     download_range = list(config["DOWNLOAD_RANGE"])
     reest_flag = int(config["REEST"])
-    identity_master = str(config["MASTER"])
+    identity_master = str(config["MASTER"]) if isinstance(config["MASTER"], str) else None
     max_perp = float(config["MAX_PERP"])
     da_threshold = float(config["DA"])
     renew_flag = int(config["RENEW"])
