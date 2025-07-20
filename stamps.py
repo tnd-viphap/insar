@@ -233,7 +233,24 @@ class StaMPSEXE:
             )
                 subprocess.run(matlab_cmd, shell=True)
             else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\"")
+                # Prepare the StaMPS path setup script
+                stamps_path_setup = os.path.join(
+                    os.path.split(os.path.abspath(__file__))[0],
+                    "modules",
+                    "StaMPS",
+                    "set_defaultpath.m"
+                )
+
+                # Build the MATLAB command string
+                cmd = (
+                    f"matlab -nojvm -nosplash {self.display} "
+                    f"-r \"run('{stamps_path_setup}'); "
+                    f"ps_plot('v-dao', 'a_linear', -1); "
+                    f"exit;\""
+                )
+
+                # Execute
+                os.system(cmd)
         print("   -> V-dao done")
         
         # Load necessary data
@@ -375,15 +392,15 @@ class StaMPSEXE:
     
     def run(self):
         self.csv_files = []
-        if platform.system() == 'Windows':
-            matlab_cmd = (
-                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
-                f"-r \"run('{os.path.split(os.path.abspath(__file__))[0].replace(os.sep, '/')}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" "
-                f"> \"{self.config['processing_parameters']['current_result'].replace(os.sep, '/')}/STAMPS.log\""
-            )
-            subprocess.run(matlab_cmd, shell=True)
-        else:
-            os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config['processing_parameters']['current_result']}/STAMPS.log")
+        # if platform.system() == 'Windows':
+        #     matlab_cmd = (
+        #         f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
+        #         f"-r \"run('{os.path.split(os.path.abspath(__file__))[0].replace(os.sep, '/')}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" "
+        #         f"> \"{self.config['processing_parameters']['current_result'].replace(os.sep, '/')}/STAMPS.log\""
+        #     )
+        #     subprocess.run(matlab_cmd, shell=True)
+        # else:
+        #     os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config['processing_parameters']['current_result']}/STAMPS.log")
         time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.config["processing_parameters"]["current_result"], f) for f in os.listdir(self.config["processing_parameters"]["current_result"]) if f.startswith('PATCH_')]
