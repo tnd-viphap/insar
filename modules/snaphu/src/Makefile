@@ -1,6 +1,6 @@
 # Makefile for statistical-cost network-flow algorithm for phase unwrapping 
 # Curtis W. Chen
-# Copyright 2002 Board of Trustees, Leland Stanford Jr. University
+# Copyright 2002,2017 Board of Trustees, Leland Stanford Jr. University
 
 # Specify your compiler (CC), whatever compiler flags (CFLAGS) you
 # need, and the directory (BINDIR) in which the produced binary should
@@ -13,8 +13,10 @@
 # If you specify -D NO_CS2, the program will be compiled without the
 # CS2 MCF solver module.
 
-CC		=	cc 
-CFLAGS		=	-O3   # -D NO_CS2
+CC		=	cc
+OPTIMFLAGS	=	-O3
+DEBUGFLAGS	=	-ggdb
+CFLAGS		=	-march=x86-64 $(OPTIMFLAGS) -Wall # -arch arm64 -Wuninitialized -m64 -D NO_CS2
 LIBS		=	-lm 
 BINDIR		=	../bin
 INSTALLDIR	=	/usr/local/bin
@@ -29,6 +31,7 @@ OBJS		=	snaphu_tile.o \
 			snaphu_cs2.o 
 
 
+.PHONY:	all
 all:		$(SNAPHU)
 
 $(SNAPHU):	snaphu.c $(OBJS) snaphu.h Makefile 
@@ -37,6 +40,10 @@ $(SNAPHU):	snaphu.c $(OBJS) snaphu.h Makefile
 		$(OBJS) \
 		-o $(SNAPHU) \
 		$(LIBS)
+
+.PHONY:	gdebug
+gdebug:		snaphu.c snaphu_tile.c snaphu_solver.c snaphu_io.c snaphu_util.c snaphu_cost.c snaphu_cs2.c snaphu.h
+		$(CC) $(DEBUGFLAGS) snaphu.c snaphu_tile.c snaphu_solver.c snaphu_io.c snaphu_util.c snaphu_cost.c snaphu_cs2.c -o $(SNAPHU) $(LIBS)
 
 install:	$(SNAPHU)
 		cp $(SNAPHU) $(INSTALLDIR);
