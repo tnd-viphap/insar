@@ -26,42 +26,17 @@
 # Output file name
 # OUTFILE	snaphu.out
 
-# Weight file name
-# WEIGHTFILE	snaphu.weights.in
-
-# Amplitude file name(s)
+# Amplitude file name
 # AMPFILE	snaphu.amp.in	# Single file containing amplitude images
-#
-# AMPFILE1      snaphu.amp1.in  # Pair of separate files for amplitude images
-# AMPFILE2      snaphu.amp2.in
-
-# Power file name(s)
-# PWRFILE	snaphu.amp.in	# Single file containing power images
-#
-# PWRFILE1      snaphu.amp1.in  # Pair of separate files for power images
-# PWRFILE2      snaphu.amp2.in
-
-# Interferogram magnitude file
-# MAGFILE	snaphu.mag.in
 
 # Correlation file name
 # CORRFILE	snaphu.corr.in
 
-# Coarse unwrapped-phase estimate file name
-# ESTIMATEFILE	snaphu.est.in
+# Input file of signed binary byte (signed char) values.  
+# BYTEMASKFILE  snaphu.bytemask
 
-# Input cost file (for statistical costs).  If costs are read from this 
-# file, many of the other parameters will be ignored (string).
-# COSTINFILE snaphu.costinfile
-
-# Output cost file to which statistical costs will be dumped (string). 
-# Costs are not dumped if no file is given.
-# COSTOUTFILE snaphu.costoutfile
-
-# Text file to which runtime parameters will be logged.  The format of
-# that file will be suitable so that it can also be used as a
-# configuration file.  
-# LOGFILE snaph.logfile
+# Text file to which runtime parameters will be logged.  
+# LOGFILE       snaph.logfile
 
 # Statistical-cost mode (TOPO, DEFO, SMOOTH, or NOSTATCOSTS)
 # STATCOSTMODE	TOPO
@@ -71,9 +46,6 @@
 
 # Unwrapped-input mode (TRUE or FALSE)
 # UNWRAPPED_IN	FALSE
-
-# Debug mode, dumps all intermediate arrays (TRUE or FALSE)
-# DEBUG		FALSE
 
 # Algorithm used for initialization of wrapped phase values.  Possible
 # values are MST and MCF.  
@@ -105,6 +77,7 @@
 
 # Input file format
 # Allowable formats:
+# If the data are not complex, the phase should be in radians from 0 to 2pi.
 #   COMPLEX_DATA        (default)
 #   ALT_LINE_DATA       (magnitude in channel 1, phase in radians in channel 2)
 #   ALT_SAMPLE_DATA     (magnitude in channel 1, phase in radians in channel 2)
@@ -114,9 +87,9 @@
 
 # Output file format
 # Allowable formats:
-#   ALT_LINE_DATA       (interferogram magnitude in channel 1, 
+#   ALT_LINE_DATA       (masked interferogram magnitude in channel 1, 
 #                        unwrapped phase in radians in channel 2; default)
-#   ALT_SAMPLE_DATA     (interferogram magnitude in channel 1, 
+#   ALT_SAMPLE_DATA     (masked interferogram magnitude in channel 1, 
 #                        unwrapped phase in radians in channel 2)
 #   FLOAT_DATA          (unwrapped phase in radians)
 #
@@ -132,16 +105,6 @@
 #
 #AMPFILEFORMAT		ALT_SAMPLE_DATA
 
-# Magnitude file format 
-# Allowable formats:
-#   ALT_LINE_DATA       (interferogram magnitude in channel 1, 
-#                        channel 2 ignored)
-#   ALT_SAMPLE_DATA     (interferogram magnitude in channel 1, 
-#                        channel 2 ignored)
-#   FLOAT_DATA          (interferogram magnitude; default)
-#
-#MAGFILEFORMAT 		FLOAT_DATA
-
 # Correlation file format
 # Allowable formats:
 #   ALT_LINE_DATA       (channel 1 ignored; correlation values 
@@ -151,16 +114,6 @@
 #   FLOAT_DATA          (correlation values between 0 and 1)
 #
 #CORRFILEFORMAT		ALT_LINE_DATA
-
-# Unwrapped estimate file format
-# Allowable formats:
-#   ALT_LINE_DATA       (interferogram magnitude in channel 1, 
-#                        unwrapped phase in radians in channel 2; default)
-#   ALT_SAMPLE_DATA     (interferogram magnitude in channel 1, 
-#                        unwrapped phase in radians in channel 2)
-#   FLOAT_DATA          (unwrapped phase in radians)
-#
-#ESTFILEFORMAT		ALT_LINE_DATA
 
 # Unwrapped input file format
 # Allowable formats:
@@ -275,47 +228,9 @@ NCORRLOOKSAZ	15
 # Scattering model parameters #
 ###############################
 
-# The scattering model: brightness proportional to
-#
-#    sigma0 = C * (kds*cos(thetai) + (cos(2thetai))^n) * cos(thetai)
-#
-# kds (input parameter KDS) is the ratio of diffuse to specular
-# scattering.  n (input parameter SPECULAREXP) is the power to which
-# speclar cosine term is rasied.  Larger n implies a sharper peak for
-# specular scatter (both doubles, dimensionless).
-KDS		0.02
-SPECULAREXP	8.0
-
-# Multiplicative factor applied to diffuse scatter term in evaluating
-# crossover point between diffuse and specular scatter in terms of 
-# range slope (double, dimensionless).
-DZRCRITFACTOR	2.0
-
-# Allow shadow discontinuities (TRUE,FALSE)?  (not yet enabled)
-SHADOW		FALSE
-
-# Minimum slope expected in the absence of layover (double,  
-# meters per slant-range pixel).
-DZEIMIN		-4.0
-
-# Number of pixels towards in increasing range that should be included in
-# layover height estimation (long, dimensionless).
-LAYWIDTH	16
-
 # Threshold brightness (normalized) for layover height integration 
 # (double, dimensionless)
 LAYMINEI	1.25
-
-# Multiplicative factor applied to kds (see scattering model) in order
-# to get ratio of slopes for linearized scattering model.  The term improves
-# agreement of the piecewise-linear model with the cosine model near the
-# transition point (dzrcrit) at the expense of poorer agreement at very
-# large slopes (double, dimensionless).
-SLOPERATIOFACTOR 1.18
-
-# Variance (sigma squared) of range slopes due to uncertainties in slope
-# estimation from brightness (double, (meters/pixel)^2)
-SIGSQEI		100.0
 
 
 ##################################
@@ -325,30 +240,6 @@ SIGSQEI		100.0
 # Here, rho is the magnitude of the complex correlation coefficient
 # between the two observations forming the interferogram (0<=rho<=1)
 # See Zebker & Villasenor, 1992
-
-# Step size for calculating lookup table of maximum layover slope based
-# on measured correlation (double, dimensionless).
-DRHO		0.005
-
-# Constants (double) for modeling biased measured correlation expected for
-# zero statistical correlation:
-#
-#   rho0 ~= rhosconst1/ncorrlooks + rhosconst2
-#
-# Approximately matches curves of Touzi, Lopes, Bruniquel, & Vachon 1999
-# (double).
-RHOSCONST1	1.3
-RHOSCONST2	0.14
-
-# Constants (double) for modeling phase standard deviation as a function 
-# of rho:
-#
-#   sigma ~= rho ^ ( cstd1 + cstd2*log(nlooks) + cstd3*nlooks )
-#
-# Approximately matches curves of Lee, Hoppel, Mango, & Miller, 1994.
-CSTD1		0.4
-CSTD2		0.35
-CSTD3		0.06
 
 # Default value to use uniformly for true, unbiased correlation if no 
 # correlation file is specified and correlation cannot be generated 
@@ -370,45 +261,13 @@ RHOMINFACTOR	1.3
 #
 #   cost = -log(f(phi | EI, rho))
 
-# Layover peak location (meters/pixel)
-DZLAYPEAK	-2.0
-
 # Factor applied to range layover probability density to get azimuth
 # layover probability density (double).  
 AZDZFACTOR	0.99 
 
-# Factor applied to slope expected from brightness without layover (double).
-# Can account for underestimation of brightness from averaging with 
-# neighboring dark pixels when despeckling.
-DZEIFACTOR      4.0
-
-# Weight applied to slope expected from brightness without layover (double).
-# Must be between zero and one.  Can reduce influence of intensity on 
-# nonlayover slope.  This is useful if there are lots of nontopographic
-# variations in brightness (ie, changes in surface relfectivity).
-DZEIWEIGHT      0.5
-
-# Factor applied to slope expected from brightness with layover (double).
-# Can account for underestimation of brightness from averaging with 
-# neighboring dark pixels when despeckling.
-DZLAYFACTOR	1.0
-
 # Ratio of layover probability density to peak probability density
 # for non-layover slopes expected (double).
 LAYCONST	0.9
-
-# Factor applied to slope varinace for nonlayover to get falloff of
-# probability density after the upper layover slope limit has been 
-# exceeded (double).
-LAYFALLOFFCONST	2.0
-
-# Minimum value of variance when cast to short integer data type (long).
-# Must be greater than 0 to avoid divide-by-zero.
-SIGSQSHORTMIN	1
-
-# Fraction of (ambiguity height)^2 to use for slope variance in the 
-# presence of layover.  Should usually be less than (1/2)^2 = 0.25.
-SIGSQLAYFACTOR	0.1
 
 
 ###############################
@@ -430,10 +289,6 @@ DEFOTHRESHFACTOR 1.2
 DEFOMAX_CYCLE	1.2
 #DEFOMAX_RAD	7.5398
 
-# Phase variance (cycles^2) reflecting uncertainty in measurement of 
-# actual statistical correlation (double).
-SIGSQCORR	0.05
-
 # Ratio of phase discontinuity probability density to peak probability
 # density expected for discontinuity-possible pixel differences (double).
 # Value of 1 means zero cost for discontinuity, 0 means infinite cost.
@@ -444,134 +299,41 @@ DEFOCONST	0.9
 # Algorithm parameters #
 ########################
 
-# Maximum flow (long) to allow in initialization.  If this is zero,
-# then the maximum is calculated automatically from the statistical
-# cost functions.  To disable, set it to a large value like 9999, but 
-# do not overflow the long integer data type.
-INITMAXFLOW	9999
-
-# Constant (long) to add to maximum flow expected from statistical 
-# cost functions for automatically determining initial maximum 
-# flow (see above).
-ARCMAXFLOWCONST	3
-
 # Maximum flow increment (long) for solver.  Not the same as maximum 
 # flow possible.
 MAXFLOW		4
-
-# Number of pixels in row and column dimensions to use in sliding average
-# window used for normalizing intensity values (long).
-KROWEI		65
-KCOLEI		257
-
-# Number of pixels to use in sliding window average used for averaging 
-# wrapped gradients to get mean non-layover slope, in directions parallel
-# and perpendicular to the examined phase difference (long).
-KPARDPSI	7
-KPERPDPSI	7
-
-# Threshold precision for iterative numerical calculations (double).
-THRESHOLD	0.001
-
-# Initial value of range slope for dzrcrit numerical solution (double, 
-# meters/pixel)
-INITDZR		2048.0
-
-# Initial range slope stepsize in dzrhomax numerical solution (double, 
-# meters/pixel)
-INITDZSTEP	100.0
-
-# Maximum cost allowd for scalar MST costs and for estimating number of 
-# buckets needed for solver routine (double).
-MAXCOST		1000.0
 
 # Scaling constant factor applied to double precision costs to get 
 # integer costs (double).
 COSTSCALE	100.0
 
-# Ambiguity height for autoscaling COSTSCALE to equal 100 (double,
-# meters).  COSTSCALE is automatically adjusted to be inversely
-# proportional to the midswath ambigutiy height in topography mode.
-COSTSCALEAMBIGHT 80.0
-
-# Step size (double, radians) for dzrhomax lookup table.  The index is
-# on the local flat-earth incidence angle; this is the sample spacing
-# in the table.
-DNOMINCANGLE	0.01
-
 # Integer spacing that represents one unit of flow or one cycle of phase
 # when storing costs as short integer types (long).
 NSHORTCYCLE	200
 
-# Fraction of total number of nodes to add in each tree expansion
-# phase of solver algorithm (double).
-MAXNEWNODECONST	0.0008
-
-# Number of cycles to allow for a call to solver with a specific flow
-# increment delta and still consider that increment done.  Ideally
-# it would be zero, but scaling for different deltas may leave some 
-# negative cycles that won't affect solution much.  Comment this out 
-# to automatically determine the number based on the size of the 
-# interferogram.
-#MAXNFLOWCYCLES	10
-
-# Fraction of the number of pixels to use as the maximum number of 
-# cycles allowed for a specific flow increment if MAXNFLOWCYCLES 
-# is not given.
-MAXCYCLEFRACTION 0.00001
-
-# Determines how the source or root of the tree is chosen for the 
-# modified network-simplex solver.  If SOURCEMODE is zero, the 
-# ground node is used as the root (usually fastest).  Otherwise, 
-# SOURCEMODE should be 1 or -1, and the root is the endpoint of the 
-# longest chain of flow greater than or equal to the current flow 
-# increment, where the sign of SOURCEMODE determines which end of the
-# chain is used.
-SOURCEMODE	0
-
-# Scale factor (long) for cs2 MCF initializations.  A larger number
-# gives greater speed, but uses more memory.
-CS2SCALEFACTOR	8
+# Gives the minimum number of connected nodes to consider for
+# unwrapping.  If masking separates the input data into disconnected
+# sets of pixels, a source is selected for each connected set,
+# provided that the number of nodes in the set is greater than
+# NCONNNODEMIN.  If NCONNNODEMIN is zero, all possible unmasked pixels
+# will be uwnrapped.  NCONNNODEMIN should be nonnegative.
+NCONNNODEMIN    0
 
 
-##############################################
-# File names for dumping intermediate arrays #
-##############################################
+###########################
+# Edge masking parameters #
+###########################
 
-# If the following file names are given, the corresponding intermediate
-# array will be dumped to that file.  Otherwise, the array is not dumped.
-# These filenames override the default file names assigned when 
-# DEBUG is TRUE.
-
-# Unwrapped initialization 
-# INITFILE 		snaphu.init
-
-# Flow corresponding to unwrapped solution
-# FLOWFILE		snaphu.flow
-
-# Normalized, despeckled SAR image intensity
-# EIFILE		snaphu.ei
-
-# Statistical costs for azimuth
-# ROWCOSTFILE		snaphu.rowcost
-
-# Statistical costs for range
-# COLCOSTFILE		snaphu.colcost
-
-# Scalar initialization costs for azimuth
-# MSTROWCOSTFILE	snaphu.mstrowcost
-
-# Scalar initialization costs for range
-# MSTCOLCOSTFILE	snaphu.mstcolcost
-
-# Scalar initialization costs for both azimuth and range, concatenated
-# MSTCOSTSFILE		snaphu.mstcosts
-
-# Correlation coefficient magnitude (before clipping into [0,1] interval)
-# RAWCORRDUMPFILE	snaphu.rawcorr
-
-# Correlation coefficient magnitude (after clipping into [0,1] interval)
-# CORRDUMPFILE		snaphu.corr
+# These parameters (long, dimensionless) are used to mask out pixels
+# near the edges of the input array.  EDGEMASKTOP, EDGEMASKBOT,
+# EDGEMASKLEFT, and EDGEMASKRIGHT specify the numbers of pixels from the
+# top, bottom, left, and right edges respectively that should be
+# masked out.  Masking is only applied during the nonlinear solver
+# stage (not the initialization).  
+# EDGEMASKTOP           0
+# EDGEMASKBOT           0
+# EDGEMASKLEFT          0
+# EDGEMASKRIGHT         0
 
 
 ###############################
@@ -633,19 +395,52 @@ CS2SCALEFACTOR	8
 # The program will remove temporary tile files if this is set.
 # RMTMPTILE 		FALSE
 
-# If this is set to anything besides FALSE, the program will skip
-# the unwrapping step and only assemble temporary tile files from a previous 
-# invocation saved in the directory whose name is given here.  The tile size 
-# parameters and file names must be the same.
-# ASSEMBLEONLY		tiledir
+# This is the name (string) of a file of signed character data types
+# which serve as a mask for which tiles will be unwrapped.  The file
+# should be a raster array with NTILEROW rows and NTILECOL columns.
+# Where the array element is nonzero, the corresponding tile will be
+# unwrapped; where the array element is zero, the tile will not be
+# unwrapped and no output for that tile will be written.  This option
+# is used for reprocessing only certain tiles of a run.
+# DOTILEMASKFILE        snaphu.dotilemaskfile.in
+
+# This is the name of the tile directory.  Tiles will be stored
+# temporarily in the tile directory.  If in assemble only mode,
+# unwrapped tiles  are assumed to reside in this directory.  The
+# directory is create if it does not exist.
+# TILEDIR		snaphu_tiledir
+
+# If this is set to TRUE, the program will skip the unwrapping step
+# and only assemble temporary tile files from a previous invocation
+# saved in the directory whose name is given by the TILEDIR keyword.
+# The tile size parameters and file names must be the same.
+# ASSEMBLEONLY		FALSE
+
+# Repotimize as single tile after using tile mode for intialization if
+# this is set to TRUE.  This is equivalent to unwrapping with multiple
+# tiles, then using the unwrapped output as the input to a new, single-tile run
+# of snaphu with the -u option.  The purpose is for speed.
+#SINGLETILEREOPTIMIZE   FALSE
 
 
 ###############################
 # Connected component control #
 ###############################
 
-# Grow connected components mask and write to output file specified.
-# CONNCOMPFILE		snaphu.conncomp
+# Grow connected components mask and write to the output file whose
+# name is specified here as a string.  The mask is a file of unsigned
+# integer values with the same number of rows and columns as the
+# unwrapped interferogram.  The type of integer (1 byte vs. 4 byte) is
+# specified by the CONNCOMPOUTTYPE keyword, with 1-byte integers being
+# the default.
+# CONNCOMPFILE            snaphu.conncomp
+
+# Type of integer that the connected-component output, if requested,
+# will be written as (see the CONNCOMPFILE keyword).  The value here
+# may be either UCHAR or UINT, which specify unsigned character
+# (1-byte integer) or unsigned integer (4-byte integer) values,
+# respectively.
+# CONNCOMPOUTTYPE         UCHAR
 
 # Grow connected components mask from unwrapped input then exit if TRUE.
 # Output is written to the file specified by CONNCOMPFILE.
