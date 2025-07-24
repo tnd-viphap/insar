@@ -32,14 +32,18 @@ if __name__ == "__main__":
     #########################################################
     # Running phases
     #########################################################
-    session = Manager(bbox, direction, frame_no, download_range, max_date, reest_flag, identity_master,
-                      max_perp, da_threshold, renew_flag=renew_flag, process_range=process_range,
-                      stamps_flag=stamps_flag, ptype=ptype,
-                      stack_size=ministack_size, uni=unified_flag, project_name=project_name).run_stages()
-    time.sleep(1)
-    ps_results = StaMPSEXE(oobj, project_name).run()
-
-    time.sleep(1)
-    crlink = CRLink(ps_results, n_rovers).run()
+    with open("control.json", "r") as control_file:
+        control = json.load(control_file)
+    if control["mamanger_run"]:
+        session = Manager(bbox, direction, frame_no, download_range, max_date, reest_flag, identity_master,
+                        max_perp, da_threshold, renew_flag=renew_flag, process_range=process_range,
+                        stamps_flag=stamps_flag, ptype=ptype,
+                        stack_size=ministack_size, uni=unified_flag, project_name=project_name).run_stages()
+        time.sleep(1)
+    if control["stamps_run"]:
+        ps_results = StaMPSEXE(oobj, project_name).run()
+        time.sleep(2)
+    if control["crlink_run"]:
+        crlink = CRLink(ps_results, n_rovers).run()
 
 
