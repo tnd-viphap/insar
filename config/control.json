@@ -1,0 +1,13 @@
+{
+    "mamanger_run": true,
+    "stamps_run": true,
+    "crlink_run": true,
+    "initialize_run": true,
+    "download_run": true,
+    "master_select_run": true,
+    "master_split_run": true,
+    "slave_split_run": true,
+    "coreg_ifg_run": true,
+    "stamps_export_run": true,
+    "stamps_prep_run": true
+} 
