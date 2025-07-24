@@ -303,25 +303,26 @@
     },
     "hnmetro": {
       "project_definition": {
-        "project_folder": "D:/projects/insar",
-        "graphs_folder": "D:/projects/insar/modules/snap2stamps/graphs/",
-        "log_folder": "D:/projects/insar/logs/",
-        "data_folder": "D:/projects/insar/data/",
-        "master_folder": "D:/projects/insar/data/master/",
-        "slaves_folder": "D:/projects/insar/data/slaves/",
-        "raw_data_folder": "D:/projects/insar/data/raw/",
-        "coreg_folder": "D:/projects/insar/process/coreg/",
-        "ifg_folder": "D:/projects/insar/process/ifg/",
-        "stamp_folder": "D:/projects/insar/results/",
-        "config_path": "D:/projects/insar/modules/snap2stamps/bin/project.conf"
+        "project_folder": "/home/viphap/insar_hnmetro/insar",
+        "graphs_folder": "/home/viphap/insar_hnmetro/insar/modules/snap2stamps/graphs/",
+        "log_folder": "/home/viphap/insar_hnmetro/insar/logs/",
+        "data_folder": "/home/viphap/insar_hnmetro/insar/data/",
+        "master_folder": "/home/viphap/insar_hnmetro/insar/data/master/",
+        "master": "",
+        "slaves_folder": "/home/viphap/insar_hnmetro/insar/data/slaves/",
+        "raw_data_folder": "/home/viphap/insar_hnmetro/insar/data/raw/",
+        "coreg_folder": "/home/viphap/insar_hnmetro/insar/process/coreg/",
+        "ifg_folder": "/home/viphap/insar_hnmetro/insar/process/ifg/",
+        "stamp_folder": "/home/viphap/insar_hnmetro/insar/results/",
+        "config_path": "/home/viphap/insar_hnmetro/insar/modules/snap2stamps/bin/project.conf"
       },
       "cache_files": {
-        "download_cache": "D:/projects/insar/data/download_cache.txt",
-        "broken_cache": "D:/projects/insar/data/broken_cache.txt",
-        "baseline_cache": "D:/projects/insar/data/baseline_cache.txt"
+        "download_cache": "/home/viphap/insar_hnmetro/insar/data/download_cache.txt",
+        "broken_cache": "/home/viphap/insar_hnmetro/insar/data/broken_cache.txt",
+        "baseline_cache": "/home/viphap/insar_hnmetro/insar/data/baseline_cache.txt"
       },
       "search_parameters": {
-        "datalake": "D:/projects/insar/data/lake.json",
+        "datalake": "/home/viphap/insar_hnmetro/insar/data/lake.json",
         "direction": "DESCENDING",
         "frame": 522
       },
@@ -329,23 +330,23 @@
         "iw1": "IW1",
         "first_burst": 5,
         "last_burst": 5,
-        "old_master": null,
-        "max_perp": 600.0,
+        "old_master": "",
+        "max_perp": 150.0,
         "da_threshold": 0.4,
         "reest_flag": 1,
-        "current_result": "D:/VIPHAP/insar/results/INSAR_20200909_PSDS_v3",
+        "current_result": "",
         "ministack": 5,
         "unified": 0,
         "ptype": 0
       },
       "aoi_bbox": {
-        "lon_min": 106.691059,
-        "lat_min": 20.837039,
-        "lon_max": 106.776203,
-        "lat_max": 20.899435
+        "lon_min": 105.7214,
+        "lat_min": 21.0186,
+        "lon_max": 105.8587,
+        "lat_max": 21.0869
       },
       "snap_gpt": {
-        "gptbin_path": "C:/Program Files/snap/bin/gpt.exe"
+        "gptbin_path": "/usr/local/snap/bin/gpt"
       },
       "api_flags": {
         "comsar": 0
@@ -357,8 +358,8 @@
         "nrovers": 2
       },
       "computing_resources": {
-        "cpu": 13,
-        "cache": "24G"
+        "cpu": 22,
+        "cache": "118G"
       }
     }
   }
