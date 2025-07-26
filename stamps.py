@@ -1,11 +1,9 @@
 # type: ignore
 import os
 import re
-import shutil
 import sys
-import time
 import platform
-import subprocess
+from datetime import timedelta
 
 import geopandas as gpd
 import jenkspy
@@ -183,7 +181,7 @@ class StaMPSEXE:
         
         return gdf
     
-    def ps_dem_err(self):
+    def ps_dem_err(self, identity):
         parms = Parms(self.project_name)
         parms.load()
         slant_range = parms.get('range_pixel_spacing')
@@ -192,25 +190,24 @@ class StaMPSEXE:
         rs = parms.get('sar_to_earth_center')
         lambda_val = parms.get('lambda')
         
-        ij = sio.loadmat("ps2.mat")['ij']
-        K_ps_uw = sio.loadmat("scla2.mat")['K_ps_uw']
-        
+        ij = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'ps2.mat'))['ij']
+        K_ps_uw = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'scla2.mat'))['K_ps_uw']
         
         range_pixel = ij[:, 2].reshape(-1, 1)
         del ij
         rg = near_range + range_pixel * slant_range
         alpha = np.pi - np.arccos((rg**2 + re**2 - rs**2) / (2 * rg * re))
-        dem_err = -K_ps_uw * lambda_val * rg * np.sin(alpha) / (4 * np.pi)
+        dem_err = -K_ps_uw.T * lambda_val * rg * np.sin(alpha) / (4 * np.pi)
         dem_err = dem_err.reshape(-1, 1)
         
         # Save result
-        sio.savemat("dem_err.mat", {"dem_err": dem_err})
+        sio.savemat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'dem_err.mat'), {"dem_err": dem_err})
         return dem_err
         
-    def ps_lonlat_err(self, dem_err):
+    def ps_lonlat_err(self, dem_err, identity):
         parms = Parms(self.project_name)
         parms.load()
-        la = sio.loadmat("la2.mat")['la']
+        la = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'la2.mat'))['la']
         heading = parms.get('heading')
         re = parms.get('earth_radius_below_sensor')
         theta = (180 - heading) * np.pi / 180
@@ -219,43 +216,22 @@ class StaMPSEXE:
         Dlon = np.arccos(1 - (Dx**2) / (2 * re**2)) * 180 / np.pi
         Dlat = np.arccos(1 - (Dy**2) / (2 * re**2)) * 180 / np.pi
         self.lonlat_err = np.array([Dlon, Dlat])
-        sio.savemat("lonlat_err.mat", {"lonlat_err": self.lonlat_err})
+        sio.savemat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'lonlat_err.mat'), {"lonlat_err": self.lonlat_err})
 
-    def ps_export_gis(self, csv_filename, shapefile_name, lon_rg=None, lat_rg=None, ortho=None):
-        if not os.path.exists("ps_plot_ts_v-dao.mat"):
-            if platform.system() == 'Windows':
-                matlab_cmd = (
-                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
-                f"-r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\""
-            )
-                subprocess.run(matlab_cmd, shell=True)
-            else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', 'ts'); exit;\"")
-        print("   -> TS V-dao done")
-        
-        if not os.path.exists("ps_plot_v-dao.mat"):
-            if platform.system() == 'Windows':
-                matlab_cmd = (
-                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
-                f"-r \"ps_plot('v-dao', 'a_linear', -1); exit;\""
-            )
-                subprocess.run(matlab_cmd, shell=True)
-            else:
-                os.system(f"matlab -nojvm -nosplash {self.display} -r \"ps_plot('v-dao', 'a_linear', -1); exit;\"")
-        print("   -> V-dao done")
-        
+    def ps_export_gis(self, csv_filename, shapefile_name, lon_rg=None, lat_rg=None, ortho=None, identity=None):
+        if not os.path.exists("data/geom/"):
+            os.makedirs("data/geom/")
         # Load necessary data
-        ph_disp = sio.loadmat("ps_plot_v-dao.mat")['ph_disp'].flatten()
-        ts_data = sio.loadmat("ps_plot_ts_v-dao.mat")
+        ph_disp = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'ps_plot_v-dao.mat'))['ph_disp'].flatten()
+        ts_data = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'ps_plot_ts_v-dao.mat'))
         ph_mm = ts_data['ph_mm']
-        day = ts_data['day'].flatten()
-        ps2_data = sio.loadmat("ps2.mat")
+        ps1_data = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'ps1.mat'))
+        ps2_data = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'ps2.mat'))
         lonlat = ps2_data['lonlat']
         xy = ps2_data['xy']
-        lonlat_err = sio.loadmat("lonlat_err.mat")['lonlat_err']
-        dem_err = sio.loadmat("dem_err.mat")['dem_err'].flatten()
-        hgt = sio.loadmat("hgt2.mat")['hgt'].flatten()
-        coh_ps = sio.loadmat("pm2.mat")['coh_ps'].flatten()
+        coh_ps = sio.loadmat(os.path.join(self.config["processing_parameters"]["current_result"], identity, 'pm2.mat'))['coh_ps'].flatten()
+
+        ph_mm = np.hstack((ph_mm[:, :ps1_data["master_ix"][0][0]], np.zeros((ph_mm.shape[0], 1)), ph_mm[:, ps1_data["master_ix"][0][0]:]))
         
         # Filter data based on region of interest
         if lon_rg and lat_rg:
@@ -273,12 +249,6 @@ class StaMPSEXE:
         ph_disp = ph_disp[mask]
         ph_mm = ph_mm[mask]
         
-        # DEM ORTHO CORRECTION
-        if ortho == 'ortho':
-            lonlat_err = lonlat_err.T
-            lonlat -= lonlat_err
-            hgt += dem_err
-        
         # Format data
         ids = [f'PS_{int(x)}' for x in xy[:, 0]]
         lon = [round(float(x), 8) for x in lonlat[:, 0]]
@@ -286,7 +256,9 @@ class StaMPSEXE:
         hgt = [round(float(x), 8) for x in hgt]
         coh = [round(float(x), 8) for x in coh_ps]
         vlos = [round(float(x), 8) for x in ph_disp]
-        days = [f'D{pd.to_datetime(d - 693960, origin="1899-12-30", unit="D").strftime("%Y%m%d")}' for d in day]
+        rslc_folder = os.path.join(self.config["processing_parameters"]["current_result"], 'rslc')
+        rslc_files = [f for f in os.listdir(rslc_folder) if f.endswith('.rslc')]
+        days = [f'D{f.split(".")[0]}' for f in sorted(rslc_files)]
         
         d_mm0 = ph_mm - ph_mm[:, [0]]  # First measurement as reference
         d_mm = d_mm0.tolist()
@@ -296,9 +268,15 @@ class StaMPSEXE:
         data = list(zip(ids, lon, lat, hgt, coh, vlos, *zip(*d_mm)))
         gis_data = pd.DataFrame(data, columns=header)
         gis_data = gis_data[['CODE', 'LON', 'LAT', 'HEIGHT', 'COHERENCE', 'VLOS'] + list(sorted(days, key=lambda x: int(x[1:])))]
+        gis_data = gis_data.dropna(subset=["LON", "LAT"])
+        # Drop rows where all values from column 6 onwards are zero
+        cols_to_check = gis_data.columns[6:]  # Get columns from VLOS onwards
+        mask = ~(gis_data[cols_to_check] == 0).all(axis=1)  # Create mask where not all values are 0
+        gis_data = gis_data[mask]  # Apply mask to keep only rows with some non-zero values
         gis_data.to_csv(csv_filename, index=False) # need to save file for CRLink
         coordinates = gpd.GeoSeries([Point(float(lon[i]), float(lat[i])) for i in range(len(lon))])
         gdf = gpd.GeoDataFrame(gis_data, geometry=coordinates, crs="EPSG:4326")
+        gdf = gdf.dropna(subset=["LON", "LAT"])
         gdf.to_file(f'{self.config["project_definition"]["data_folder"]}geom/temp_cr.shp', driver='ESRI Shapefile')
 
         # Rasterize the data
@@ -383,30 +361,16 @@ class StaMPSEXE:
     
     def run(self):
         self.csv_files = []
-        if platform.system() == 'Windows':
-            matlab_cmd = (
-                f"\"C:/Program Files/MATLAB/R2024a/bin/matlab.exe\" -wait -nosplash {self.display} "
-                f"-r \"run('{os.path.split(os.path.abspath(__file__))[0].replace(os.sep, '/')}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" "
-                f"> \"{self.config['processing_parameters']['current_result'].replace(os.sep, '/')}/STAMPS.log\""
-            )
-            subprocess.run(matlab_cmd, shell=True)
-        else:
-            os.system(f"matlab -nojvm -nosplash -nodisplay -r \"run('{os.path.split(os.path.abspath(__file__))[0]}/modules/StaMPS/autorun_{self.oobj.lower()}.m'); exit;\" > {self.config['processing_parameters']['current_result']}/STAMPS.log")
-        time.sleep(1)
         print('-> Exporting CSV data and Shapefiles...')
         patch_paths = [os.path.join(self.config["processing_parameters"]["current_result"], f) for f in os.listdir(self.config["processing_parameters"]["current_result"]) if f.startswith('PATCH_')]
         patch_identifier = [f for f in os.listdir(self.config["processing_parameters"]["current_result"]) if f.startswith('PATCH_')]
         for path, identity in zip(patch_paths, patch_identifier):
             csv_filename = os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}_cr.csv")
             self.csv_files.append(csv_filename)
-            shutil.copy(os.path.join(self.config["processing_parameters"]["current_result"], 'parms.json'), path)
-            os.chdir(path)
-            dem_err = self.ps_dem_err()
-            self.ps_lonlat_err(dem_err)
-            self.ps_export_gis(csv_filename, os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}.shp"), [], [], 'ortho')
-            os.chdir(self.config["processing_parameters"]["current_result"]) 
-        os.chdir(self.config["project_definition"]["project_folder"])
+            dem_err = self.ps_dem_err(identity)
+            self.ps_lonlat_err(dem_err, identity)
+            self.ps_export_gis(csv_filename, os.path.join(self.config["project_definition"]["data_folder"], f"geom/{self.config['processing_parameters']['current_result'].split('/')[-1]}_{identity}.shp"), [], [], 'ortho', identity)
         return self.csv_files
 
 if __name__ == "__main__":
-    StaMPSEXE(project_name="maychai").run()
+    StaMPSEXE(project_name="noibai").run()
