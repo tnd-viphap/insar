@@ -1639,46 +1639,25 @@ class StaMPSStep:
 
         use_triangle = False
         if n_ps != 0 and no_weed_noisy == False:
-            if use_triangle:
-                with open(f"{self.config['processing_parameters']['current_result']}/{self.patch_dir}/psweed.1.node", "w") as f:
-                    f.write(f"{n_ps} 2 0 0\n")
-                    for i in range(n_ps):
-                        f.write(f"{i+1} {xy_weed[i, 1]} {xy_weed[i, 2]}\n")
-                    f.close()
-                # try:
-                #     shutil.copy(self.triangle_path, f"{self.config['processing_parameters']['current_result']}/{self.patch_dir}")
-                # except:
-                #     pass
-                # if platform.system() == 'Windows':
-                #     self.triangle_path = os.path.join(self.config['processing_parameters']['current_result'], self.patch_dir, 'triangle.exe')
-                # else:
-                #     self.triangle_path = os.path.join(self.config['processing_parameters']['current_result'], self.patch_dir, 'triangle')
+            
+            # Assume xy_weed is a NumPy array of shape (n_points, 3)
+            # xy_weed is a (n, 3) numpy array; use columns 1 and 2 like MATLAB
+            points = xy_weed[:, 1:3]  # corresponds to xy_weed(:,2:3) in MATLAB
 
-                os.chdir(f"{self.config['project_definition']['project_folder']}/modules/triangle")
-                os.system(f"triangle.exe -e {self.config['processing_parameters']['current_result']}/{self.patch_dir}/psweed.1.node > {self.config['processing_parameters']['current_result']}/{self.patch_dir}/triangle_weed.log")
-                os.chdir(f"{self.config['processing_parameters']['current_result']}/{self.patch_dir}")
-                with open(f"{self.config['processing_parameters']['current_result']}/{self.patch_dir}/psweed.2.edge", "r") as f:
-                    header = list(map(int, f.readline().split()))
-                    edgs = np.array([list(map(int, f.readline().split())) for _ in range(header[0])])[:, 1:] - 1
-            else:
-                # Assume xy_weed is a NumPy array of shape (n_points, 3)
-                # xy_weed is a (n, 3) numpy array; use columns 1 and 2 like MATLAB
-                points = xy_weed[:, 1:3]  # corresponds to xy_weed(:,2:3) in MATLAB
+            # Perform Delaunay triangulation using scipy (triangle package doesn't directly expose delaunay)
+            delaunay = Delaunay(points)
+            triangles = delaunay.simplices  # shape (n_tri, 3), indices of triangle vertices
 
-                # Perform Delaunay triangulation using scipy (triangle package doesn't directly expose delaunay)
-                delaunay = Delaunay(points)
-                triangles = delaunay.simplices  # shape (n_tri, 3), indices of triangle vertices
+            # Now extract edges from triangles
+            edges = set()
+            for tri in triangles:
+                edges.update([
+                    tuple(sorted((tri[0], tri[1]))),
+                    tuple(sorted((tri[1], tri[2]))),
+                    tuple(sorted((tri[2], tri[0])))
+                ])
 
-                # Now extract edges from triangles
-                edges = set()
-                for tri in triangles:
-                    edges.update([
-                        tuple(sorted((tri[0], tri[1]))),
-                        tuple(sorted((tri[1], tri[2]))),
-                        tuple(sorted((tri[2], tri[0])))
-                    ])
-
-                edgs = np.array(list(edges))  # convert set to numpy array
+            edgs = np.array(list(edges))  # convert set to numpy array
 
             n_edge = edgs.shape[0]
             # Calculate phase for weeded points with proper array shapes
@@ -2174,7 +2153,7 @@ class StaMPSStep:
                 pm = sio.loadmat(f"{self.config['processing_parameters']['current_result']}/{dirname[i]}/{pmname}")
                 pm['ph_res'] = np.angle(np.exp(1j * (pm['ph_res'] - np.tile(pm['C_ps'], (pm['ph_res'].shape[1], 1)).reshape(pm['ph_res'].shape))))
                 if small_baseline_flag != 'y':
-                    pm['ph_res'] = np.hstack((pm['ph_res'], pm['C_ps'].T))
+                    pm['ph_res'] = np.hstack((pm['ph_res'], pm['C_ps']))
 
                 sigsq_noise = np.var(pm['ph_res'], axis=1)
                 coh_ps_all = np.abs(np.sum(np.exp(1j * pm['ph_res']), axis=1)) / n_ifg
@@ -2194,19 +2173,19 @@ class StaMPSStep:
                     weights = ps_weight[f_ix[k]:l_ix[k] + 1]
                     weightsum = np.sum(weights)
                     weightsave[k] = weightsum
-                    if weightsum < min_weight:
-                        ix[f_ix[k]:l_ix[k] + 1] = 0
+                    # if weightsum < min_weight:
+                    #     ix[f_ix[k]:l_ix[k] + 1] = 0
 
                 # Final filtering
-                g_ix = g_ix[ix > 0]
+                g_ix = g_ix
                 if len(g_ix) == 0:
                     ix_no_ps = True  # All PS rejected due to low weight
 
                 l_ix = np.append(np.where(np.diff(g_ix))[0], len(g_ix) - 1)
                 f_ix = np.append([0], l_ix[:-1] + 1)
-                ps_weight = ps_weight[ix > 0]
-                ps_snr = ps_snr[ix > 0]
-                ix = ix[ix > 0]
+                ps_weight = ps_weight
+                ps_snr = ps_snr
+                ix = ix
                 n_ps_g = len(f_ix)
 
                 # Update coordinates
@@ -2262,13 +2241,13 @@ class StaMPSStep:
                     pm['ph_res'] = pm['ph_res'][ix, :]
                     ph_res_g = ph_g
                 if 'K_ps' in pm:
-                    pm['K_ps'] = pm['K_ps'].T[ix, :]
+                    pm['K_ps'] = pm['K_ps'][ix, :]
                     K_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
                 if 'C_ps' in pm:
-                    pm['C_ps'] = pm['C_ps'].T[ix, :]
+                    pm['C_ps'] = pm['C_ps'][ix, :]
                     C_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
                 if 'coh_ps' in pm:
-                    pm['coh_ps'] = pm['coh_ps'].T[ix, :]
+                    pm['coh_ps'] = pm['coh_ps'][ix, :]
                     coh_ps_g = np.zeros((n_ps_g, 1), dtype=np.float32)
                 
                 if not os.path.exists(f"{self.config['processing_parameters']['current_result']}/{self.patch_dir}/ph_g_temp.mat"):
@@ -2344,7 +2323,7 @@ class StaMPSStep:
                 if os.path.exists(f"{self.config['processing_parameters']['current_result']}/{dirname[i]}/{laname}"):
                     lain = sio.loadmat(f"{self.config['processing_parameters']['current_result']}/{dirname[i]}/{laname}")
                     la_g = np.zeros((n_ps_g, 1), dtype=np.float32)
-                    lain['la'] = lain['la'].T[ix,:]
+                    lain['la'] = lain['la'][ix,:]
                     for k in tqdm(range(n_ps_g), desc="         -> Collocating line of sight over groups", unit=" group"):
                         weights = ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis]
                         la_g[k] = np.sum(lain['la'][f_ix[k]:l_ix[k] + 1] * weights, axis=0) / np.sum(weights)
@@ -2366,7 +2345,7 @@ class StaMPSStep:
                 if os.path.exists(f"{self.config['processing_parameters']['current_result']}/{dirname[i]}/{hgtname}"):
                     hgtin = sio.loadmat(f"{self.config['processing_parameters']['current_result']}/{dirname[i]}/{hgtname}")
                     hgt_g = np.zeros((n_ps_g, 1), dtype=np.float64)
-                    hgtin['hgt'] = hgtin['hgt'].T[ix,:]
+                    hgtin['hgt'] = hgtin['hgt'][ix,:]
                     for k in tqdm(range(n_ps_g), desc="         -> Collocating height over groups", unit=" group"):
                         weights = ps_weight[f_ix[k]:l_ix[k] + 1][:, np.newaxis]
                         with np.errstate(divide='ignore', invalid='ignore'):
@@ -2646,22 +2625,6 @@ class StaMPSStep:
             for i in range(ps['n_ifg'][0][0]):
                 date = datetime(1,1,1) + timedelta(days=int(ps['day'][0][i])-1)
                 print(f"      {i+1:3d} {date.strftime('%Y-%b-%d')} {ifg_std[i]:3.2f}")
-
-        # mean_std = np.mean(ifg_std)
-        # high_std_indices = np.where(ifg_std > mean_std)[0]
-        # print(f"-> Mean standard deviation: {mean_std:3.2f} degrees")
-        # print("-> Interferograms with standard deviation > mean:")
-        # for i in high_std_indices:
-        #     print(f"   -> {i+1:3d} {ps['day'][0][i]} {ifg_std[i]:3.2f}")
-
-        # # Append high bperp indices to drop_ifg_index
-        # drop_ifg_index = np.unique(np.concatenate([high_std_indices, toremove_bperp_indices]))
-        # print("drop_ifg_index values:")
-        # print(' '.join(str(idx+1) for idx in drop_ifg_index))
-
-        # # Set the updated drop_ifg_index parameter
-        # self.parms.set('drop_ifg_index', ' '.join(str(idx+1) for idx in drop_ifg_index))
-        # print(f"-> Set drop_ifg_index parameter with {len(drop_ifg_index)} interferograms (including those with |bperp| ≥ {max_bperp})")
 
         sio.savemat(os.path.join(self.config['processing_parameters']['current_result'], self.patch_dir, ifgstdname), {'ifg_std': ifg_std})
         
@@ -5652,44 +5615,43 @@ class StaMPSStep:
                     else:
                         self.control_flow[step]()
 
-    def run_normal(self):
-        with open("in.json", "r") as f:
-            in_json = json.load(f)
-        self.project_name = in_json['project_name']
-        parms = Parms(self.project_name)
-        parms.initialize()
-        parms.load()
-        parms.set('max_topo_err', in_json['max_topo_err'])
-        parms.set('gamma_change_convergence', in_json['gamma_change_convergence'])
-        parms.set('filter_grid_size', in_json['filter_grid_size'])
-        parms.set('select_method', in_json['select_method'])
-        parms.set('percent_rand', in_json['percent_rand'])
-        parms.set('quick_est_gamma_flag', in_json['quick_est_gamma_flag'])
-        parms.set('reest_gamma_flag', in_json['reest_gamma_flag'])
-        parms.set('weed_zero_elevation', in_json['weed_zero_elevation'])
-        parms.set('weed_neighbours', in_json['weed_neighbours'])
-        parms.set('merge_resample_size', in_json['merge_resample_size'])
-        parms.set('unwrap_grid_size', in_json['unwrap_grid_size'])
-        parms.set('unwrap_time_win', in_json['unwrap_time_win'])
-        parms.set('unwrap_gold_n_win', in_json['unwrap_gold_n_win'])
-        parms.set('scla_deramp', in_json['scla_deramp'])
-        parms.set('scn_time_win', in_json['scn_time_win'])
-        parms.save()
-        parms.load()
-        stamps_step = StaMPSStep(parms)
-        
-        stamps_step.run(1, 1)
-        stamps_step.run(2, 2)
-        stamps_step.run(3, 3, plot_flag=True)
-        stamps_step.run(4, 4)
-        stamps_step.run(5, 5, False)
-        stamps_step.run(5, 5, True)
-        stamps_step.run(6, 6, True, aps_flag=True)
-        stamps_step.run(7, 7, True)
-        stamps_step.run(6, 6, True)
-        stamps_step.run(7, 7, True)
-        stamps_step.run(8, 8, True)
+def run_normal():
+    with open("in.json", "r") as f:
+        in_json = json.load(f)
+    project_name = in_json['PROJECT_NAME']
+    parms = Parms(project_name)
+    parms.initialize()
+    parms.load()
+    parms.set('max_topo_err', in_json['max_topo_err'])
+    parms.set('gamma_change_convergence', in_json['gamma_change_convergence'])
+    parms.set('filter_grid_size', in_json['filter_grid_size'])
+    parms.set('select_method', in_json['select_method'])
+    parms.set('percent_rand', in_json['percent_rand'])
+    parms.set('quick_est_gamma_flag', in_json['quick_est_gamma_flag'])
+    parms.set('reest_gamma_flag', in_json['reest_gamma_flag'])
+    parms.set('weed_zero_elevation', in_json['weed_zero_elevation'])
+    parms.set('weed_neighbours', in_json['weed_neighbours'])
+    parms.set('merge_resample_size', in_json['merge_resample_size'])
+    parms.set('unwrap_grid_size', in_json['unwrap_grid_size'])
+    parms.set('unwrap_time_win', in_json['unwrap_time_win'])
+    parms.set('unwrap_gold_n_win', in_json['unwrap_gold_n_win'])
+    parms.set('scla_deramp', in_json['scla_deramp'])
+    parms.set('scn_time_win', in_json['scn_time_win'])
+    parms.save()
+    parms.load()
+    stamps_step = StaMPSStep(parms)
+    
+    # stamps_step.run(1, 1)
+    # stamps_step.run(2, 2)
+    # stamps_step.run(3, 3, plot_flag=True)
+    # stamps_step.run(4, 4)
+    # stamps_step.run(5, 5, False)
+    stamps_step.run(5, 5, True)
+    stamps_step.run(6, 6, True, aps_flag=True)
+    stamps_step.run(7, 7, True)
+    stamps_step.run(6, 6, True)
+    stamps_step.run(7, 7, True)
+    stamps_step.run(8, 8, True)
 
 if __name__ == "__main__":
-    stamps_step = StaMPSStep()
-    stamps_step.run_normal()
+    run_normal()

@@ -127,7 +127,11 @@ class Parms:
                 'weed_standard_dev': float('inf'),
                 'unwrap_method': '3D_QUICK',
                 'merge_resample_size': 100,
-                'sb_scla_drop_index': []
+                'sb_scla_drop_index': [],
+                'preserve_pixels': True,  # New parameter to preserve pixels during merge
+                'disable_grid_resampling': False,  # New parameter to disable grid resampling
+                'adaptive_grid': True,  # New parameter to control adaptive grid sizing
+                'preserve_duplicates': False  # New parameter to control duplicate removal
             })
         else:
             defaults.update({
@@ -135,7 +139,11 @@ class Parms:
                 'percent_rand': 20,
                 'weed_standard_dev': 1.0,
                 'unwrap_method': '3D',
-                'merge_resample_size': 0
+                'merge_resample_size': 0,
+                'preserve_pixels': True,  # New parameter to preserve pixels during merge
+                'disable_grid_resampling': False,  # New parameter to disable grid resampling
+                'adaptive_grid': True,  # New parameter to control adaptive grid sizing
+                'preserve_duplicates': False  # New parameter to control duplicate removal
             })
             
         # Apply defaults for missing parameters

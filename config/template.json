@@ -17,7 +17,7 @@
     "MSIZE": 5,
     "OOBJ": null,
     "NROVERS": 2,
-    "max_topo_error": 10,
+    "max_topo_err": 10,
     "gamma_change_convergence": 0.005,
     "filter_grid_size": 50,
     "select_method": "PERCENT",
@@ -28,7 +28,7 @@
     "weed_neighbours": "n",
     "merge_resample_size": 10,
     "unwrap_grid_size": 10,
-    "unwrap_time_window": 30,
+    "unwrap_time_win": 30,
     "unwrap_gold_n_win": 8,
     "scla_deramp": "y",
     "scn_time_win": 30
